@@ -1,9 +1,11 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
-import           System.Directory            (doesFileExist)
-import           Hammer.Render.VTK.VTKRender (writeUniVTKfile)
 import           Hammer.Reader.ANGReader     (parseANG)
+import           Hammer.Render.VTK.VTKRender (writeUniVTKfile)
+import           Hammer.Texture.Orientation  (RefFrame (..))
+import           Hammer.Texture.Symmetry     (Symm (..))
+import           System.Directory            (doesFileExist)
 
 import           Options.Applicative
 import           System.FilePath
@@ -61,6 +63,11 @@ renderTest :: FilePath -> FilePath -> IO ()
 renderTest fin fout = do
   ang <- parseANG fin
   let
-    view = [showQI, showCI, showPhase, showOrien]
-    vtk  = renderANG view ang
-  writeUniVTKfile (fout <.> "vti") vtk
+    view = [ showEBSDQI
+           , showEBSDCI
+           , showEBSDPhase
+           , showEBSDIPF  Cubic ND
+           , showGrainIDs Cubic ang
+           ]
+    vtk = renderANG view ang
+  writeUniVTKfile (fout <.> "vti") True vtk
