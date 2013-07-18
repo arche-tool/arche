@@ -24,19 +24,16 @@ gammafier = Gammafier
       <> short 'i'
       <> metavar "ANG_IN"
       <> help "Input file (.ang) target for correction." )
-  <*> parseMaybeStrOpt
+  <*> (optional . strOption)
       (  long "output"
       <> short 'o'
       <> metavar "VTK_OUT"
       <> help "VTK visualization.")
-  <*> parseMaybeOpt
+  <*> (optional . option)
       (  long "error-tolerance"
       <> short 'e'
       <> metavar "error[%]"
       <> help "The default error is 5%.")
-
-parseMaybeStrOpt cfg = (Just <$> strOption cfg) <|> pure Nothing
-parseMaybeOpt    cfg = (Just <$>    option cfg) <|> pure Nothing
 
 main :: IO ()
 main = execParser opts >>= run
@@ -45,6 +42,7 @@ main = execParser opts >>= run
       ( fullDesc
       <> progDesc "Reconstructs gamma phase from EBSD data"
       <> header "Gamma Builder" )
+
 run :: Gammafier -> IO ()
 run Gammafier{..} = let
   stdOutName = dropExtensions ang_input
