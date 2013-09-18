@@ -11,6 +11,7 @@ import           Options.Applicative
 import           System.FilePath
 
 import           Gamma.OMRender
+import           Gamma.GBRender
 import           Gamma.Grains
 
 data Gammafier =
@@ -64,11 +65,15 @@ renderTest :: FilePath -> FilePath -> IO ()
 renderTest fin fout = do
   ang <- parseANG fin
   let
+    vboxQ  = getVoxBox ang
+    viewGB = [showGBMiso Cubic]
     viewOM = [ showOMQI
              , showOMCI
              , showOMPhase
              , showOMIPF  Cubic ND
              , showGrainIDs Cubic ang
              ]
+    vtkGB = renderGB viewGB vboxQ
     vtkOM = renderOM viewOM ang
   writeUniVTKfile (fout <.> "vti") True vtkOM
+  writeUniVTKfile (fout <.> "vtu") True vtkGB

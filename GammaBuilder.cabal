@@ -14,6 +14,7 @@ cabal-version:       >=1.8
 
 library
   exposed-modules:   Gamma.OMRender
+                     Gamma.GBRender
                      Gamma.Grains
   -- other-modules:
   build-depends:     base   == 4.6.*
