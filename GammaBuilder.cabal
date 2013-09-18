@@ -13,7 +13,8 @@ cabal-version:       >=1.8
 
 
 library
-  exposed-modules:   Gamma.ImageRender
+  exposed-modules:   Gamma.OMRender
+                     Gamma.Grains
   -- other-modules:
   build-depends:     base   == 4.6.*
                    , hammer               == 0.2.*

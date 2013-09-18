@@ -10,7 +10,8 @@ import           System.Directory            (doesFileExist)
 import           Options.Applicative
 import           System.FilePath
 
-import           Gamma.ImageRender
+import           Gamma.OMRender
+import           Gamma.Grains
 
 data Gammafier =
   Gammafier
@@ -63,11 +64,11 @@ renderTest :: FilePath -> FilePath -> IO ()
 renderTest fin fout = do
   ang <- parseANG fin
   let
-    view = [ showEBSDQI
-           , showEBSDCI
-           , showEBSDPhase
-           , showEBSDIPF  Cubic ND
-           , showGrainIDs Cubic ang
-           ]
-    vtk = renderANG view ang
-  writeUniVTKfile (fout <.> "vti") True vtk
+    viewOM = [ showOMQI
+             , showOMCI
+             , showOMPhase
+             , showOMIPF  Cubic ND
+             , showGrainIDs Cubic ang
+             ]
+    vtkOM = renderOM viewOM ang
+  writeUniVTKfile (fout <.> "vti") True vtkOM
