@@ -28,7 +28,7 @@ getGrainID symm ed = let
 
 getVoxBox :: EBSDdata -> VoxBox Quaternion
 getVoxBox EBSDdata{..} = let
-  EBSDinfo{..}       = headInfo
+  EBSDinfo{..}       = ebsdInfo
   Gridinfo{..}       = grid
   (xstep, ystep)     = xystep
   (row, col_even, _) = rowCols

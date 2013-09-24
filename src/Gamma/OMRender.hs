@@ -37,7 +37,7 @@ showOMCI :: RenderOM
 showOMCI = RenderOM "CI" ci
 
 showOMPhase :: RenderOM
-showOMPhase = RenderOM "Phase" phase
+showOMPhase = RenderOM "Phase" phaseNum
 
 showOMIPF :: Symm -> RefFrame -> RenderOM
 showOMIPF symm ref = let
@@ -56,7 +56,7 @@ checkSqrANG :: EBSDdata -> Bool
 checkSqrANG EBSDdata{..} = let
   Gridinfo{..}       = grid
   (row, cEven, cOdd) = rowCols
-  in    not hexGrid
+  in not hexGrid
      && cEven          == cOdd
      && V.length nodes == (row * cEven)
 
@@ -65,7 +65,7 @@ renderOM fs ed@EBSDdata{..}
   | checkSqrANG ed = L.foldl' addData vtkBase fs
   | otherwise      = error "[ImageRender] Improper square grid ANG file."
   where
-    EBSDinfo{..}    = headInfo
+    EBSDinfo{..}    = ebsdInfo
     Gridinfo{..}    = grid
     (row, cEven, _) = rowCols
     (stepX, stepY)  = xystep
