@@ -66,11 +66,13 @@ renderTest fin fout = do
   ang <- parseANG fin
   let
     vboxQ  = getVoxBox ang
-    viewGB = [showGBMiso Cubic]
+    viewGB = [ showGBMiso   Cubic
+             , showGBMisoKS Cubic
+             ]
     viewOM = [ showOMQI
              , showOMCI
              , showOMPhase
-             , showOMIPF  Cubic ND
+             , showOMIPF    Cubic ND
              , showGrainIDs Cubic ang
              ]
     vtkGB = renderGB viewGB vboxQ

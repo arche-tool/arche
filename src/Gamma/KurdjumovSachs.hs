@@ -5,6 +5,7 @@ module Gamma.KurdjumovSachs
        , ksQuaters
        , ksOris
        , ksPoles
+       , misoKS
        ) where
 
 import qualified Data.Vector as V
@@ -19,6 +20,13 @@ import           Hammer.Texture.Symmetry
 import           Hammer.Texture.SphereProjection
 
 -- ======================================================================================= 
+
+misoKS :: Symm -> Quaternion -> Quaternion -> Double
+misoKS symm q1 q2 = let
+  ks1 = ksQuaters q1
+  ks2 = ksQuaters q2
+  foo q = V.map (getMisoAngle symm q) ks2
+  in V.minimum $ V.concatMap foo ks1
 
 -- | Kurdjumov-Sachs orientation relationship for phase transformation defined by 24
 -- rotation operations.

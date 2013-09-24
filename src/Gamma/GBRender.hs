@@ -5,6 +5,7 @@
 module Gamma.GBRender
        ( RenderGB
        , showGBMiso
+       , showGBMisoKS
        , renderGB
        ) where
 
@@ -18,12 +19,17 @@ import           Hammer.Texture.Orientation
 import           Hammer.Texture.Symmetry
 import           Hammer.VoxBox.Base
 
+import           Gamma.KurdjumovSachs
+
 -- =======================================================================================
 
 data RenderGB = forall a . RenderElemVTK a => RenderGB String (Quaternion -> Quaternion -> a)
 
 showGBMiso :: Symm -> RenderGB
 showGBMiso symm = RenderGB "Misorientation" (getMisoAngle symm)
+
+showGBMisoKS :: Symm -> RenderGB
+showGBMisoKS symm = RenderGB "Misorientation KS" (misoKS symm)
 
 -- =======================================================================================
 
