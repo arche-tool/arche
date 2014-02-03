@@ -16,11 +16,11 @@ import qualified Data.Vector as V
 
 import           Hammer.MicroGraph   (unGrainID)
 
-import           Hammer.Reader.ANGReader
+import           File.ANGReader
 import           Hammer.Render.VTK.VTKRender
-import           Hammer.Texture.IPF
-import           Hammer.Texture.Orientation
-import           Hammer.Texture.Symmetry
+import           Texture.IPF
+import           Texture.Orientation
+import           Texture.Symmetry
 import           Hammer.VoxBox.Base
 
 import           Gamma.Grains

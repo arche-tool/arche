@@ -11,9 +11,9 @@ import qualified Data.Vector as V
 import           Control.Applicative ((<$>))
 import           Hammer.MicroGraph   (GrainID)
 
-import           Hammer.Reader.ANGReader
-import           Hammer.Texture.Orientation
-import           Hammer.Texture.Symmetry
+import           File.ANGReader
+import           Texture.Orientation
+import           Texture.Symmetry
 import           Hammer.VoxBox.Base
 import           Hammer.VoxBox.VoxConnFinder
 

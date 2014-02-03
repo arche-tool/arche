@@ -1,10 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
-import           Hammer.Reader.ANGReader     (parseANG)
+import           File.ANGReader              (parseANG)
 import           Hammer.Render.VTK.VTKRender (writeUniVTKfile)
-import           Hammer.Texture.Orientation  (RefFrame (..))
-import           Hammer.Texture.Symmetry     (Symm (..))
+import           Texture.Orientation         (RefFrame (..))
+import           Texture.Symmetry            (Symm (..))
 import           System.Directory            (doesFileExist)
 
 import           Options.Applicative

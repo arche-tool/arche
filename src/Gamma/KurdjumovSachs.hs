@@ -17,9 +17,9 @@ import           System.IO
 import           System.Random
 
 import           Hammer.Math.Algebra
-import           Hammer.Texture.Orientation
-import           Hammer.Texture.Symmetry
-import           Hammer.Texture.SphereProjection
+import           Texture.Orientation
+import           Texture.Symmetry
+import           Texture.SphereProjection
 
 testKS = let
   q = toQuaternion $ mkAxisPair (Vec3 1 1 2) (Deg 90)

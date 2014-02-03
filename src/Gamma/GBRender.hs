@@ -15,8 +15,8 @@ import qualified Data.Vector.Unboxed as U
 
 import           Hammer.Math.Algebra
 import           Hammer.Render.VTK.VTKRender
-import           Hammer.Texture.Orientation
-import           Hammer.Texture.Symmetry
+import           Texture.Orientation
+import           Texture.Symmetry
 import           Hammer.VoxBox.Base
 
 import           Gamma.KurdjumovSachs
