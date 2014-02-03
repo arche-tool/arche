@@ -8,16 +8,43 @@ module Gamma.KurdjumovSachs
        , misoKS
        ) where
 
-import qualified Data.Vector as V
+import qualified Data.Vector   as V
 
-import           Data.Vector (Vector)
+import           Data.Vector   (Vector)
+import           Control.Monad (replicateM_)
 
 import           System.IO
+import           System.Random
 
 import           Hammer.Math.Algebra
 import           Hammer.Texture.Orientation
 import           Hammer.Texture.Symmetry
 import           Hammer.Texture.SphereProjection
+
+testKS = let
+  q = toQuaternion $ mkAxisPair (Vec3 1 1 2) (Deg 90)
+  in V.map ((q #<=) . symmOp) (getSymmOps Cubic)
+
+testAll dir w file n = do
+  h <- openFile file WriteMode
+  let
+    q  = toQuaternion $ mkAxisPair dir w
+    ks = V.map (#<= q) ksTrans
+  replicateM_ n (testKSMiso ks >>= (hPutStrLn h . show . unDeg))
+  hClose h
+
+testKSMiso :: Vector Quaternion -> IO Deg
+testKSMiso ks = do
+  a  <- randomIO
+  i1 <- randomRIO (0, V.length ks - 1)
+  i2 <- randomRIO (0, V.length ks - 1)
+  let
+    ks1 = ks V.! i1
+    ks2 = ks V.! i2
+    m1  = a #<= ks1
+    m2  = a #<= ks2
+    miso = getMisoAngle Cubic m1 m2
+  return (toAngle miso :: Deg)
 
 -- ======================================================================================= 
 
@@ -60,7 +87,7 @@ ksPoles g pole = let
 showTest :: FilePath -> [Vec3] -> IO ()
 showTest file poles = let
   out h (Vec2 x y) = hPutStrLn h $ show x ++ "   " ++ show y
-  g      = mkEuler (Deg 0) (Deg 54.7) (Deg 45)
+  g      = mkEuler (Deg 0) (Deg 0) (Deg 0)
   foo    = V.map (so3ProjCoord . steroSO3Proj) . ksPoles g
   points = map foo poles
   writeSet h set = do
