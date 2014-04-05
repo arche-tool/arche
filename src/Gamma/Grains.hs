@@ -10,6 +10,8 @@ import qualified Data.Vector as V
 
 import           Control.Applicative ((<$>))
 import           Hammer.MicroGraph   (GrainID)
+import           Data.Vector         (Vector)
+import           Data.HashMap.Strict (HashMap)
 
 import           File.ANGReader
 import           Texture.Orientation
@@ -17,14 +19,14 @@ import           Texture.Symmetry
 import           Hammer.VoxBox.Base
 import           Hammer.VoxBox.VoxConnFinder
 
-getGrainID :: Symm -> EBSDdata -> Maybe (VoxBox GrainID)
-getGrainID symm ed = let
+getGrainID :: Deg -> Symm -> EBSDdata -> Maybe (VoxBox GrainID, HashMap Int (Vector VoxelPos))
+getGrainID mis symm ed = let
   isGrain a b = let
     omega = getMisoAngle symm a b
-    in (fromAngle $ Deg 15) > omega
+    in (abs $ fromAngle mis) > omega
   vbox     = getVoxBox ed
   vboxSymm = vbox { grainID = V.map (toFZ symm) (grainID vbox) }
-  in fst . resetGrainIDs <$> grainFinder isGrain vboxSymm
+  in resetGrainIDs <$> grainFinder isGrain vboxSymm
 
 getVoxBox :: EBSDdata -> VoxBox Quaternion
 getVoxBox EBSDdata{..} = let
