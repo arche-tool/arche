@@ -26,10 +26,10 @@ import           Gamma.KurdjumovSachs
 data RenderGB = forall a . RenderElemVTK a => RenderGB String (Quaternion -> Quaternion -> a)
 
 showGBMiso :: Symm -> RenderGB
-showGBMiso symm = RenderGB "Misorientation" (getMisoAngle symm)
+showGBMiso symm = RenderGB "Misorientation" (\q1 q2 -> unDeg $ toAngle $ (getMisoAngle symm q1 q2))
 
 showGBMisoKS :: Symm -> RenderGB
-showGBMisoKS symm = RenderGB "Misorientation KS" (misoKS symm)
+showGBMisoKS symm = RenderGB "Misorientation KS" (\q1 q2 -> unDeg $ toAngle $ (misoKS symm q1 q2))
 
 -- =======================================================================================
 
