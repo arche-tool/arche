@@ -26,6 +26,10 @@ library
                    , containers           >= 0.5
                    , unordered-containers >= 0.2
                    , random               >= 1
+                   , hmatrix              >= 0.15
+                   , monad-par            >= 0.3
+                   , deepseq              >= 1.1
+
   exposed:           True
   buildable:         True
   ghc-options:      -O2
@@ -33,6 +37,8 @@ library
                     -threaded
                     -rtsopts
                     -Wall
+                    -auto-all
+                    -caf-all
   hs-source-dirs:    src
 
 
@@ -43,6 +49,8 @@ Executable gamma
                     -threaded
                     -rtsopts
                     -Wall
+                    -auto-all
+                    -caf-all
   hs-source-dirs:    src
   Main-Is:           Main.hs
   Build-depends:     gamma-builder
@@ -58,3 +66,7 @@ Executable gamma
                    , containers           >= 0.5
                    , unordered-containers >= 0.2
                    , random               >= 1
+                   , hmatrix              >= 0.15
+                   , monad-par            >= 0.3
+                   , deepseq              >= 1.1
+                   , primitive
