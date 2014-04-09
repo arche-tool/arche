@@ -14,10 +14,11 @@ module Gamma.OMRender
        , getOriGID
        ) where
 
-import qualified Data.List   as L
-import qualified Data.Vector as V
+import qualified Data.List           as L
+import qualified Data.Vector         as V
+import qualified Data.Vector.Unboxed as U
 
-import           Data.Vector         (Vector)
+import           Data.Vector.Unboxed (Vector)
 import           Hammer.MicroGraph   (GrainID, unGrainID)
 
 import           File.ANGReader
@@ -51,7 +52,7 @@ showOMIPF symm ref = let
 
 showGrainIDs :: VoxBox GrainID -> RenderOM
 showGrainIDs gids = let
-  foo = unGrainID . ((grainID gids) V.!)
+  foo = unGrainID . ((grainID gids) U.!)
   in  RenderAlterMap "GrainID" foo
 
 -- =======================================================================================
@@ -86,24 +87,24 @@ renderOM fs ed@EBSDdata{..}
 
 getOriGID :: EBSDdata -> VoxBox GrainID -> (Vector Quaternion, Vector GrainID)
 getOriGID EBSDdata{..} vboxgid = let
-  is   = V.findIndices ((> 0.1) . ci) nodes
-  gids = V.map ((grainID vboxgid) V.!)  is
-  qs   = V.map (rotation . (nodes V.!)) is
+  is   = V.convert $ V.findIndices ((> 0.1) . ci) nodes
+  gids = U.map ((grainID vboxgid) U.!)  is
+  qs   = U.map (rotation . (nodes V.!)) is
   in (qs, gids)
 
 renderSO3Points :: Symm -> RefFrame -> Vector GrainID -> Vector Quaternion -> VTK Vec3
 renderSO3Points symm ref gids qs = let
   unColor (RGBColor rgb) = rgb
 
-  vtkBase = renderSO3PointsVTK (V.map quat qs)
+  vtkBase = renderSO3PointsVTK (U.map quat (U.convert qs))
 
   quat  = quaternionToSO3 . toFZ symm
   color = unColor . getRGBColor . snd . getIPFColor symm ref
 
-  func1 i _    = color (qs V.! i)
+  func1 i _    = color (qs U.! i)
   addColor vtk = addDataPoints vtk (mkPointAttr "IPF colors" func1)
 
-  func2 i _  = unGrainID (gids V.! i)
+  func2 i _  = unGrainID (gids U.! i)
   addGID vtk = addDataPoints vtk (mkPointAttr "GrainID" func2)
 
   in addGID $ addColor vtkBase
@@ -112,27 +113,23 @@ renderSO2Points :: Symm -> RefFrame -> Vec3 -> Vector GrainID -> Vector Quaterni
 renderSO2Points symm ref v gidv qs = let
   unColor (RGBColor rgb) = rgb
 
-  getDirs  = V.singleton . cartToSO2 . activeVecRotation v
+  getDirs  = U.singleton . cartToSO2 . activeVecRotation v
   getColor = unColor . getRGBColor . snd . getIPFColor symm ref
 
-  func i q = let
-    color = getColor q
-    gid   = gidv V.! i
-    dirs  = getDirs q
-    n = V.length dirs
-    in (dirs, V.replicate n gid, V.replicate n color)
+  ls = U.map (U.length . getDirs) qs
+  ds = U.concatMap getDirs qs
+  gs = U.concatMap funcG $ U.imap ((,)) ls
+  cs = U.concatMap funcC $ U.zip ls qs
 
-  (ds, gs, cs) = V.unzip3 $ V.imap func qs
-  ds' = V.concatMap id ds
-  gs' = V.concatMap id gs
-  cs' = V.concatMap id cs
+  funcG (n, i) = U.replicate n (gidv U.! i)
+  funcC (n, q) = U.replicate n (getColor q)
 
-  vtkBase = renderSO2PointsVTK ds'
+  vtkBase = renderSO2PointsVTK ds
 
-  func1 i _    = cs' V.! i
+  func1 i _    = cs U.! i
   addColor vtk = addDataPoints vtk (mkPointAttr "IPF colors" func1)
 
-  func2 i _  = unGrainID (gs' V.! i)
+  func2 i _  = unGrainID (gs U.! i)
   addGID vtk = addDataPoints vtk (mkPointAttr "GrainID" func2)
 
   in addGID $ addColor vtkBase

@@ -33,8 +33,8 @@ showGBMisoKS symm = RenderGB "Misorientation KS" (\q1 q2 -> unDeg $ toAngle $ (m
 
 -- =======================================================================================
 
-extendBoxFace :: VoxBox a -> VoxBox a
-extendBoxFace VoxBox{..} = VoxBox d o spacing (V.empty)
+extendBoxFace :: (U.Unbox a)=> VoxBox a -> VoxBox a
+extendBoxFace VoxBox{..} = VoxBox d o spacing (U.empty)
   where
     VoxBoxDim nx ny nz    = vbrDim dimension
     VoxBoxOrigin x0 y0 z0 = origin
@@ -68,7 +68,7 @@ renderGB fs box = L.foldl' addData vtkBase fs
     points = U.generate (sizeVoxBoxRange extRange) (evalVoxelPos extBox . (extRange %#))
     vtkBase = mkUGVTK "GB map" points (U.fromList cells)
     addData vtk (RenderGB name f) = let
-      func i _ _ = (uncurry f) $ (V.fromList values) V.! i
+      func i _ _ = (uncurry f) $ (U.fromList values) U.! i
       in addDataCells vtk (mkCellAttr name func)
 
 instance RenderCell (Int, Int, Int, Int) where

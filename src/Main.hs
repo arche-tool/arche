@@ -1,7 +1,9 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
-import qualified Data.Vector as V
+import qualified Data.Vector         as V
+import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Unboxed.Mutable as UM
 
 import           System.Directory            (doesFileExist)
 
@@ -100,20 +102,21 @@ renderTest miso fin fout = do
       vtkSO2 = renderSO2Points Cubic ND (Vec3 1 0 0) vecGID vecQ
       vtkSO3 = renderSO3Points Cubic ND vecGID vecQ
       in do
-        print (V.length vecQ, V.length vecGID)
-        --writeUniVTKfile (fout <.> "vti") True vtkOM
-        --writeUniVTKfile (fout <.> "vtu") True vtkGB
+        print (U.length vecQ, U.length vecGID)
+        writeUniVTKfile (fout <.> "vti") True vtkOM
+        writeUniVTKfile (fout <.> "vtu") True vtkGB
         writeUniVTKfile (fout <.> "SO2" <.> "vtu") True vtkSO2
         writeUniVTKfile (fout <.> "SO3" <.> "vtu") True vtkSO3
         let
-          g        = getGamma ang
-          ggid     = V.singleton $ mkGrainID (-1)
-          as       = V.map (toFZ Cubic . (g #<=)) ksTrans
-          agid     = V.replicate (V.length as) (mkGrainID $ -1)
-          vtkSO2_g = renderSO2Points Cubic ND (Vec3 1 0 0) ggid (V.singleton g)
-          vtkSO3_g = renderSO3Points Cubic ND              ggid (V.singleton g)
+          (g, t)   = getGammaOR2 ang
+          --g        = getGamma ang
+          ggid     = U.singleton $ mkGrainID (-1)
+          as       = U.map (toFZ Cubic . (g #<=)) (V.convert ksTrans)
+          agid     = U.replicate (U.length as) (mkGrainID $ -1)
+          vtkSO2_g = renderSO2Points Cubic ND (Vec3 1 0 0) ggid (U.singleton g)
+          vtkSO3_g = renderSO3Points Cubic ND              ggid (U.singleton g)
           vtkSO3_a = renderSO3Points Cubic ND              agid as
-        print g
-        writeUniVTKfile (fout <.> "SO2-gamma" <.> "vtu") True vtkSO2_g
+        print (g, t)
+        --writeUniVTKfile (fout <.> "SO2-gamma" <.> "vtu") True vtkSO2_g
         writeUniVTKfile (fout <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
         writeUniVTKfile (fout <.> "SO3-alpha" <.> "vtu") True vtkSO3_a

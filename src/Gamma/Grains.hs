@@ -6,7 +6,8 @@ module Gamma.Grains
        , getVoxBox
        ) where
 
-import qualified Data.Vector as V
+import qualified Data.Vector         as V
+import qualified Data.Vector.Unboxed as U
 
 import           Control.Applicative ((<$>))
 import           Hammer.MicroGraph   (GrainID)
@@ -25,7 +26,7 @@ getGrainID mis symm ed = let
     omega = getMisoAngle symm a b
     in (abs $ fromAngle mis) > omega
   vbox     = getVoxBox ed
-  vboxSymm = vbox { grainID = V.map (toFZ symm) (grainID vbox) }
+  vboxSymm = vbox { grainID = U.map (toFZ symm) (grainID vbox) }
   in resetGrainIDs <$> grainFinder isGrain vboxSymm
 
 getVoxBox :: EBSDdata -> VoxBox Quaternion
@@ -39,4 +40,4 @@ getVoxBox EBSDdata{..} = let
   dime   = VoxBoxRange boxorg boxdim
   org    = VoxBoxOrigin xstart ystart zstart
   spc    = VoxelDim xstep ystep ((xstep + ystep) / 2)
-  in VoxBox dime org spc (V.map rotation nodes)
+  in VoxBox dime org spc (V.convert $ V.map rotation nodes)
