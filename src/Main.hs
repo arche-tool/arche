@@ -6,15 +6,18 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
 import           System.Directory            (doesFileExist)
+import           Control.DeepSeq
+import           Control.Parallel.Strategies
 
 import           Options.Applicative
 import           System.FilePath
 
+import           Texture.Orientation
+import           Hammer.VoxBox.Base
 import           Hammer.Render.VTK.VTKRender (writeUniVTKfile)
-import           Hammer.Math.Algebra         (Vec3(..))
+import           Hammer.Math.Algebra         (Vec3(..), Vec4(..))
 import           Hammer.MicroGraph           (mkGrainID)
-import           File.ANGReader              (parseANG)
-import           Texture.Orientation         (RefFrame (..), (#<=), Deg(..))
+import           File.ANGReader              (parseANG, rotation, nodes)
 import           Texture.Symmetry            (Symm (..), toFZ)
 
 import           Gamma.OMRender
@@ -23,7 +26,7 @@ import           Gamma.Grains
 import           Gamma.GammaFinder
 import           Gamma.KurdjumovSachs
 
-import           Texture.SH.HyperSphere
+import    Debug.Trace
 
 data Gammafier =
   Gammafier
@@ -77,7 +80,8 @@ run Gammafier{..} = let
   in do
     inOK <- doesFileExist ang_input
     if inOK
-      then renderTest grain_miso ang_input outName
+      --then renderTest grain_miso ang_input outName
+      then mkMia ang_input outName
       else putStrLn "Invalid input file. Try agian!"
 
 renderTest :: Deg -> FilePath -> FilePath -> IO ()
@@ -120,3 +124,53 @@ renderTest miso fin fout = do
         --writeUniVTKfile (fout <.> "SO2-gamma" <.> "vtu") True vtkSO2_g
         writeUniVTKfile (fout <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
         writeUniVTKfile (fout <.> "SO3-alpha" <.> "vtu") True vtkSO3_a
+
+
+-- | Simlpe reconstruction strategy were the orientation map is divided in non-overlapping
+-- areas and the parent phase is calculated from all product orientation within the subarea.
+-- The calculation is done by function minimization with pure KS.   
+mkMia :: FilePath -> FilePath -> IO ()
+mkMia fin fout = do
+  ang <- parseANG fin
+  let
+    vb     = getVoxBox ang
+    vb'    = runMia 100 vb
+    node'  = V.zipWith (\p q -> p {rotation = q}) (nodes ang) (U.convert $ grainID vb')
+    ang'   = ang {nodes = node'}
+    viewOM = [ showOMQI
+             , showOMCI
+             , showOMPhase
+             , showOMIPF    Cubic ND
+             ]
+    vtkOM  = renderOM viewOM ang'
+  writeUniVTKfile (fout <.> "vti") True vtkOM
+
+runMia :: Int -> VoxBox Quaternion -> VoxBox Quaternion
+runMia n vb@VoxBox{..} = vb {grainID = newVec}
+  where
+    stg = parListChunk 5000 (evalTuple2 rpar r0)
+    l = U.length grainID
+    newVec = U.create $ do
+      v <- UM.new l
+      let qis  = divConq dimension
+          qisp = qis `using` stg
+      mapM_ (save v) qisp
+      return v
+    save v (ga, is) = U.mapM_ (\i -> UM.write v i ga) is
+    getG br = let
+      ps = V.fromList $ getRangePos br
+      is = V.convert $ V.map (dimension %@) ps
+      qs = U.map (grainID U.!) is
+      in (findGamma ksORs qs, is)
+    divConq br
+      | sizeVoxBoxRange br <= 0 = []
+      | sizeVoxBoxRange br <= n = [getG br]
+      | otherwise = case splitInTwoBox br of
+        Just (br1, br2) -> divConq br1 ++ divConq br2
+        Nothing         -> []
+
+instance NFData Quaternion where
+  rnf = rnf . quaterVec
+
+instance NFData Vec4 where
+  rnf (Vec4 a b c d) = a `seq` b `seq` c `seq` d `seq` ()
