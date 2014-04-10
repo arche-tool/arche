@@ -13,8 +13,8 @@ import           Options.Applicative
 import           System.FilePath
 
 import           Texture.Orientation
-import           Hammer.VoxBox.Base
-import           Hammer.Render.VTK.VTKRender (writeUniVTKfile)
+import           Hammer.VoxBox
+import           Hammer.VTK                  (writeUniVTKfile)
 import           Hammer.Math.Algebra         (Vec3(..), Vec4(..))
 import           Hammer.MicroGraph           (mkGrainID)
 import           File.ANGReader              (parseANG, rotation, nodes)

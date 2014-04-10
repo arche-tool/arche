@@ -40,7 +40,7 @@ import           Hammer.Math.Optimum
 import           Gamma.KurdjumovSachs
 
 import           Debug.Trace
-import           Hammer.Render.VTK.VTKRender
+import           Hammer.VTK
 import           Texture.SH.HyperSphere
 
 dbg a = trace (show a) a

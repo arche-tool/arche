@@ -19,7 +19,7 @@ library
                      Gamma.GammaFinder
   -- other-modules:
   build-depends:     base                 == 4.6.*
-                   , hammer               >= 0.3.1
+                   , hammer               >= 0.4
                    , sledge               >= 0.3.2
                    , vector               >= 0.10
                    , bytestring           >= 0.10
@@ -59,7 +59,7 @@ Executable gamma
                    , filepath             >= 1.3
                    , directory            >= 1.0
 
-                   , hammer               >= 0.3.1
+                   , hammer               >= 0.4
                    , sledge               >= 0.3.2
                    , vector               >= 0.10
                    , bytestring           >= 0.10

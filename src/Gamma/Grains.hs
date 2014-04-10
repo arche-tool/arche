@@ -17,8 +17,8 @@ import           Data.HashMap.Strict (HashMap)
 import           File.ANGReader
 import           Texture.Orientation
 import           Texture.Symmetry
-import           Hammer.VoxBox.Base
-import           Hammer.VoxBox.VoxConnFinder
+import           Hammer.VoxBox
+import           Hammer.VoxConn
 
 getGrainID :: Deg -> Symm -> EBSDdata -> Maybe (VoxBox GrainID, HashMap Int (Vector VoxelPos))
 getGrainID mis symm ed = let

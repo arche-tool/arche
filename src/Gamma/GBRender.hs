@@ -14,10 +14,10 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as U
 
 import           Hammer.Math.Algebra
-import           Hammer.Render.VTK.VTKRender
+import           Hammer.VoxBox
+import           Hammer.VTK
 import           Texture.Orientation
 import           Texture.Symmetry
-import           Hammer.VoxBox.Base
 
 import           Gamma.KurdjumovSachs
 

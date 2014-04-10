@@ -22,9 +22,9 @@ import           Data.Vector.Unboxed (Vector)
 import           Hammer.MicroGraph   (GrainID, unGrainID)
 
 import           File.ANGReader
-import           Hammer.Render.VTK.VTKRender
 import           Hammer.Math.Algebra
-import           Hammer.VoxBox.Base
+import           Hammer.VoxBox
+import           Hammer.VTK
 import           Texture.IPF
 import           Texture.Orientation
 import           Texture.Symmetry
