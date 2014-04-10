@@ -1,5 +1,5 @@
 name:                gamma-builder
-version:             0.1.1.0
+version:             0.1.2.0
 synopsis:            Software to reconstrut Austenite for EBSD map.
 -- description:
 license:             AllRightsReserved
