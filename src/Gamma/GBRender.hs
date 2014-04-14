@@ -16,6 +16,7 @@ import qualified Data.Vector.Unboxed as U
 import           Hammer.Math.Algebra
 import           Hammer.VoxBox
 import           Hammer.VTK
+import           Hammer.VTK.VoxBox ()
 import           Texture.Orientation
 import           Texture.Symmetry
 
@@ -70,7 +71,3 @@ renderGB fs box = L.foldl' addData vtkBase fs
     addData vtk (RenderGB name f) = let
       func i _ _ = (uncurry f) $ (U.fromList values) U.! i
       in addDataCells vtk (mkCellAttr name func)
-
-instance RenderCell (Int, Int, Int, Int) where
-  makeCell (a,b,c,d) = U.fromList [a,b,c,d]
-  getType _          = VTK_QUAD

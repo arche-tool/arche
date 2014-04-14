@@ -14,9 +14,11 @@ import           System.FilePath
 
 import           Texture.Orientation
 import           Hammer.VoxBox
-import           Hammer.VTK                  (writeUniVTKfile)
+import           Hammer.VoxConn
+import           Hammer.VTK.VoxBox
+import           Hammer.VTK
+import           Hammer.MicroGraph
 import           Hammer.Math.Algebra         (Vec3(..), Vec4(..))
-import           Hammer.MicroGraph           (mkGrainID)
 import           File.ANGReader              (parseANG, rotation, nodes)
 import           Texture.Symmetry            (Symm (..), toFZ)
 
@@ -24,6 +26,7 @@ import           Gamma.OMRender
 import           Gamma.GBRender
 import           Gamma.Grains
 import           Gamma.GammaFinder
+import           Gamma.GammaGrain
 import           Gamma.KurdjumovSachs
 
 import    Debug.Trace
@@ -80,6 +83,7 @@ run Gammafier{..} = let
   in do
     inOK <- doesFileExist ang_input
     if inOK
+      --then mkCay grain_miso ang_input outName
       --then renderTest grain_miso ang_input outName
       then mkMia ang_input outName
       else putStrLn "Invalid input file. Try agian!"
@@ -125,10 +129,37 @@ renderTest miso fin fout = do
         writeUniVTKfile (fout <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
         writeUniVTKfile (fout <.> "SO3-alpha" <.> "vtu") True vtkSO3_a
 
+test_GrainFinder :: FilePath -> VoxBox GrainID -> IO ()
+test_GrainFinder fout vbq = case (getMicroVoxel . resetGrainIDs) <$> grainFinder (==) vbq of
+  Nothing -> putStrLn "Sorry, I can't get the MicroVoxel"
+  Just (micro, vboxGID) -> let
+    attrs = [mkCellAttr "GrainID" (\a _ _ -> unGrainID $ (grainID vboxGID) U.! a)]
+    in do
+      --print micro
+      writeUniVTKfile (fout ++ ".vtr")        True $ renderVoxBoxVTK      vbq attrs
+      writeUniVTKfile (fout ++ "_faces.vtu")  True $ renderMicroFacesVTK  vbq micro
+      writeUniVTKfile (fout ++ "_edges.vtu")  True $ renderMicroEdgesVTK  vbq micro
+      writeUniVTKfile (fout ++ "_vertex.vtu") True $ renderMicroVertexVTK vbq micro
+
 
 -- | Simlpe reconstruction strategy were the orientation map is divided in non-overlapping
 -- areas and the parent phase is calculated from all product orientation within the subarea.
--- The calculation is done by function minimization with pure KS.   
+-- The calculation is done by function minimization with pure KS.
+mkCay :: Deg -> FilePath -> FilePath -> IO ()
+mkCay miso fin fout = do
+  ang <- parseANG fin
+  case getGrainID miso Cubic ang of
+    Nothing            -> print "No grain detected!"
+    Just (gids, gtree) -> let
+      vb  = getVoxBox ang
+      vtk = runCay vb (gids, gtree)
+      in do
+        test_GrainFinder fout gids
+        writeUniVTKfile (fout <.> "vtu") True vtk
+
+-- | Simlpe reconstruction strategy were the orientation map is divided in non-overlapping
+-- areas and the parent phase is calculated from all product orientation within the subarea.
+-- The calculation is done by function minimization with pure KS.
 mkMia :: FilePath -> FilePath -> IO ()
 mkMia fin fout = do
   ang <- parseANG fin
