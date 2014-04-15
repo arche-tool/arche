@@ -66,9 +66,3 @@ scanBox n vb@VoxBox{..} = vb {grainID = newVec}
       | otherwise = case splitInTwoBox br of
         Just (br1, br2) -> divConq br1 ++ divConq br2
         Nothing         -> []
-
-instance NFData Quaternion where
-  rnf = rnf . quaterVec
-
-instance NFData Vec4 where
-  rnf (Vec4 a b c d) = a `seq` b `seq` c `seq` d `seq` ()
