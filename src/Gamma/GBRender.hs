@@ -9,8 +9,7 @@ module Gamma.GBRender
        , renderGB
        ) where
 
-import qualified Data.List   as L
-import qualified Data.Vector as V
+import qualified Data.List           as L
 import qualified Data.Vector.Unboxed as U
 
 import           Hammer.Math.Algebra

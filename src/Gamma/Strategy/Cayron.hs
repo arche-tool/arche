@@ -1,43 +1,48 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Gamma.GammaGrain
-       ( runCay ) where
+module Gamma.Strategy.Cayron
+       ( run ) where
 
-import qualified Data.List                   as L
-
-import qualified Data.Vector                 as V
-import qualified Data.Vector.Unboxed         as U
-import qualified Data.Vector.Unboxed.Mutable as UM
-
+import qualified Data.Vector         as V
 import qualified Data.HashMap.Strict as HM
-import           Data.HashMap.Strict (HashMap)
-
 import qualified Data.HashSet        as HS
+
+import           Data.HashMap.Strict (HashMap)
 import           Data.HashSet        (HashSet)
-
 import           Data.Maybe          (mapMaybe)
+import           File.ANGReader      (parseANG)
 
+import           System.FilePath
+
+import           Hammer.Math.Algebra         (Vec3(..))
 import           Hammer.VoxBox
 import           Hammer.VTK.VoxBox
 import           Hammer.VTK
-import           Hammer.Math.Algebra         (Vec3(..), Vec4(..))
 import           Hammer.MicroGraph
 
+import           Texture.Symmetry            (Symm (..))
 import           Texture.Orientation
-import           Texture.Symmetry            (Symm (..), toFZ)
 
 import           Gamma.Grains
-import           Gamma.GammaFinder
 import           Gamma.KurdjumovSachs
 
-import Debug.Trace
+--import Debug.Trace
+--dbg a = trace (show a) a
+--dbgs s a = trace (show s ++ " <=> " ++ show a) a
 
-dbg a = trace (show a) a
-dbgs s a = trace (show s ++ " <=> " ++ show a) a
+run :: Deg -> FilePath -> FilePath -> IO ()
+run miso fin fout = do
+  ang <- parseANG fin
+  case getGrainID miso Cubic ang of
+    Nothing            -> print "No grain detected!"
+    Just (gids, gtree) -> let
+      vb  = getVoxBox ang
+      vtk = findConnFaces vb (gids, gtree)
+      in writeUniVTKfile (fout <.> "vtu") True vtk
 
-runCay :: VoxBox Quaternion -> (VoxBox GrainID, HashMap Int (V.Vector VoxelPos)) -> VTK Vec3
-runCay vbq gbox@(_, gmap) = let
+findConnFaces :: VoxBox Quaternion -> (VoxBox GrainID, HashMap Int (V.Vector VoxelPos)) -> VTK Vec3
+findConnFaces vbq gbox@(_, gmap) = let
   es    = HM.keys $ microEdges micro
   micro = fst $ getMicroVoxel gbox
   qMap  = HM.map (averageQuaternion . V.convert . V.map (vbq #!)) gmap
@@ -57,7 +62,7 @@ testFace grains fid = let
    q1 <- HM.lookup g1 grains
    q2 <- HM.lookup g2 grains
    return $ hasOR q1 q2
-  in dbgs (g1, g2) $ maybe False id test
+  in maybe False id test
 
 hasOR :: Quaternion -> Quaternion -> Bool
 hasOR q1 q2 = (fromAngle $ Deg 15) > misoKS Cubic q1 q2

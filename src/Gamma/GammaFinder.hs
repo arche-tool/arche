@@ -37,13 +37,11 @@ import           Texture.Symmetry
 import           Hammer.Math.Algebra
 import           Hammer.Math.Optimum
 
-import           Gamma.KurdjumovSachs
-
 import           Debug.Trace
 import           Hammer.VTK
 import           Texture.SH.HyperSphere
 
-dbg a = trace (show a) a
+--dbg a = trace (show a) a
 
 newtype FZ = FZ {qFZ :: Quaternion} deriving (Show, GB.Vector U.Vector, GM.MVector U.MVector, U.Unbox)
 newtype OR = OR {qOR :: Quaternion} deriving (Show, GB.Vector U.Vector, GM.MVector U.MVector, U.Unbox)

@@ -1,0 +1,32 @@
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE FlexibleInstances #-}
+
+module Gamma.Strategy.Graph
+       ( run ) where
+
+import qualified Data.Vector.Unboxed as U
+
+import           Texture.Orientation
+import           Hammer.VoxBox
+import           Hammer.VoxConn
+import           Hammer.VTK.VoxBox
+import           Hammer.VTK
+import           Hammer.MicroGraph
+import           File.ANGReader   (parseANG)
+import           Texture.Symmetry (Symm (..))
+
+import           Gamma.Grains
+
+run :: Deg -> FilePath -> FilePath -> IO ()
+run miso fin fout = do
+  ang <- parseANG fin
+  case getGrainID miso Cubic ang of
+    Nothing -> print "No grain detected!"
+    Just vg -> let
+      (micro, gids) = getMicroVoxel $ resetGrainIDs vg
+      attrs = [mkCellAttr "GrainID" (\a _ _ -> unGrainID $ (grainID gids) U.! a)]
+      in do
+        writeUniVTKfile (fout ++ ".vtr")        True $ renderVoxBoxVTK      gids attrs
+        writeUniVTKfile (fout ++ "_faces.vtu")  True $ renderMicroFacesVTK  gids micro
+        writeUniVTKfile (fout ++ "_edges.vtu")  True $ renderMicroEdgesVTK  gids micro
+        writeUniVTKfile (fout ++ "_vertex.vtu") True $ renderMicroVertexVTK gids micro

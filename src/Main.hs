@@ -1,35 +1,24 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
-import qualified Data.Vector         as V
-import qualified Data.Vector.Unboxed as U
-import qualified Data.Vector.Unboxed.Mutable as UM
+import qualified Gamma.Strategy.Graph    as Graph
+import qualified Gamma.Strategy.ORFit    as ORFit
+import qualified Gamma.Strategy.Cayron   as Cayron
+import qualified Gamma.Strategy.Miyamoto as Miyamoto
 
 import           System.Directory            (doesFileExist)
-import           Control.DeepSeq
-import           Control.Parallel.Strategies
 
 import           Options.Applicative
 import           System.FilePath
 
-import           Texture.Orientation
-import           Hammer.VoxBox
-import           Hammer.VoxConn
-import           Hammer.VTK.VoxBox
-import           Hammer.VTK
-import           Hammer.MicroGraph
-import           Hammer.Math.Algebra         (Vec3(..), Vec4(..))
-import           File.ANGReader              (parseANG, rotation, nodes)
-import           Texture.Symmetry            (Symm (..), toFZ)
+import           Texture.Orientation (Deg(..))
 
-import           Gamma.OMRender
-import           Gamma.GBRender
-import           Gamma.Grains
-import           Gamma.GammaFinder
-import           Gamma.GammaGrain
-import           Gamma.KurdjumovSachs
-
-import    Debug.Trace
+data RunMode
+  = ShowGraph
+  | ORFit
+  | Miyamoto
+  | Cayron
+  deriving (Show, Eq)
 
 data Gammafier =
   Gammafier
@@ -37,6 +26,7 @@ data Gammafier =
   , vtk_output :: Maybe String
   , grain_miso :: Deg
   , tolerance  :: Double
+  , runMode    :: RunMode
   } deriving (Show)
 
 gammafier :: Parser Gammafier
@@ -63,6 +53,23 @@ gammafier = Gammafier
       <> metavar "error[%]"
       <> value 0.05
       <> help "The default error is 5%."))
+  <*> parseMode
+
+parseMode :: Parser RunMode
+parseMode = subparser
+ ( command "graph"
+   (info (pure ShowGraph)
+   (progDesc "Render grain's ID, vertexes, edges and faces."))
+ <> command "orfit"
+   (info (pure ORFit)
+   (progDesc "Fit OR on all points where ci > 0.1"))
+ <> command "myiamoto"
+   (info (pure Miyamoto)
+   (progDesc "Reconstruction based on Myiamoto's method."))
+ <> command "cayron"
+   (info (pure Cayron)
+   (progDesc "Reconstruction based on Cayron's method."))
+ )
 
 main :: IO ()
 main = execParser opts >>= run
@@ -82,126 +89,10 @@ run Gammafier{..} = let
       _ -> stdOutName
   in do
     inOK <- doesFileExist ang_input
-    if inOK
-      --then mkCay grain_miso ang_input outName
-      --then renderTest grain_miso ang_input outName
-      then mkMia ang_input outName
-      else putStrLn "Invalid input file. Try agian!"
-
-renderTest :: Deg -> FilePath -> FilePath -> IO ()
-renderTest miso fin fout = do
-  ang <- parseANG fin
-  case getGrainID miso Cubic ang of
-    Nothing            -> print "No grain detected!"
-    Just (gids, gtree) -> let
-      vboxQ  = getVoxBox ang
-      viewGB = [ showGBMiso   Cubic
-               , showGBMisoKS Cubic
-               ]
-      viewOM = [ showOMQI
-               , showOMCI
-               , showOMPhase
-               , showOMIPF    Cubic ND
-               , showGrainIDs gids
-               ]
-      (vecQ, vecGID) = getOriGID ang gids
-      vtkGB  = renderGB viewGB vboxQ
-      vtkOM  = renderOM viewOM ang
-      vtkSO2 = renderSO2Points Cubic ND (Vec3 1 0 0) vecGID vecQ
-      vtkSO3 = renderSO3Points Cubic ND vecGID vecQ
-      in do
-        print (U.length vecQ, U.length vecGID)
-        writeUniVTKfile (fout <.> "vti") True vtkOM
-        writeUniVTKfile (fout <.> "vtu") True vtkGB
-        writeUniVTKfile (fout <.> "SO2" <.> "vtu") True vtkSO2
-        writeUniVTKfile (fout <.> "SO3" <.> "vtu") True vtkSO3
-        let
-          (g, t)   = getGammaOR2 ang
-          --g        = getGamma ang
-          ggid     = U.singleton $ mkGrainID (-1)
-          as       = U.map (toFZ Cubic . (g #<=)) (V.convert ksTrans)
-          agid     = U.replicate (U.length as) (mkGrainID $ -1)
-          vtkSO2_g = renderSO2Points Cubic ND (Vec3 1 0 0) ggid (U.singleton g)
-          vtkSO3_g = renderSO3Points Cubic ND              ggid (U.singleton g)
-          vtkSO3_a = renderSO3Points Cubic ND              agid as
-        print (g, t)
-        --writeUniVTKfile (fout <.> "SO2-gamma" <.> "vtu") True vtkSO2_g
-        writeUniVTKfile (fout <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
-        writeUniVTKfile (fout <.> "SO3-alpha" <.> "vtu") True vtkSO3_a
-
-test_GrainFinder :: FilePath -> VoxBox GrainID -> IO ()
-test_GrainFinder fout vbq = case (getMicroVoxel . resetGrainIDs) <$> grainFinder (==) vbq of
-  Nothing -> putStrLn "Sorry, I can't get the MicroVoxel"
-  Just (micro, vboxGID) -> let
-    attrs = [mkCellAttr "GrainID" (\a _ _ -> unGrainID $ (grainID vboxGID) U.! a)]
-    in do
-      --print micro
-      writeUniVTKfile (fout ++ ".vtr")        True $ renderVoxBoxVTK      vbq attrs
-      writeUniVTKfile (fout ++ "_faces.vtu")  True $ renderMicroFacesVTK  vbq micro
-      writeUniVTKfile (fout ++ "_edges.vtu")  True $ renderMicroEdgesVTK  vbq micro
-      writeUniVTKfile (fout ++ "_vertex.vtu") True $ renderMicroVertexVTK vbq micro
-
-
--- | Simlpe reconstruction strategy were the orientation map is divided in non-overlapping
--- areas and the parent phase is calculated from all product orientation within the subarea.
--- The calculation is done by function minimization with pure KS.
-mkCay :: Deg -> FilePath -> FilePath -> IO ()
-mkCay miso fin fout = do
-  ang <- parseANG fin
-  case getGrainID miso Cubic ang of
-    Nothing            -> print "No grain detected!"
-    Just (gids, gtree) -> let
-      vb  = getVoxBox ang
-      vtk = runCay vb (gids, gtree)
-      in do
-        test_GrainFinder fout gids
-        writeUniVTKfile (fout <.> "vtu") True vtk
-
--- | Simlpe reconstruction strategy were the orientation map is divided in non-overlapping
--- areas and the parent phase is calculated from all product orientation within the subarea.
--- The calculation is done by function minimization with pure KS.
-mkMia :: FilePath -> FilePath -> IO ()
-mkMia fin fout = do
-  ang <- parseANG fin
-  let
-    vb     = getVoxBox ang
-    vb'    = runMia 100 vb
-    node'  = V.zipWith (\p q -> p {rotation = q}) (nodes ang) (U.convert $ grainID vb')
-    ang'   = ang {nodes = node'}
-    viewOM = [ showOMQI
-             , showOMCI
-             , showOMPhase
-             , showOMIPF    Cubic ND
-             ]
-    vtkOM  = renderOM viewOM ang'
-  writeUniVTKfile (fout <.> "vti") True vtkOM
-
-runMia :: Int -> VoxBox Quaternion -> VoxBox Quaternion
-runMia n vb@VoxBox{..} = vb {grainID = newVec}
-  where
-    stg = parListChunk 5000 (evalTuple2 rpar r0)
-    l = U.length grainID
-    newVec = U.create $ do
-      v <- UM.new l
-      let qis  = divConq dimension
-          qisp = qis `using` stg
-      mapM_ (save v) qisp
-      return v
-    save v (ga, is) = U.mapM_ (\i -> UM.write v i ga) is
-    getG br = let
-      ps = V.fromList $ getRangePos br
-      is = V.convert $ V.map (dimension %@) ps
-      qs = U.map (grainID U.!) is
-      in (findGamma ksORs qs, is)
-    divConq br
-      | sizeVoxBoxRange br <= 0 = []
-      | sizeVoxBoxRange br <= n = [getG br]
-      | otherwise = case splitInTwoBox br of
-        Just (br1, br2) -> divConq br1 ++ divConq br2
-        Nothing         -> []
-
-instance NFData Quaternion where
-  rnf = rnf . quaterVec
-
-instance NFData Vec4 where
-  rnf (Vec4 a b c d) = a `seq` b `seq` c `seq` d `seq` ()
+    if not inOK
+      then putStrLn "Invalid input file. Try agian!"
+      else case runMode of
+      Cayron   -> Cayron.run grain_miso ang_input outName
+      Miyamoto -> Miyamoto.run          ang_input outName
+      ORFit    -> ORFit.run grain_miso  ang_input outName
+      _        -> Graph.run grain_miso  ang_input outName

@@ -18,7 +18,7 @@ library
                      Gamma.KurdjumovSachs
                      Gamma.GammaFinder
   -- other-modules:
-  build-depends:     base                 == 4.6.*
+  build-depends:     base                 == 4.*
                    , hammer               >= 0.4
                    , sledge               >= 0.3.2
                    , vector               >= 0.10
