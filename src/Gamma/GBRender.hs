@@ -19,7 +19,7 @@ import           Hammer.VTK.VoxBox ()
 import           Texture.Orientation
 import           Texture.Symmetry
 
-import           Gamma.KurdjumovSachs
+import           Gamma.OR
 
 -- =======================================================================================
 

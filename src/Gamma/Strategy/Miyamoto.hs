@@ -4,11 +4,10 @@
 module Gamma.Strategy.Miyamoto
        ( run ) where
 
-import qualified Data.Vector         as V
-import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector                 as V
+import qualified Data.Vector.Unboxed         as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
-import           Control.DeepSeq
 import           Control.Parallel.Strategies
 
 import           System.FilePath
@@ -16,13 +15,12 @@ import           System.FilePath
 import           Texture.Orientation
 import           Hammer.VoxBox
 import           Hammer.VTK
-import           Hammer.Math.Algebra         (Vec4(..))
 import           File.ANGReader              (parseANG, rotation, nodes)
 import           Texture.Symmetry            (Symm (..))
 
 import           Gamma.OMRender
 import           Gamma.Grains
-import           Gamma.GammaFinder
+import           Gamma.OR
 
 -- | Simlpe reconstruction strategy were the orientation map is divided in non-overlapping
 -- areas and the parent phase is calculated from all product orientation within the subarea.

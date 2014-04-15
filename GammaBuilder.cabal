@@ -15,8 +15,7 @@ library
   exposed-modules:   Gamma.OMRender
                      Gamma.GBRender
                      Gamma.Grains
-                     Gamma.KurdjumovSachs
-                     Gamma.GammaFinder
+                     Gamma.OR
   -- other-modules:
   build-depends:     base                 == 4.*
                    , hammer               >= 0.4

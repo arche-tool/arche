@@ -19,8 +19,7 @@ import           Texture.Symmetry            (Symm (..), toFZ)
 import           Gamma.OMRender
 import           Gamma.GBRender
 import           Gamma.Grains
-import           Gamma.GammaFinder
-import           Gamma.KurdjumovSachs
+import           Gamma.OR
 
 run :: Deg -> FilePath -> FilePath -> IO ()
 run miso fin fout = do
@@ -51,7 +50,7 @@ run miso fin fout = do
           (g, t)   = getGammaOR2 ang
           --g        = getGamma ang
           ggid     = U.singleton $ mkGrainID (-1)
-          as       = U.map (toFZ Cubic . (g #<=)) (V.convert ksTrans)
+          as       = U.map (toFZ Cubic . (g #<=) . qOR) (V.convert ksORs)
           agid     = U.replicate (U.length as) (mkGrainID $ -1)
           vtkSO3_g = renderSO3Points Cubic ND              ggid (U.singleton g)
           vtkSO3_a = renderSO3Points Cubic ND              agid as

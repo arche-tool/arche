@@ -2,7 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 
-module Gamma.GammaFinder
+module Gamma.OR
        ( findGamma
        , findGamma2
        , findOR
@@ -12,25 +12,28 @@ module Gamma.GammaFinder
        , OR (..)
        , ksORs
        , ksOR
+       , misoKS
+         -- * Test functions
        , testGammaFit
        , testFindGamma
        , testMisFunc
+       , testMisoKS
        ) where
 
-import qualified Data.Vector         as V
-import qualified Data.Vector.Unboxed as U
-import qualified Data.Vector.Generic as G
-import qualified Data.Packed         as HV
-
+import qualified Data.Packed                 as HV
+import qualified Data.Vector                 as V
+import qualified Data.Vector.Unboxed         as U
+import qualified Data.Vector.Generic         as G
 import qualified Data.Vector.Generic.Base    as GB
 import qualified Data.Vector.Generic.Mutable as GM
 
-import           Numeric.Container   (add, sub)
 import           Data.Vector.Unboxed (Vector)
-import           System.Random       (randomIO)
+import           Numeric.Container   (add, sub)
+import           System.Random       (randomIO, randomRIO)
 
 import           Numeric.GSL.Minimization
 import           File.ANGReader
+
 import           Texture.Orientation
 import           Texture.Symmetry
 
@@ -43,8 +46,24 @@ import           Texture.SH.HyperSphere
 
 --dbg a = trace (show a) a
 
+-- ======================================================================================= 
+
 newtype FZ = FZ {qFZ :: Quaternion} deriving (Show, GB.Vector U.Vector, GM.MVector U.MVector, U.Unbox)
 newtype OR = OR {qOR :: Quaternion} deriving (Show, GB.Vector U.Vector, GM.MVector U.MVector, U.Unbox)
+
+instance Rot OR where
+  (OR p) #<= (OR q) = OR $ p #<= q
+  invert         = OR . invert . qOR
+  toQuaternion   = qOR
+  fromQuaternion = OR
+  zerorot        = OR zerorot
+  getOmega       = getOmega . qOR
+
+mkOR :: Vec3 -> Deg -> OR
+mkOR v = OR . toQuaternion . mkAxisPair v
+
+convert :: (Rot a, Rot b) => a -> b
+convert = fromQuaternion . toQuaternion
 
 getQinFZ :: Quaternion -> FZ
 getQinFZ = FZ . toFZ Cubic
@@ -195,20 +214,6 @@ errorfunc ga ts gms1FZ = abs $ 1 - (total / n)
     total = G.sum q0s
     n     = fromIntegral (G.length gms1FZ)
 
-instance Rot OR where
-  (OR p) #<= (OR q) = OR $ p #<= q
-  invert         = OR . invert . qOR
-  toQuaternion   = qOR
-  fromQuaternion = OR
-  zerorot        = OR zerorot
-  getOmega       = getOmega . qOR
-
-mkOR :: Vec3 -> Deg -> OR
-mkOR v = OR . toQuaternion . mkAxisPair v
-
-convert :: (Rot a, Rot b) => a -> b
-convert = fromQuaternion . toQuaternion
-
 -- ================================= Test Function =======================================
 
 testGammaFit :: Quaternion -> Vector Quaternion -> OR -> (Double, Double)
@@ -286,3 +291,23 @@ errorfuncSlowButSure ga gms t = abs $ 1 - (total / n)
 
     total = G.sum $ G.map getMaxQ0 gms
     n     = fromIntegral (G.length gms)
+
+testMisoKS :: Vector Quaternion -> IO Deg
+testMisoKS ks = do
+  a  <- randomIO
+  i1 <- randomRIO (0, U.length ks - 1)
+  i2 <- randomRIO (0, U.length ks - 1)
+  let
+    ks1 = ks U.! i1
+    ks2 = ks U.! i2
+    m1  = a #<= ks1
+    m2  = a #<= ks2
+    miso = getMisoAngle Cubic m1 m2
+  return (toAngle miso :: Deg)
+
+misoKS :: Symm -> Quaternion -> Quaternion -> Double
+misoKS symm q1 q2 = let
+  ks1 = U.map ((q1 #<=) . qOR) ksORs
+  ks2 = U.map ((q2 #<=) . qOR) ksORs
+  foo q = U.map (getMisoAngle symm q) ks2
+  in U.minimum $ U.concatMap foo ks1

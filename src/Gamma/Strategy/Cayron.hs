@@ -25,7 +25,7 @@ import           Texture.Symmetry            (Symm (..))
 import           Texture.Orientation
 
 import           Gamma.Grains
-import           Gamma.KurdjumovSachs
+import           Gamma.OR
 
 --import Debug.Trace
 --dbg a = trace (show a) a
