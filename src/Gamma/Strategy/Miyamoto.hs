@@ -9,17 +9,16 @@ import qualified Data.Vector.Unboxed         as U
 import qualified Data.Vector.Unboxed.Mutable as UM
 
 import           Control.Parallel.Strategies
-
 import           System.FilePath
 
-import           Texture.Orientation
 import           Hammer.VoxBox
 import           Hammer.VTK
-import           File.ANGReader              (parseANG, rotation, nodes)
-import           Texture.Symmetry            (Symm (..))
+
+import           File.ANGReader
+import           Texture.Symmetry
+import           Texture.Orientation
 
 import           Gamma.OMRender
-import           Gamma.Grains
 import           Gamma.OR
 
 -- | Simlpe reconstruction strategy were the orientation map is divided in non-overlapping
@@ -29,7 +28,7 @@ run :: FilePath -> FilePath -> IO ()
 run fin fout = do
   ang <- parseANG fin
   let
-    vb     = getVoxBox ang
+    vb     = ebsdToVoxBox ang rotation
     vb'    = scanBox 100 vb
     node'  = V.zipWith (\p q -> p {rotation = q}) (nodes ang) (U.convert $ grainID vb')
     ang'   = ang {nodes = node'}

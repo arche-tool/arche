@@ -6,21 +6,23 @@ module Gamma.Strategy.Graph
 
 import qualified Data.Vector.Unboxed as U
 
-import           Texture.Orientation
 import           Hammer.VoxBox
 import           Hammer.VoxConn
 import           Hammer.VTK.VoxBox
 import           Hammer.VTK
 import           Hammer.MicroGraph
-import           File.ANGReader   (parseANG)
-import           Texture.Symmetry (Symm (..))
+
+import           File.ANGReader
+import           Texture.Symmetry
+import           Texture.Orientation
 
 import           Gamma.Grains
 
 run :: Deg -> FilePath -> FilePath -> IO ()
 run miso fin fout = do
   ang <- parseANG fin
-  case getGrainID miso Cubic ang of
+  let vboxQ = ebsdToVoxBox ang rotation
+  case getGrainID miso Cubic vboxQ of
     Nothing -> print "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg

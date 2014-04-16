@@ -4,17 +4,17 @@
 module Gamma.Strategy.ORFit
        ( run ) where
 
-import qualified Data.Vector                 as V
-import qualified Data.Vector.Unboxed         as U
+import qualified Data.Vector         as V
+import qualified Data.Vector.Unboxed as U
 
 import           System.FilePath
 
 import           Hammer.VTK
 import           Hammer.MicroGraph
 
-import           File.ANGReader              (parseANG)
+import           File.ANGReader
 import           Texture.Orientation
-import           Texture.Symmetry            (Symm (..), toFZ)
+import           Texture.Symmetry
 
 import           Gamma.OMRender
 import           Gamma.GBRender
@@ -24,10 +24,10 @@ import           Gamma.OR
 run :: Deg -> FilePath -> FilePath -> IO ()
 run miso fin fout = do
   ang <- parseANG fin
-  case getGrainID miso Cubic ang of
+  let vboxQ = ebsdToVoxBox ang rotation
+  case getGrainID miso Cubic vboxQ of
     Nothing        -> print "No grain detected!"
     Just (gids, _) -> let
-      vboxQ  = getVoxBox ang
       viewGB = [ showGBMiso   Cubic
                , showGBMisoKS Cubic
                ]

@@ -11,7 +11,6 @@ import qualified Data.HashSet        as HS
 import           Data.HashMap.Strict (HashMap)
 import           Data.HashSet        (HashSet)
 import           Data.Maybe          (mapMaybe)
-import           File.ANGReader      (parseANG)
 
 import           System.FilePath
 
@@ -23,6 +22,7 @@ import           Hammer.MicroGraph
 
 import           Texture.Symmetry            (Symm (..))
 import           Texture.Orientation
+import           File.ANGReader
 
 import           Gamma.Grains
 import           Gamma.OR
@@ -34,11 +34,11 @@ import           Gamma.OR
 run :: Deg -> FilePath -> FilePath -> IO ()
 run miso fin fout = do
   ang <- parseANG fin
-  case getGrainID miso Cubic ang of
+  let vbq = ebsdToVoxBox ang rotation
+  case getGrainID miso Cubic vbq of
     Nothing            -> print "No grain detected!"
     Just (gids, gtree) -> let
-      vb  = getVoxBox ang
-      vtk = findConnFaces vb (gids, gtree)
+      vtk = findConnFaces vbq (gids, gtree)
       in writeUniVTKfile (fout <.> "vtu") True vtk
 
 findConnFaces :: VoxBox Quaternion -> (VoxBox GrainID, HashMap Int (V.Vector VoxelPos)) -> VTK Vec3
