@@ -5,6 +5,7 @@ import qualified Gamma.Strategy.Graph    as Graph
 import qualified Gamma.Strategy.ORFit    as ORFit
 import qualified Gamma.Strategy.Cayron   as Cayron
 import qualified Gamma.Strategy.Miyamoto as Miyamoto
+import qualified Gamma.Strategy.Gomes    as Gomes
 
 import           System.Directory            (doesFileExist)
 
@@ -18,6 +19,7 @@ data RunMode
   | ORFit
   | Miyamoto
   | Cayron
+  | Gomes
   deriving (Show, Eq)
 
 data Gammafier =
@@ -69,6 +71,9 @@ parseMode = subparser
  <> command "cayron"
    (info (pure Cayron)
    (progDesc "Reconstruction based on Cayron's method."))
+ <> command "gomes"
+   (info (pure Gomes)
+   (progDesc "Reconstruction based on Gomes's method."))
  )
 
 main :: IO ()
@@ -92,7 +97,8 @@ run Gammafier{..} = let
     if not inOK
       then putStrLn "Invalid input file. Try agian!"
       else case runMode of
+      Miyamoto -> Miyamoto.run ang_input outName
+      Gomes    -> Gomes.run  grain_miso ang_input outName
       Cayron   -> Cayron.run grain_miso ang_input outName
-      Miyamoto -> Miyamoto.run          ang_input outName
-      ORFit    -> ORFit.run grain_miso  ang_input outName
-      _        -> Graph.run grain_miso  ang_input outName
+      ORFit    -> ORFit.run  grain_miso ang_input outName
+      _        -> Graph.run  grain_miso ang_input outName
