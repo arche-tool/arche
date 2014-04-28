@@ -10,6 +10,7 @@ import qualified Data.Vector.Unboxed.Mutable  as MU
 import qualified Data.HashMap.Strict          as HM
 import qualified Data.HashSet                 as HS
 
+import           Data.Vector.Unboxed (Vector)
 import           Data.HashMap.Strict (HashMap)
 import           Data.HashSet        (HashSet)
 import           Data.Maybe          (mapMaybe)
@@ -17,7 +18,7 @@ import           Data.Maybe          (mapMaybe)
 import           System.FilePath
 import           Control.Parallel.Strategies
 
-import           Hammer.Math.Algebra         (Vec3(..))
+import           Hammer.Math.Algebra         (Vec3(..), Vec4(..))
 import           Hammer.VoxBox
 import           Hammer.VTK.VoxBox
 import           Hammer.VTK
@@ -41,18 +42,19 @@ run miso fin fout = do
   case getGrainID miso Cubic vbq of
     Nothing               -> print "No grain detected!"
     Just gidMap@(vbgid, _) -> let
-      mkr = fst $ getMicroVoxel gidMap
-      fs  = findConnFaces vbq mkr
-      vtk = renderGB vbq mkr fs
-      ggh = grainsGraph fs
+      realOR = fromQuaternion $ mkQuaternion $ Vec4 7.126e-1 2.895e-1 2.238e-1 5.986e-1
+      mkr    = fst $ getMicroVoxel gidMap
+      fs     = findConnFaces vbq mkr realOR -- or ksOR
+      ggh    = grainsGraph fs
       vbgid2 = gammaBox gidMap ggh
-      vtk2 = renderVoxBoxVTK vbgid2 [cell1, cell2]
-      cell1 = mkCellAttr "GammaGB" (\i _ _ -> (grainID vbgid2) U.! i)
-      cell2 = mkCellAttr "AlphaGB" (\i _ _ -> unGrainID $ (grainID vbgid)  U.! i)
+      vtkGB  = renderGB   vbq mkr fs
+      vtkBox = renderVoxBoxVTK vbgid2 [cell1, cell2]
+      cell1  = mkCellAttr "GammaGB" (\i _ _ -> (grainID vbgid2) U.! i)
+      cell2  = mkCellAttr "AlphaGB" (\i _ _ -> unGrainID $ (grainID vbgid)  U.! i)
       in do
         print $ grainsGraph fs
-        writeUniVTKfile (fout <.> "vtu") True vtk
-        writeUniVTKfile (fout <.> "vtr") True vtk2
+        writeUniVTKfile (fout <.> "vtu") True vtkGB
+        writeUniVTKfile (fout <.> "vtr") True vtkBox
 
 gammaBox :: (VoxBox GrainID, HashMap Int (V.Vector VoxelPos)) -> [HashSet Int] -> VoxBox Int
 gammaBox (vb@VoxBox{..}, gidMap) gs = let
@@ -67,39 +69,41 @@ gammaBox (vb@VoxBox{..}, gidMap) gs = let
 grainsGraph :: [FaceID] -> [HashSet Int]
 grainsGraph = connComp . mkGraph . map unFaceID
 
-findConnFaces :: VoxBox Quaternion -> MicroVoxel -> [FaceID]
-findConnFaces vbq micro = let
-  es = HM.keys $ microEdges micro
-  fs = (map (testEdge vbq micro) es) `using` parListChunk 100 rpar
+findConnFaces :: VoxBox Quaternion -> MicroVoxel -> OR -> [FaceID]
+findConnFaces vbq micro withOR = let
+  es  = HM.keys $ microEdges micro
+  ors = genTS withOR
+  bs  = map (testEdge vbq micro ors) es
+  fs  = bs `using` parListChunk 100 rpar
   in concatMap (\(f1, f2, f3)-> [f1, f2, f3]) (mapMaybe id fs)
 
-testEdge :: VoxBox Quaternion -> MicroVoxel -> EdgeID -> Maybe (FaceID, FaceID, FaceID)
-testEdge vbq micro eid = case unEdgeID eid of
+testEdge :: VoxBox Quaternion -> MicroVoxel -> Vector OR ->
+            EdgeID -> Maybe (FaceID, FaceID, FaceID)
+testEdge vbq micro ors eid = let
+  func = testFace vbq micro ors
+  in case unEdgeID eid of
   Left (f1, f2, f3)
-    | testFace vbq micro f1 &&
-      testFace vbq micro f2 &&
-      testFace vbq micro f3 -> return (f1, f2, f3)
+    | func f1 &&
+      func f2 &&
+      func f3 -> return (f1, f2, f3)
   _ -> Nothing
 
-testFace :: VoxBox Quaternion -> MicroVoxel -> FaceID -> Bool
-testFace vbq micro fid = let
+testFace :: VoxBox Quaternion -> MicroVoxel -> Vector OR -> FaceID -> Bool
+testFace vbq micro ors fid = let
   facelist = getFaceProp fid micro >>= getPropValue
   func fs = let
-    ors = V.filter id $ V.map (testSingleFace vbq) fs
-    orn = fromIntegral $ V.length ors
-    fn  = fromIntegral $ V.length fs
-    in dbgs fid $ (orn / fn) :: Double
-  in maybe False ((> 0.7) . func) facelist
+    bs = V.filter id $ V.map (testSingleFace vbq ors) fs
+    fn = fromIntegral $ V.length fs
+    on = fromIntegral $ V.length bs
+    in dbgs fid $ (on / fn) :: Double
+  in maybe False ((> 0.5) . func) facelist
 
-testSingleFace :: VoxBox Quaternion -> FaceVoxelPos -> Bool
-testSingleFace vbq face = let
+testSingleFace :: VoxBox Quaternion -> Vector OR -> FaceVoxelPos -> Bool
+testSingleFace vbq ors face = let
   (v1, v2) = getFaceVoxels face
   q1 = vbq #! v1
   q2 = vbq #! v2
-  in hasOR q1 q2
-
-hasOR :: Quaternion -> Quaternion -> Bool
-hasOR q1 q2 = (fromAngle $ Deg 5) > misoKS Cubic q1 q2
+  in (fromAngle $ Deg 3) > misoOR ors Cubic q1 q2
 
 renderGB :: VoxBox Quaternion -> MicroVoxel -> [FaceID] -> VTK Vec3
 renderGB vb micro fs = addData $ renderAllElemProp vb fprop

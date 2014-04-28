@@ -28,7 +28,7 @@ import           Hammer.VTK
 import           Texture.IPF
 import           Texture.Orientation
 import           Texture.Symmetry
-import           Texture.SH.HyperSphere
+import           Texture.HyperSphere
 
 -- =======================================================================================
 

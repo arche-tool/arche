@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Gamma.Strategy.ORFit
+module Gamma.Strategy.ORFitSingle
        ( run ) where
 
 import qualified Data.Vector         as V

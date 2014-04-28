@@ -6,12 +6,15 @@ module Gamma.OR
        ( findGamma
        , findGamma2
        , findOR
+       , findORFace
        , getGamma
        , getGammaOR
        , getGammaOR2
        , OR (..)
+       , genTS
        , ksORs
        , ksOR
+       , misoOR
        , misoKS
          -- * Test functions
        , testGammaFit
@@ -42,7 +45,7 @@ import           Hammer.Math.Optimum
 
 import           Debug.Trace
 import           Hammer.VTK
-import           Texture.SH.HyperSphere
+import           Texture.HyperSphere
 
 --dbg a = trace (show a) a
 
@@ -80,6 +83,17 @@ genTS (OR t) = let
   vs = V.convert $ getAllSymmVec (getSymmOps Cubic) v
   in G.map (OR . mergeQuaternion . ((,) w)) vs
 
+misoKS :: Symm -> Quaternion -> Quaternion -> Double
+misoKS = misoOR ksORs
+
+misoOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
+misoOR ors symm q1 q2 = let
+  ks1 = U.map ((q1 #<=) . qOR) ors
+  ks2 = U.map ((q2 #<=) . qOR) ors
+  -- Fully correct. Need prove that works!
+  foo q = U.map (getMisoAngle symm q) ks2
+  in U.minimum $ U.concatMap foo ks1
+
 getGammaOR2 :: EBSDdata -> (Quaternion, OR)
 getGammaOR2 EBSDdata{..} = trace (show (testGammaFit gf qs tf)) (gf, tf)
   where
@@ -115,6 +129,23 @@ findOR ga qs t0 = let
   func v = let
     t = OR . toQuaternion $ mkUnsafeRodrigues v
     in errorfunc ga (genTS t) fzqs
+  foo v = let
+    k  = 0.001
+    x  = func v
+    d1 = (func (v &+ Vec3 k 0 0) - func (v &- Vec3 k 0 0)) / (2*k)
+    d2 = (func (v &+ Vec3 0 k 0) - func (v &- Vec3 0 k 0)) / (2*k)
+    d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
+    in (x, Vec3 d1 d2 d3)
+  guess = rodriVec $ fromQuaternion $ qOR t0
+  in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS foo guess
+
+findORFace :: Vector (Quaternion, Quaternion) -> OR -> OR
+findORFace qs t0 = let
+  err t = let
+    n    = U.length qs
+    errs = U.map (\(q1, q2) -> misoOR (genTS t) Cubic q1 q2) qs
+    in U.sum errs / (fromIntegral n)
+  func = err . OR . toQuaternion . mkUnsafeRodrigues
   foo v = let
     k  = 0.001
     x  = func v
@@ -304,10 +335,3 @@ testMisoKS ks = do
     m2  = a #<= ks2
     miso = getMisoAngle Cubic m1 m2
   return (toAngle miso :: Deg)
-
-misoKS :: Symm -> Quaternion -> Quaternion -> Double
-misoKS symm q1 q2 = let
-  ks1 = U.map ((q1 #<=) . qOR) ksORs
-  ks2 = U.map ((q2 #<=) . qOR) ksORs
-  foo q = U.map (getMisoAngle symm q) ks2
-  in U.minimum $ U.concatMap foo ks1

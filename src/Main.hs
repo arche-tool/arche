@@ -1,11 +1,12 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
-import qualified Gamma.Strategy.Graph    as Graph
-import qualified Gamma.Strategy.ORFit    as ORFit
-import qualified Gamma.Strategy.Cayron   as Cayron
-import qualified Gamma.Strategy.Miyamoto as Miyamoto
-import qualified Gamma.Strategy.Gomes    as Gomes
+import qualified Gamma.Strategy.Graph       as Graph
+import qualified Gamma.Strategy.ORFitSingle as ORFitSingle
+import qualified Gamma.Strategy.ORFitAll    as ORFitAll
+import qualified Gamma.Strategy.Cayron      as Cayron
+import qualified Gamma.Strategy.Miyamoto    as Miyamoto
+import qualified Gamma.Strategy.Gomes       as Gomes
 
 import           System.Directory            (doesFileExist)
 
@@ -16,7 +17,8 @@ import           Texture.Orientation (Deg(..))
 
 data RunMode
   = ShowGraph
-  | ORFit
+  | ORFitAll
+  | ORFitSingle
   | Miyamoto
   | Cayron
   | Gomes
@@ -62,9 +64,12 @@ parseMode = subparser
  ( command "graph"
    (info (pure ShowGraph)
    (progDesc "Render grain's ID, vertexes, edges and faces."))
- <> command "orfit"
-   (info (pure ORFit)
+ <> command "orfit-single"
+   (info (pure ORFitSingle)
    (progDesc "Fit OR on all points where ci > 0.1"))
+ <> command "orfit-all"
+   (info (pure ORFitAll)
+   (progDesc "Fit OR on all grain boundaries."))
  <> command "myiamoto"
    (info (pure Miyamoto)
    (progDesc "Reconstruction based on Myiamoto's method."))
@@ -97,8 +102,9 @@ run Gammafier{..} = let
     if not inOK
       then putStrLn "Invalid input file. Try agian!"
       else case runMode of
-      Miyamoto -> Miyamoto.run ang_input outName
-      Gomes    -> Gomes.run  grain_miso ang_input outName
-      Cayron   -> Cayron.run grain_miso ang_input outName
-      ORFit    -> ORFit.run  grain_miso ang_input outName
-      _        -> Graph.run  grain_miso ang_input outName
+      Miyamoto    -> Miyamoto.run                ang_input outName
+      Gomes       -> Gomes.run        grain_miso ang_input outName
+      Cayron      -> Cayron.run       grain_miso ang_input outName
+      ORFitSingle -> ORFitSingle.run  grain_miso ang_input outName
+      ORFitAll    -> ORFitAll.run     grain_miso ang_input outName
+      _           -> Graph.run        grain_miso ang_input outName
