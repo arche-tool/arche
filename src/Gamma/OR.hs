@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Gamma.OR
        ( findGamma
@@ -32,7 +34,10 @@ import qualified Data.Vector.Generic.Mutable as GM
 
 import           Data.Vector.Unboxed (Vector)
 import           Numeric.Container   (add, sub)
-import           System.Random       (randomIO, randomRIO)
+import           Control.Monad       (liftM)
+ 
+import           Foreign
+import           System.Random
 
 import           Numeric.GSL.Minimization
 import           File.ANGReader
@@ -51,8 +56,8 @@ import           Texture.HyperSphere
 
 -- ======================================================================================= 
 
-newtype FZ = FZ {qFZ :: Quaternion} deriving (Show, GB.Vector U.Vector, GM.MVector U.MVector, U.Unbox)
-newtype OR = OR {qOR :: Quaternion} deriving (Show, GB.Vector U.Vector, GM.MVector U.MVector, U.Unbox)
+newtype FZ = FZ {qFZ :: Quaternion} deriving (Show)
+newtype OR = OR {qOR :: Quaternion} deriving (Show)
 
 instance Rot OR where
   (OR p) #<= (OR q) = OR $ p #<= q
@@ -242,8 +247,97 @@ errorfunc ga ts gms1FZ = abs $ 1 - (total / n)
     gms2   = G.map (toFZ Cubic . (ga #<=) . qOR) ts
     q0s    = G.map (\gm1 -> G.maximum $ G.map (func gm1) gms2) gms1FZ
 
-    total = G.sum q0s
-    n     = fromIntegral (G.length gms1FZ)
+-- -------------------------------------------- Unbox FZ ----------------------------------------------------
+
+newtype instance U.MVector s FZ = MV_FZ (U.MVector s Quaternion)
+newtype instance U.Vector    FZ = V_FZ  (U.Vector    Quaternion)
+
+instance U.Unbox FZ
+
+instance GM.MVector U.MVector FZ where
+  {-# INLINE basicLength #-}
+  {-# INLINE basicUnsafeSlice #-}
+  {-# INLINE basicOverlaps #-}
+  {-# INLINE basicUnsafeNew #-}
+  {-# INLINE basicUnsafeReplicate #-}
+  {-# INLINE basicUnsafeRead #-}
+  {-# INLINE basicUnsafeWrite #-}
+  {-# INLINE basicClear #-}
+  {-# INLINE basicSet #-}
+  {-# INLINE basicUnsafeCopy #-}
+  {-# INLINE basicUnsafeGrow #-}
+  basicLength (MV_FZ v)                 = GM.basicLength v
+  basicUnsafeSlice i n (MV_FZ v)        = MV_FZ $ GM.basicUnsafeSlice i n v
+  basicOverlaps (MV_FZ v1) (MV_FZ v2)   = GM.basicOverlaps v1 v2
+  basicUnsafeNew n                      = MV_FZ `liftM` GM.basicUnsafeNew n
+  basicUnsafeReplicate n (FZ x)         = MV_FZ `liftM` GM.basicUnsafeReplicate n x
+  basicUnsafeRead (MV_FZ v) i           = GM.basicUnsafeRead v i >>= (return . FZ)
+  basicUnsafeWrite (MV_FZ v) i (FZ x)   = GM.basicUnsafeWrite v i x
+  basicClear (MV_FZ v)                  = GM.basicClear v
+  basicSet (MV_FZ v) (FZ x)             = GM.basicSet v x
+  basicUnsafeCopy (MV_FZ v1) (MV_FZ v2) = GM.basicUnsafeCopy v1 v2
+  basicUnsafeGrow (MV_FZ v) n           = MV_FZ `liftM` GM.basicUnsafeGrow v n
+
+instance GB.Vector U.Vector FZ where
+  {-# INLINE basicUnsafeFreeze #-}
+  {-# INLINE basicUnsafeThaw #-}
+  {-# INLINE basicLength #-}
+  {-# INLINE basicUnsafeSlice #-}
+  {-# INLINE basicUnsafeIndexM #-}
+  {-# INLINE elemseq #-}
+  basicUnsafeFreeze (MV_FZ v)         = V_FZ `liftM` GB.basicUnsafeFreeze v
+  basicUnsafeThaw (V_FZ v)            = MV_FZ `liftM` GB.basicUnsafeThaw v
+  basicLength (V_FZ v)                = GB.basicLength v
+  basicUnsafeSlice i n (V_FZ v)       = V_FZ $ GB.basicUnsafeSlice i n v
+  basicUnsafeIndexM (V_FZ v) i        = GB.basicUnsafeIndexM v i >>= (return . FZ)
+  basicUnsafeCopy (MV_FZ mv) (V_FZ v) = GB.basicUnsafeCopy mv v
+  elemseq _ (FZ x) t                  = GB.elemseq (undefined :: Vector a) x t
+
+-- -------------------------------------------- Unbox OR ----------------------------------------------------
+
+newtype instance U.MVector s OR = MV_OR (U.MVector s Quaternion)
+newtype instance U.Vector    OR = V_OR  (U.Vector    Quaternion)
+
+instance U.Unbox OR
+
+instance GM.MVector U.MVector OR where
+  {-# INLINE basicLength #-}
+  {-# INLINE basicUnsafeSlice #-}
+  {-# INLINE basicOverlaps #-}
+  {-# INLINE basicUnsafeNew #-}
+  {-# INLINE basicUnsafeReplicate #-}
+  {-# INLINE basicUnsafeRead #-}
+  {-# INLINE basicUnsafeWrite #-}
+  {-# INLINE basicClear #-}
+  {-# INLINE basicSet #-}
+  {-# INLINE basicUnsafeCopy #-}
+  {-# INLINE basicUnsafeGrow #-}
+  basicLength (MV_OR v)                 = GM.basicLength v
+  basicUnsafeSlice i n (MV_OR v)        = MV_OR $ GM.basicUnsafeSlice i n v
+  basicOverlaps (MV_OR v1) (MV_OR v2)   = GM.basicOverlaps v1 v2
+  basicUnsafeNew n                      = MV_OR `liftM` GM.basicUnsafeNew n
+  basicUnsafeReplicate n (OR x)         = MV_OR `liftM` GM.basicUnsafeReplicate n x
+  basicUnsafeRead (MV_OR v) i           = GM.basicUnsafeRead v i >>= (return . OR)
+  basicUnsafeWrite (MV_OR v) i (OR x)   = GM.basicUnsafeWrite v i x
+  basicClear (MV_OR v)                  = GM.basicClear v
+  basicSet (MV_OR v) (OR x)             = GM.basicSet v x
+  basicUnsafeCopy (MV_OR v1) (MV_OR v2) = GM.basicUnsafeCopy v1 v2
+  basicUnsafeGrow (MV_OR v) n           = MV_OR `liftM` GM.basicUnsafeGrow v n
+
+instance GB.Vector U.Vector OR where
+  {-# INLINE basicUnsafeFreeze #-}
+  {-# INLINE basicUnsafeThaw #-}
+  {-# INLINE basicLength #-}
+  {-# INLINE basicUnsafeSlice #-}
+  {-# INLINE basicUnsafeIndexM #-}
+  {-# INLINE elemseq #-}
+  basicUnsafeFreeze (MV_OR v)         = V_OR `liftM` GB.basicUnsafeFreeze v
+  basicUnsafeThaw (V_OR v)            = MV_OR `liftM` GB.basicUnsafeThaw v
+  basicLength (V_OR v)                = GB.basicLength v
+  basicUnsafeSlice i n (V_OR v)       = V_OR $ GB.basicUnsafeSlice i n v
+  basicUnsafeIndexM (V_OR v) i        = GB.basicUnsafeIndexM v i >>= (return . OR)
+  basicUnsafeCopy (MV_OR mv) (V_OR v) = GB.basicUnsafeCopy mv v
+  elemseq _ (OR x) t                  = GB.elemseq (undefined :: Vector a) x t
 
 -- ================================= Test Function =======================================
 
