@@ -13,16 +13,19 @@ module Gamma.OR
        , getGammaOR
        , getGammaOR2
        , OR (..)
+       , FitError (avgError, devError, maxError)
        , genTS
        , ksORs
        , ksOR
        , misoOR
        , misoKS
+       , errorProductParent
          -- * Test functions
        , testGammaFit
        , testFindGamma
        , testMisFunc
        , testMisoKS
+       , shitQAvg
        ) where
 
 import qualified Data.Packed                 as HV
@@ -35,7 +38,7 @@ import qualified Data.Vector.Generic.Mutable as GM
 import           Data.Vector.Unboxed (Vector)
 import           Numeric.Container   (add, sub)
 import           Control.Monad       (liftM)
- 
+
 import           Foreign
 import           System.Random
 
@@ -88,6 +91,21 @@ genTS (OR t) = let
   vs = V.convert $ getAllSymmVec (getSymmOps Cubic) v
   in G.map (OR . mergeQuaternion . ((,) w)) vs
 
+
+data FitError
+  = FitError
+  { avgError :: Deg
+  , devError :: Deg
+  , maxError :: Deg
+  } deriving (Show)
+
+-- | Find the angular error in rad between product and parent orientations regarding a
+-- given orientation relationship.
+errorProductParent :: Vector Quaternion -> Quaternion -> OR -> FitError
+errorProductParent qs ga t0 = let
+  fzqs = G.map getQinFZ qs
+  in errorfunc ga (genTS t0) fzqs
+
 misoKS :: Symm -> Quaternion -> Quaternion -> Double
 misoKS = misoOR ksORs
 
@@ -133,7 +151,7 @@ findOR ga qs t0 = let
   fzqs = G.map getQinFZ qs
   func v = let
     t = OR . toQuaternion $ mkUnsafeRodrigues v
-    in errorfunc ga (genTS t) fzqs
+    in fromAngle $ avgError $ errorfunc ga (genTS t) fzqs
   foo v = let
     k  = 0.001
     x  = func v
@@ -166,7 +184,7 @@ findGamma ts qs = let
   fzqs = G.map getQinFZ qs
   func v = let
     gamma = toQuaternion $ mkUnsafeRodrigues v
-    in errorfunc gamma ts fzqs
+    in fromAngle $ avgError $ errorfunc gamma ts fzqs
   foo v = let
     k  = 0.001
     x  = func v
@@ -185,7 +203,7 @@ findGamma2 qs = let
     [x1,x2,x3, k1, k2, k3] = HV.toList v
     g = toQuaternion $ mkUnsafeRodrigues (Vec3 x1 x2 x3)
     t = OR $ toQuaternion $ mkUnsafeRodrigues (Vec3 k1 k2 k3)
-    in errorfunc g (genTS t) fzqs
+    in fromAngle $ avgError $ errorfunc g (genTS t) fzqs
   foo v = let
     d1 = HV.fromList [k, 0, 0, 0, 0, 0]
     d2 = HV.fromList [0, k, 0, 0, 0, 0]
@@ -221,7 +239,7 @@ hotStart gms = let
        , phi  <- [0.0, 3 .. 90]
        , phi2 <- [0.0, 3 .. 90]
        ]
-  func q = errorfunc q ksORs gms
+  func q = fromAngle $ avgError $ errorfunc q ksORs gms
   i = V.minIndex $ V.map func qs
   in qs V.! i
 
@@ -235,17 +253,49 @@ hotStartOR q gms = let
        , r2 <- [-0.2, 0.02 .. 0.2]
        , r3 <- [-0.2, 0.02 .. 0.2]
        ]
-  foo t = errorfunc q (genTS t) gms
+  foo t = fromAngle $ avgError $ errorfunc q (genTS t) gms
   i = V.minIndex $ V.map foo ts
   in ts V.! i
 
-errorfunc :: Quaternion-> Vector OR -> Vector FZ -> Double
-errorfunc ga ts gms1FZ = abs $ 1 - (total / n)
-  where
-    func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
 
-    gms2   = G.map (toFZ Cubic . (ga #<=) . qOR) ts
-    q0s    = G.map (\gm1 -> G.maximum $ G.map (func gm1) gms2) gms1FZ
+-- | Evaluates the average angular error in rad between given parent and product
+-- orientations and given orientation relationship. The list of products is given in the
+-- fundamental zone.
+errorfunc :: Quaternion-> Vector OR -> Vector FZ -> FitError
+errorfunc ga ts gms1FZ = let
+  toAng = toAngle . (2 *) . acosSafe
+  func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
+  gms2  = G.map (toFZ Cubic . (ga #<=) . qOR) ts
+  q0s   = G.map (\gm1 -> G.maximum $ G.map (func gm1) gms2) gms1FZ
+  n     = fromIntegral (G.length gms1FZ)
+  dev   = let s = G.map ((\x->x*x) . ((-) avg)) q0s in sqrt (abs $ 1 - G.sum s / n)
+  avg   = G.sum q0s / n
+  in FitError
+     { avgError = toAng avg
+     , devError = toAng dev
+     , maxError = toAng (G.minimum q0s)
+     }
+
+-- | Evaluates the average angular error in rad between given parent and product
+-- orientations and given orientation relationship. The list of products is given in the
+-- fundamental zone.
+weightederrorfunc :: Quaternion-> Vector OR -> Vector Double -> Vector FZ -> FitError
+weightederrorfunc ga ts ws gms1FZ = let
+  func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
+  toRad = abs . (2 *) . acosSafe
+  gms2  = G.map (toFZ Cubic . (ga #<=) . qOR) ts
+  q0s   = G.map (\gm1 -> toRad . G.maximum $ G.map (func gm1) gms2) gms1FZ
+  wt    = G.sum ws
+  wq    = G.zipWith (*) ws q0s
+  dev   = let
+    s = G.map ((\x->x*x) . ((-) avg)) q0s
+    in sqrt (G.sum (G.zipWith (*) ws s) / wt)
+  avg   = G.sum wq / wt
+  in FitError
+     { avgError = toAngle avg
+     , devError = toAngle dev
+     , maxError = toAngle (G.maximum wq / wt)
+     }
 
 -- -------------------------------------------- Unbox FZ ----------------------------------------------------
 
@@ -341,7 +391,7 @@ instance GB.Vector U.Vector OR where
 
 -- ================================= Test Function =======================================
 
-testGammaFit :: Quaternion -> Vector Quaternion -> OR -> (Double, Double)
+testGammaFit :: Quaternion -> Vector Quaternion -> OR -> (FitError, FitError)
 testGammaFit ga gs t = let
   gms = G.map getQinFZ gs
   m1  = errorfunc ga (genTS t) gms
@@ -376,7 +426,7 @@ plotErrFunc a = let
   gms  = G.map ((a #<=) . qOR) ksORs
   fzqs = G.map getQinFZ gms
   (grid, vtk) = mkSO3 35 35 35
-  es = G.map (\s -> errorfunc (so3ToQuaternion s) ksORs fzqs) grid
+  es = G.map (\s -> fromAngle $ avgError $ errorfunc (so3ToQuaternion s) ksORs fzqs) grid
   func i _ = es U.! i
   attr = mkPointAttr "Error function" func
   vtk' = addDataPoints vtk attr
@@ -405,17 +455,23 @@ plotErrFunc a = let
     let vtk2 = renderSO3PointsVTK (U.map quaternionToSO3 $ U.fromList [gi, toFZ Cubic gi, a, a'])
     writeUniVTKfile ("/home/edgar/Desktop/SO3ErrFuncP.vtu") False vtk2
 
-errorfuncSlowButSure :: Quaternion -> Vector Quaternion -> Quaternion -> Double
-errorfuncSlowButSure ga gms t = abs $ 1 - (total / n)
-  where
-    os = V.map symmOp (getSymmOps Cubic)
-    getMaxQ0 gm = let
-      func on om = abs $ composeQ0 ((ga #<= on) -#- (gm #<= om)) t
-      allQ0 = V.concatMap (\on -> V.map (func on) os) os
-      in V.maximum allQ0
-
-    total = G.sum $ G.map getMaxQ0 gms
-    n     = fromIntegral (G.length gms)
+errorfuncSlowButSure :: Quaternion -> Vector Quaternion -> Quaternion -> FitError
+errorfuncSlowButSure ga gms t = let
+  os = U.map symmOp (getSymmOps Cubic)
+  getMaxQ0 gm = let
+    func on om = abs $ composeQ0 ((ga #<= on) -#- (gm #<= om)) t
+    allQ0 = U.concatMap (\on -> U.map (func on) os) os
+    in U.maximum allQ0
+  toAng = toAngle . (2 *) . acosSafe
+  q0s   = G.map getMaxQ0 gms
+  n     = fromIntegral (G.length gms)
+  dev   = let s = G.map ((\x->x*x) . ((-) avg)) q0s in sqrt (abs $ 1 - G.sum s/n)
+  avg   = G.sum q0s / n
+  in FitError
+     { avgError = toAng avg
+     , devError = toAng dev
+     , maxError = toAng (G.minimum q0s)
+     }
 
 testMisoKS :: Vector Quaternion -> IO Deg
 testMisoKS ks = do
@@ -429,3 +485,25 @@ testMisoKS ks = do
     m2  = a #<= ks2
     miso = getMisoAngle Cubic m1 m2
   return (toAngle miso :: Deg)
+
+shitQAvg :: Vector Quaternion -> Quaternion
+shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)
+  where
+    os = getSymmOps Cubic
+    func avg q = let
+      qs = U.map ((q #<=) . symmOp) os
+      ms = U.map (composeQ0 avg) qs
+      i  = U.minIndex ms
+      vi = quaterVec (qs U.! i)
+      in mkQuaternion $ vi &+ (quaterVec avg)
+
+testAvg :: Int -> IO ()
+testAvg n = do
+  gen <- newStdGen
+  let
+    vs = take n $ randoms gen :: [Vec3]
+    q  = toQuaternion $ mkEuler (Deg 10) (Deg 15) (Deg 2)
+    rs = map (\v -> toQuaternion $ mkAxisPair v (Deg 1)) vs
+    qs = U.fromList $ map (q #<=) rs
+  print q
+  print $ averageQuaternion qs

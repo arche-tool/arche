@@ -21,6 +21,7 @@ import           Hammer.Math.Algebra         (Vec3(..))
 import           Hammer.VoxBox
 import           Hammer.VTK.VoxBox
 import           Hammer.VTK
+import           Hammer.Graph
 import           Hammer.MicroGraph
 
 import           Texture.Symmetry            (Symm (..))
@@ -65,12 +66,12 @@ gammaBox (vb@VoxBox{..}, gidMap) gs = let
   in vb {grainID = vec}
 
 grainsGraph :: [FaceID] -> [HashSet Int]
-grainsGraph = connComp . mkGraph . map unFaceID
+grainsGraph = connComp . mkUniGraph [] . map ((\x -> (x, 1.0 :: Double)) . unFaceID)
 
 findConnFaces :: VoxBox Quaternion -> HashMap Int (V.Vector VoxelPos) -> MicroVoxel -> [FaceID]
 findConnFaces vbq gmap micro = let
   es   = HM.keys $ microEdges micro
-  qMap = HM.map (averageQuaternion . V.convert . V.map (vbq #!)) gmap
+  qMap = HM.map (shitQAvg . V.convert . V.map (vbq #!)) gmap
   fs   =  (map (testEdge qMap) es) `using` parListChunk 100 rpar
   --stg  = parListChunk 10 (rdeepseq)
   in concatMap (\(f1, f2, f3)-> [f1, f2, f3]) (mapMaybe id fs) -- (fs `using` stg)

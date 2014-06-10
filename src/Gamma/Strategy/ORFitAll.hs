@@ -39,9 +39,11 @@ run miso fin fout = do
       vtkKS   = renderGBOR ksOR vbq mkr
       realOR  = getOR vbq mkr
       vtkReal = renderGBOR realOR vbq mkr
+      vtkRealAvg = renderGBOR2 realOR vbq mkr
       in do
         writeUniVTKfile (fout ++ "-KS-OR"  <.> "vtu") True vtkKS
         writeUniVTKfile (fout ++ "-RealOR" <.> "vtu") True vtkReal
+        writeUniVTKfile (fout ++ "-RealORAvg" <.> "vtu") True vtkRealAvg
 
 getOR :: VoxBox Quaternion -> MicroVoxel -> OR
 getOR vbq micro = let
@@ -52,6 +54,31 @@ getOR vbq micro = let
   qs  = U.fromList $ map (foo . getFaceVoxels . (fs V.!)) rs
   foo (f1, f2) = (vbq #! f1, vbq #! f2)
   in findORFace qs ksOR
+
+avg :: V.Vector Double -> Double
+avg x
+  | n > 0     = (V.sum x) / n
+  | otherwise = 0
+  where
+    n = fromIntegral $ V.length x
+
+avgVector :: V.Vector Double -> V.Vector Double
+avgVector x
+  | n > 0     = V.replicate n (avg x)
+  | otherwise = x
+  where
+    n = fromIntegral $ V.length x
+
+renderGBOR2 :: OR -> VoxBox Quaternion -> MicroVoxel -> VTK Vec3
+renderGBOR2 ror vbq micro = let
+  gs  = mapMaybe (getPropValue) $ HM.elems $ microFaces micro
+  fs  = V.concat gs
+  ms  = V.concat $ map (avgVector . getM) gs
+  ts  = genTS ror
+  vtk = renderVoxElemListVTK vbq (V.toList fs)
+  getM = V.map (faceMisoOR ts vbq)
+  func i _ _ = ms V.! i
+  in addDataCells vtk (mkCellAttr "misoORAvg" func)
 
 renderGBOR :: OR -> VoxBox Quaternion -> MicroVoxel -> VTK Vec3
 renderGBOR ror vbq micro = let

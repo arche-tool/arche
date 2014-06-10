@@ -7,6 +7,7 @@ import qualified Gamma.Strategy.ORFitAll    as ORFitAll
 import qualified Gamma.Strategy.Cayron      as Cayron
 import qualified Gamma.Strategy.Miyamoto    as Miyamoto
 import qualified Gamma.Strategy.Gomes       as Gomes
+import qualified Gamma.Strategy.GomesGraph  as GomesGraph
 
 import           System.Directory            (doesFileExist)
 
@@ -22,6 +23,7 @@ data RunMode
   | Miyamoto
   | Cayron
   | Gomes
+  | GomesGraph
   deriving (Show, Eq)
 
 data Gammafier =
@@ -79,6 +81,9 @@ parseMode = subparser
  <> command "gomes"
    (info (pure Gomes)
    (progDesc "Reconstruction based on Gomes's method."))
+ <> command "gomes-graph"
+   (info (pure GomesGraph)
+   (progDesc "Reconstruction based on Gomes's method(graph clustering)."))
  )
 
 main :: IO ()
@@ -104,6 +109,7 @@ run Gammafier{..} = let
       else case runMode of
       Miyamoto    -> Miyamoto.run                ang_input outName
       Gomes       -> Gomes.run        grain_miso ang_input outName
+      GomesGraph  -> GomesGraph.run   grain_miso ang_input outName
       Cayron      -> Cayron.run       grain_miso ang_input outName
       ORFitSingle -> ORFitSingle.run  grain_miso ang_input outName
       ORFitAll    -> ORFitAll.run     grain_miso ang_input outName

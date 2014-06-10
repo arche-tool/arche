@@ -43,8 +43,8 @@ run miso fin fout = do
       vtkSO3 = renderSO3Points Cubic ND vecGID vecQ
       in do
         print (U.length vecQ, U.length vecGID)
-        writeUniVTKfile (fout <.> "vti") True vtkOM
-        writeUniVTKfile (fout <.> "vtu") True vtkGB
+        --writeUniVTKfile (fout <.> "vti") True vtkOM
+        --writeUniVTKfile (fout <.> "vtu") True vtkGB
         writeUniVTKfile (fout <.> "SO3" <.> "vtu") True vtkSO3
         let
           (g, t)   = getGammaOR2 ang
