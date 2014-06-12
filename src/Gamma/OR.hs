@@ -6,20 +6,24 @@
 
 module Gamma.OR
        ( findGamma
-       , findGamma2
+       , findGammaOR
        , findOR
        , findORFace
-       , getGamma
-       , getGammaOR
-       , getGammaOR2
+       , hotStartGamma
+       , hotStartOR
        , OR (..)
        , FitError (avgError, devError, maxError)
+       , convert
+       , mkOR
        , genTS
+       , getQinFZ
        , ksORs
        , ksOR
        , misoOR
        , misoKS
        , errorProductParent
+       , weightederrorfunc
+       , errorfunc
          -- * Test functions
        , testGammaFit
        , testFindGamma
@@ -39,11 +43,9 @@ import           Data.Vector.Unboxed (Vector)
 import           Numeric.Container   (add, sub)
 import           Control.Monad       (liftM)
 
-import           Foreign
 import           System.Random
 
 import           Numeric.GSL.Minimization
-import           File.ANGReader
 
 import           Texture.Orientation
 import           Texture.Symmetry
@@ -51,7 +53,6 @@ import           Texture.Symmetry
 import           Hammer.Math.Algebra
 import           Hammer.Math.Optimum
 
-import           Debug.Trace
 import           Hammer.VTK
 import           Texture.HyperSphere
 
@@ -91,21 +92,6 @@ genTS (OR t) = let
   vs = V.convert $ getAllSymmVec (getSymmOps Cubic) v
   in G.map (OR . mergeQuaternion . ((,) w)) vs
 
-
-data FitError
-  = FitError
-  { avgError :: Deg
-  , devError :: Deg
-  , maxError :: Deg
-  } deriving (Show)
-
--- | Find the angular error in rad between product and parent orientations regarding a
--- given orientation relationship.
-errorProductParent :: Vector Quaternion -> Quaternion -> OR -> FitError
-errorProductParent qs ga t0 = let
-  fzqs = G.map getQinFZ qs
-  in errorfunc ga (genTS t0) fzqs
-
 misoKS :: Symm -> Quaternion -> Quaternion -> Double
 misoKS = misoOR ksORs
 
@@ -117,50 +103,21 @@ misoOR ors symm q1 q2 = let
   foo q = U.map (getMisoAngle symm q) ks2
   in U.minimum $ U.concatMap foo ks1
 
-getGammaOR2 :: EBSDdata -> (Quaternion, OR)
-getGammaOR2 EBSDdata{..} = trace (show (testGammaFit gf qs tf)) (gf, tf)
-  where
-    is = U.convert $ V.findIndices ((> 0.1) . ci) nodes
-    qs = G.map (rotation . (nodes G.!)) is
-    (gf, tf) = findGamma2 qs
+data FitError
+  = FitError
+  { avgError :: Deg
+  , devError :: Deg
+  , maxError :: Deg
+  } deriving (Show)
 
-getGammaOR :: Int -> EBSDdata -> (Quaternion, OR)
-getGammaOR n EBSDdata{..} = go n t0
-  where
-    t0 = mkOR (Vec3 1 1 2) (Deg 90)
-    is = V.convert $ V.findIndices ((> 0.1) . ci) nodes
-    qs = G.map (rotation . (nodes G.!)) is
-    func t = let
-      g = findGamma (genTS t) qs
-      in trace (show (testGammaFit g qs t)) $ findOR g qs t
-    go k t
-      | k <= 0    = (findGamma (genTS t) qs, convert t)
-      | otherwise = go (k-1) (func t)
+type ErrorFunc = Quaternion -> Vector OR -> FitError
 
-getGamma :: EBSDdata -> Quaternion
-getGamma EBSDdata{..} = let
-  t0 = mkOR (Vec3 1 1 2) (Deg 90)
-  ts = genTS t0
-  is = V.convert $ V.findIndices ((> 0.1) . ci) nodes
-  qs = G.map (rotation . (nodes G.!)) is
-  gamma = toFZ Cubic $ findGamma ts qs
-  in trace (show $ testGammaFit gamma qs t0) gamma
-
-findOR :: Quaternion -> Vector Quaternion  -> OR -> OR
-findOR ga qs t0 = let
+-- | Find the angular error in rad between product and parent orientations regarding a
+-- given orientation relationship.
+errorProductParent :: Vector Quaternion -> Quaternion -> OR -> FitError
+errorProductParent qs ga t0 = let
   fzqs = G.map getQinFZ qs
-  func v = let
-    t = OR . toQuaternion $ mkUnsafeRodrigues v
-    in fromAngle $ avgError $ errorfunc ga (genTS t) fzqs
-  foo v = let
-    k  = 0.001
-    x  = func v
-    d1 = (func (v &+ Vec3 k 0 0) - func (v &- Vec3 k 0 0)) / (2*k)
-    d2 = (func (v &+ Vec3 0 k 0) - func (v &- Vec3 0 k 0)) / (2*k)
-    d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
-    in (x, Vec3 d1 d2 d3)
-  guess = rodriVec $ fromQuaternion $ qOR t0
-  in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS foo guess
+  in errorfunc fzqs ga (genTS t0)
 
 findORFace :: Vector (Quaternion, Quaternion) -> OR -> OR
 findORFace qs t0 = let
@@ -179,12 +136,11 @@ findORFace qs t0 = let
   guess = rodriVec $ fromQuaternion $ qOR t0
   in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS foo guess
 
-findGamma :: Vector OR -> Vector Quaternion -> Quaternion
-findGamma ts qs = let
-  fzqs = G.map getQinFZ qs
+findOR :: ErrorFunc -> Quaternion -> OR -> OR
+findOR errf ga t0 = let
   func v = let
-    gamma = toQuaternion $ mkUnsafeRodrigues v
-    in fromAngle $ avgError $ errorfunc gamma ts fzqs
+    t = OR . toQuaternion $ mkUnsafeRodrigues v
+    in fromAngle $ avgError $ errf ga (genTS t)
   foo v = let
     k  = 0.001
     x  = func v
@@ -192,18 +148,32 @@ findGamma ts qs = let
     d2 = (func (v &+ Vec3 0 k 0) - func (v &- Vec3 0 k 0)) / (2*k)
     d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
     in (x, Vec3 d1 d2 d3)
-  guess = rodriVec $ fromQuaternion $ hotStart fzqs
+  guess = rodriVec $ fromQuaternion $ qOR t0
+  in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS foo guess
+
+findGamma :: ErrorFunc -> Quaternion -> OR -> Quaternion
+findGamma errf q0 or0 = let
+  func v = let
+    gamma = toQuaternion $ mkUnsafeRodrigues v
+    in fromAngle $ avgError $ errf gamma (genTS or0)
+  foo v = let
+    k  = 0.001
+    x  = func v
+    d1 = (func (v &+ Vec3 k 0 0) - func (v &- Vec3 k 0 0)) / (2*k)
+    d2 = (func (v &+ Vec3 0 k 0) - func (v &- Vec3 0 k 0)) / (2*k)
+    d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
+    in (x, Vec3 d1 d2 d3)
+  guess = rodriVec $ fromQuaternion q0
   cfg   = BFGScfg { epsi = 1e-4, tol = 1e-4, niter = 200 }
   in toQuaternion $ mkUnsafeRodrigues $ bfgs cfg foo guess
 
-findGamma2 :: Vector Quaternion -> (Quaternion, OR)
-findGamma2 qs = let
-  fzqs = G.map getQinFZ qs
+findGammaOR :: ErrorFunc -> Quaternion -> OR -> (Quaternion, OR)
+findGammaOR errf q0 or0 = let
   func v = let
     [x1,x2,x3, k1, k2, k3] = HV.toList v
     g = toQuaternion $ mkUnsafeRodrigues (Vec3 x1 x2 x3)
     t = OR $ toQuaternion $ mkUnsafeRodrigues (Vec3 k1 k2 k3)
-    in fromAngle $ avgError $ errorfunc g (genTS t) fzqs
+    in fromAngle $ avgError $ errf g (genTS t)
   foo v = let
     d1 = HV.fromList [k, 0, 0, 0, 0, 0]
     d2 = HV.fromList [0, k, 0, 0, 0, 0]
@@ -220,31 +190,34 @@ findGamma2 qs = let
     dt2 = (func (v `add` d5) - func (v `sub` d5)) / (2*k)
     dt3 = (func (v `add` d6) - func (v `sub` d6)) / (2*k)
     in (HV.fromList [dr1, dr2, dr3, dt1, dt2, dt3])
-  Vec3 ra rb rc = rodriVec $ convert $ hotStart fzqs
-  Vec3 ta tb tc = rodriVec $ convert $ qOR $ mkOR (Vec3 1 1 2) (Deg 90)
+  Vec3 ra rb rc = rodriVec $ convert q0
+  Vec3 ta tb tc = rodriVec $ convert or0
   guess = HV.fromList [ra, rb, rc, ta, tb, tc]
   (r,_) = minimizeVD VectorBFGS2 0.00001 200 0.01 0.1 func foo guess
   --box = HV.fromList [5,5,5,5,5,5]
-  --(r,_) = minimizeV NMSimplex2	0.00001 200 box func guess
+  --(r,_) = minimizeV NMSimplex2 0.00001 200 box func guess
   [r1, r2, r3, t1, t2, t3] = HV.toList r
   gf = convert $ mkUnsafeRodrigues (Vec3 r1 r2 r3)
   tf = convert $ mkUnsafeRodrigues (Vec3 t1 t2 t3)
   in (gf, tf)
 
-hotStart :: Vector FZ -> Quaternion
-hotStart gms = let
+-- $ hotStart fzqs
+-- $ qOR $ mkOR (Vec3 1 1 2) (Deg 90)
+
+hotStartGamma :: ErrorFunc -> Quaternion
+hotStartGamma errf = let
   qs = V.fromList $
        [ toQuaternion (mkEuler (Deg phi1) (Deg phi) (Deg phi2))
        | phi1 <- [0.0, 3 .. 90]
        , phi  <- [0.0, 3 .. 90]
        , phi2 <- [0.0, 3 .. 90]
        ]
-  func q = fromAngle $ avgError $ errorfunc q ksORs gms
+  func q = fromAngle $ avgError $ errf q ksORs
   i = V.minIndex $ V.map func qs
   in qs V.! i
 
-hotStartOR :: Quaternion -> Vector FZ -> OR
-hotStartOR q gms = let
+hotStartOR :: ErrorFunc -> Quaternion -> OR
+hotStartOR errf q = let
   ks   = rodriVec $ fromQuaternion $ toQuaternion $ mkAxisPair (Vec3 1 1 2) (Deg 90)
   func = OR . toQuaternion . mkUnsafeRodrigues . (ks &+)
   ts = V.fromList $
@@ -253,16 +226,15 @@ hotStartOR q gms = let
        , r2 <- [-0.2, 0.02 .. 0.2]
        , r3 <- [-0.2, 0.02 .. 0.2]
        ]
-  foo t = fromAngle $ avgError $ errorfunc q (genTS t) gms
+  foo t = fromAngle $ avgError $ errf q (genTS t)
   i = V.minIndex $ V.map foo ts
   in ts V.! i
-
 
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
-errorfunc :: Quaternion-> Vector OR -> Vector FZ -> FitError
-errorfunc ga ts gms1FZ = let
+errorfunc :: Vector FZ -> Quaternion-> Vector OR -> FitError
+errorfunc gms1FZ ga ts = let
   toAng = toAngle . (2 *) . acosSafe
   func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
   gms2  = G.map (toFZ Cubic . (ga #<=) . qOR) ts
@@ -279,8 +251,8 @@ errorfunc ga ts gms1FZ = let
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
-weightederrorfunc :: Quaternion-> Vector OR -> Vector Double -> Vector FZ -> FitError
-weightederrorfunc ga ts ws gms1FZ = let
+weightederrorfunc :: Vector Double -> Vector FZ -> Quaternion-> Vector OR -> FitError
+weightederrorfunc ws gms1FZ ga ts = let
   func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
   toRad = abs . (2 *) . acosSafe
   gms2  = G.map (toFZ Cubic . (ga #<=) . qOR) ts
@@ -297,7 +269,7 @@ weightederrorfunc ga ts ws gms1FZ = let
      , maxError = toAngle (G.maximum wq / wt)
      }
 
--- -------------------------------------------- Unbox FZ ----------------------------------------------------
+-- =========================================== Unbox FZ  =================================
 
 newtype instance U.MVector s FZ = MV_FZ (U.MVector s Quaternion)
 newtype instance U.Vector    FZ = V_FZ  (U.Vector    Quaternion)
@@ -343,7 +315,7 @@ instance GB.Vector U.Vector FZ where
   basicUnsafeCopy (MV_FZ mv) (V_FZ v) = GB.basicUnsafeCopy mv v
   elemseq _ (FZ x) t                  = GB.elemseq (undefined :: Vector a) x t
 
--- -------------------------------------------- Unbox OR ----------------------------------------------------
+-- =========================================== Unbox OR =================================
 
 newtype instance U.MVector s OR = MV_OR (U.MVector s Quaternion)
 newtype instance U.Vector    OR = V_OR  (U.Vector    Quaternion)
@@ -394,7 +366,7 @@ instance GB.Vector U.Vector OR where
 testGammaFit :: Quaternion -> Vector Quaternion -> OR -> (FitError, FitError)
 testGammaFit ga gs t = let
   gms = G.map getQinFZ gs
-  m1  = errorfunc ga (genTS t) gms
+  m1  = errorfunc gms ga (genTS t)
   m2  = errorfuncSlowButSure ga gs (qOR t)
   in (m1, m2)
 
@@ -403,7 +375,7 @@ testMisFunc = do
   a <- randomIO
   let gms = G.map (getQinFZ . (a #<=) . toQuaternion) ksORs
   print $ errorfuncSlowButSure a (G.map qFZ gms) (qOR ksOR)
-  print $ errorfunc a ksORs gms
+  print $ errorfunc gms a ksORs
 
 testFindOR :: IO ()
 testFindOR = do
@@ -412,11 +384,12 @@ testFindOR = do
     t  = mkOR (Vec3 1 1 2) (Deg 90)
     ts = genTS t
     ms = G.map ((a #<=) . qOR) ts
-    t' = findOR a ms t
+    t' = findOR errf a t
+    errf = errorfunc fzqs
     fzqs = G.map getQinFZ ms
   print (convert t  :: AxisPair)
   print (convert t' :: AxisPair)
-  print ((convert $ hotStartOR a fzqs) :: AxisPair)
+  print ((convert $ hotStartOR errf a) :: AxisPair)
 
 testFindGamma :: IO ()
 testFindGamma = randomIO >>= plotErrFunc
@@ -425,8 +398,9 @@ plotErrFunc :: Quaternion -> IO ()
 plotErrFunc a = let
   gms  = G.map ((a #<=) . qOR) ksORs
   fzqs = G.map getQinFZ gms
+  errf = errorfunc fzqs
   (grid, vtk) = mkSO3 35 35 35
-  es = G.map (\s -> fromAngle $ avgError $ errorfunc (so3ToQuaternion s) ksORs fzqs) grid
+  es = G.map (\s -> fromAngle $ avgError $ errorfunc fzqs (so3ToQuaternion s) ksORs) grid
   func i _ = es U.! i
   attr = mkPointAttr "Error function" func
   vtk' = addDataPoints vtk attr
@@ -434,8 +408,8 @@ plotErrFunc a = let
   gi   = so3ToQuaternion $ grid U.! (U.minIndex es)
   in do
     let
-      a'   = findGamma ksORs gms
-      (a'', t'') = findGamma2 gms
+      a'   = findGamma errf zerorot ksOR
+      (a'', t'') = findGammaOR errf zerorot ksOR
       fa   = toFZ Cubic a
       fa'  = toFZ Cubic a'
       fa'' = toFZ Cubic a''

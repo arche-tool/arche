@@ -11,6 +11,7 @@ import           System.FilePath
 
 import           Hammer.VTK
 import           Hammer.MicroGraph
+import           Hammer.Math.Algebra
 
 import           File.ANGReader
 import           Texture.Orientation
@@ -57,3 +58,36 @@ run miso fin fout = do
         print (g, t)
         writeUniVTKfile (fout <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
         writeUniVTKfile (fout <.> "SO3-alpha" <.> "vtu") True vtkSO3_a
+
+getGammaOR2 :: EBSDdata -> (Quaternion, OR)
+getGammaOR2 EBSDdata{..} = (gf, tf)
+  where
+    is = U.convert $ V.findIndices ((> 0.1) . ci) nodes
+    qs = U.map (rotation . (nodes V.!)) is
+    ef = errorfunc (U.map getQinFZ qs)
+    g0 = hotStartGamma ef
+    (gf, tf) = findGammaOR ef g0 ksOR
+
+getGammaOR :: Int -> EBSDdata -> (Quaternion, OR)
+getGammaOR n EBSDdata{..} = go n t0
+  where
+    t0 = mkOR (Vec3 1 1 2) (Deg 90)
+    is = V.convert $ V.findIndices ((> 0.1) . ci) nodes
+    qs = U.map (rotation . (nodes V.!)) is
+    ef = errorfunc (U.map getQinFZ qs)
+    g0 = hotStartGamma ef
+    func t = let
+      g = findGamma ef g0 t
+      in findOR ef g t
+    go k t
+      | k <= 0    = (findGamma ef g0 t, convert t)
+      | otherwise = go (k-1) (func t)
+
+getGamma :: EBSDdata -> Quaternion
+getGamma EBSDdata{..} = let
+  is = V.convert $ V.findIndices ((> 0.1) . ci) nodes
+  qs = U.map (rotation . (nodes V.!)) is
+  ef = errorfunc (U.map getQinFZ qs)
+  g0 = hotStartGamma ef
+  gamma = toFZ Cubic $ findGamma ef g0 ksOR
+  in gamma

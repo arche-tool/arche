@@ -56,7 +56,9 @@ scanBox n vb@VoxBox{..} = vb {grainID = newVec}
       ps = V.fromList $ getRangePos br
       is = V.convert $ V.map (dimension %@) ps
       qs = U.map (grainID U.!) is
-      in (findGamma ksORs qs, is)
+      ef = errorfunc (U.map getQinFZ qs)
+      g0 = hotStartGamma ef
+      in (findGamma ef g0 ksOR, is)
     divConq br
       | sizeVoxBoxRange br <= 0 = []
       | sizeVoxBoxRange br <= n = [getG br]

@@ -91,7 +91,7 @@ getInitState GomesConfig{..} = let
   fs    = findConnFaces orientationBox structureGraph realOR
   gids  = HM.keys $ microGrains structureGraph
   gg    = grainsGraph gids fs
-  go    = getGrainGroupAvgOrientation (genTS realOR) orientationMap gg
+  go    = getGrainGroupAvgOrientation realOR orientationMap gg
   in GomesState
      { grainGroup        = gg
      , groupOrientation  = go
@@ -108,7 +108,7 @@ mergeStepSingles ang = do
   -- Next step
   let
     gg = doMerge grainGroup mergeableFaces
-    go = getGrainGroupAvgOrientation (genTS realOR) orientationMap gg
+    go = getGrainGroupAvgOrientation realOR orientationMap gg
   put $ GomesState
      { grainGroup       = gg
      , groupOrientation = go
@@ -313,22 +313,30 @@ tryMergeGroups ang fs = do
   return $ filter func fs
 
 -- | Calculates the parent phase for grouped grains based on their average orientation.
-getGrainGroupOrientation :: Vector OR -> HashMap Int (Vector Quaternion) -> V.Vector (HashSet Int) -> V.Vector OrientationType
-getGrainGroupOrientation vor qmap gg = let
+getGrainGroupOrientation :: OR -> HashMap Int (Vector Quaternion) -> V.Vector (HashSet Int) -> V.Vector OrientationType
+getGrainGroupOrientation or0 qmap gg = let
   func = U.concat . mapMaybe ((flip HM.lookup) qmap) . HS.toList
+  find qs = let
+    ef = errorfunc (U.map getQinFZ qs)
+    g0 = hotStartGamma ef
+    in findGamma ef g0 or0
   foo s
-    | HS.size s >  1 = Parent  $ findGamma vor (func s)
-    | HS.size s == 1 = Product $ U.head        (func s)
+    | HS.size s >  1 = Parent  $ find   (func s)
+    | HS.size s == 1 = Product $ U.head (func s)
     | otherwise      = error "[Gomes] Empty grain group."
   in V.map foo gg
 
 -- | Calculates the parent phase for grouped grains based on their average orientation.
-getGrainGroupAvgOrientation :: Vector OR -> HashMap Int Quaternion -> V.Vector (HashSet Int) -> V.Vector OrientationType
-getGrainGroupAvgOrientation vor qmap gg = let
-  func =  U.fromList . mapMaybe ((flip HM.lookup) qmap) . HS.toList
+getGrainGroupAvgOrientation :: OR -> HashMap Int Quaternion -> V.Vector (HashSet Int) -> V.Vector OrientationType
+getGrainGroupAvgOrientation or0 qmap gg = let
+  func = U.fromList . mapMaybe ((flip HM.lookup) qmap) . HS.toList
+  find qs = let
+    ef = errorfunc (U.map getQinFZ qs)
+    g0 = hotStartGamma ef
+    in findGamma ef g0 or0
   foo s
-    | HS.size s >  1 = Parent  $ findGamma vor (func s)
-    | HS.size s == 1 = Product $ U.head        (func s)
+    | HS.size s >  1 = Parent  $ find   (func s)
+    | HS.size s == 1 = Product $ U.head (func s)
     | otherwise      = error "[Gomes] Empty grain group."
   in V.map foo gg
 

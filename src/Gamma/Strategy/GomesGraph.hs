@@ -190,7 +190,7 @@ run miso fin fout = do
     doit = do
       plotInput
       grainClustering
-      voxelClustering
+      -- voxelClustering
   _ <- case getGomesConfig fout miso 4 4 4 ror vbq of
     Nothing  -> error "No grain detected!"
     Just cfg -> runRWST doit cfg (getInitState cfg)
@@ -348,10 +348,12 @@ gammaQGrain = do
   GomesState{..}  <- get
   let
     func v gs = let
-      (gamma, _) = findGamma2 qs
-      is    = U.concat $ map (V.convert . getIS) gs
-      qs    = U.map getQ (U.fromList gs)
-      in U.mapM_ (\i -> MU.write v i gamma) is
+      (gamma, _) = getWGammaOR ws qs
+      is = map (V.convert . getIS) gs
+      ws = U.fromList (map (fromIntegral . U.length) is)
+      qs = U.map getQ (U.fromList gs)
+      iv = U.concat is
+      in U.mapM_ (\i -> MU.write v i gamma) iv
     boxdim    = dimension grainIDBox
     nvox      = U.length $ grainID grainIDBox
     getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
@@ -372,15 +374,17 @@ gammaQGrain2 = do
     getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
     getQ  gid = maybe zerorot id (HM.lookup gid orientationMap)
     func q e d m gs = let
-      (gamma, _) = findGamma2 qs
-      is    = U.concat $ map (V.convert . getIS) gs
-      qs    = U.map getQ (U.fromList gs)
-      err   = errorProductParent qs gamma realOR
+      (gamma, _) = getWGammaOR ws qs
+      is  = map (V.convert . getIS) gs
+      ws  = U.fromList (map (fromIntegral . U.length) is)
+      qs  = U.map getQ (U.fromList gs)
+      iv  = U.concat is
+      err = errorProductParent qs gamma realOR
       in do
-        U.mapM_ (\i -> MU.write q i gamma) is
-        U.mapM_ (\i -> MU.write e i (unDeg $ avgError err)) is
-        U.mapM_ (\i -> MU.write d i (unDeg $ devError err)) is
-        U.mapM_ (\i -> MU.write m i (unDeg $ maxError err)) is
+        U.mapM_ (\i -> MU.write q i gamma) iv
+        U.mapM_ (\i -> MU.write e i (unDeg $ avgError err)) iv
+        U.mapM_ (\i -> MU.write d i (unDeg $ devError err)) iv
+        U.mapM_ (\i -> MU.write m i (unDeg $ maxError err)) iv
     (vq, ve, vd, vm) = runST $ do
       q <- MU.replicate nvox zerorot
       e <- MU.replicate nvox (-1)
@@ -397,7 +401,6 @@ gammaQGrain2 = do
          , grainIDBox { grainID = vd }
          , grainIDBox { grainID = vm }
          )
-
 
 -- ================================ Voxel Clustering =====================================
 
@@ -477,7 +480,7 @@ gammaQVoxel = do
   GomesState{..}  <- get
   let
     func v gs = let
-      (gamma, _) = findGamma2 qs
+      (gamma, _) = getGammaOR qs
       is    = U.fromList gs
       qs    = U.map ((grainID orientationBox) U.!) is
       in U.mapM_ (\i -> MU.write v i gamma) is
@@ -494,7 +497,7 @@ gammaQVoxel2 = do
   GomesState{..}  <- get
   let
     func q e d m gs = let
-      (gamma, _) = findGamma2 qs
+      (gamma, _) = getGammaOR qs
       is    = U.fromList gs
       qs    = U.map ((grainID orientationBox) U.!) is
       err   = errorProductParent qs gamma realOR
@@ -521,6 +524,17 @@ gammaQVoxel2 = do
          , grainIDBox { grainID = vm }
          )
 
+getGammaOR :: Vector Quaternion -> (Quaternion, OR)
+getGammaOR qs = let
+  ef = errorfunc (U.map getQinFZ qs)
+  g0 = hotStartGamma ef
+  in findGammaOR ef g0 ksOR
+
+getWGammaOR :: Vector Double -> Vector Quaternion -> (Quaternion, OR)
+getWGammaOR ws qs = let
+  ef = weightederrorfunc ws (U.map getQinFZ qs)
+  g0 = hotStartGamma ef
+  in findGammaOR ef g0 ksOR
 
 -- ========================================= MCL =========================================
 
