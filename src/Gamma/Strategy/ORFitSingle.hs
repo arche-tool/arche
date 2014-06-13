@@ -53,8 +53,8 @@ run miso fin fout = do
           ggid     = U.singleton $ mkGrainID (-1)
           as       = U.map (toFZ Cubic . (g #<=) . qOR) (V.convert ksORs)
           agid     = U.replicate (U.length as) (mkGrainID $ -1)
-          vtkSO3_g = renderSO3Points Cubic ND              ggid (U.singleton g)
-          vtkSO3_a = renderSO3Points Cubic ND              agid as
+          vtkSO3_g = renderSO3Points Cubic ND ggid (U.singleton g)
+          vtkSO3_a = renderSO3Points Cubic ND agid as
         print (g, t)
         writeUniVTKfile (fout <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
         writeUniVTKfile (fout <.> "SO3-alpha" <.> "vtu") True vtkSO3_a

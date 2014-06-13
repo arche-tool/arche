@@ -155,8 +155,8 @@ plotMicroID = do
   GomesState{..}  <- get
   idBox <- gammaIDBox
   let
-    attr1  = mkCellAttr "GammaGB" (\i _ _ ->             (grainID idBox)  U.! i)
-    attr2  = mkCellAttr "AlphaGB" (\i _ _ -> unGrainID $ (grainID grainIDBox) U.! i)
+    attr1  = mkPointAttr "GammaGB" ((grainID idBox)  U.!)
+    attr2  = mkPointAttr "AlphaGB" (unGrainID . ((grainID grainIDBox) U.!))
   return $ renderVoxBoxVTK idBox [attr1, attr2]
 
 gammaIDBox :: Gomes (VoxBox Int)
@@ -179,7 +179,7 @@ plotMicroIPF :: String -> VoxBox Quaternion -> VTK Double
 plotMicroIPF name qBox = let
   unColor (RGBColor rgb) = rgb
   getIPF = unColor . getRGBColor . snd . getIPFColor Cubic ND
-  attr   = mkCellAttr name (\i _ _ -> getIPF $ (grainID qBox) U.! i)
+  attr   = mkPointAttr name (getIPF . ((grainID qBox) U.!))
   in renderVoxBoxVTK qBox [attr]
 
 gammaQBox :: Gomes (VoxBox Quaternion)
@@ -268,7 +268,7 @@ renderGB vb micro fs = addData $ renderAllElemProp vb fprop
     fprop = mapMaybe ((flip getFaceProp) micro) fs
     addData vtk = let
       func _ _ _ = 1 :: Int
-      in addDataCells vtk (mkCellAttr "ConnGB" func)
+      in addCellAttr vtk (mkCellAttr "ConnGB" func)
 
 -- TODO move to Hammer
 -- | Get both voxels that forms a given face.

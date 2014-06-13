@@ -14,7 +14,6 @@ module Gamma.OMRender
        , getOriGID
        ) where
 
-import qualified Data.List           as L
 import qualified Data.Vector         as V
 import qualified Data.Vector.Unboxed as U
 
@@ -67,23 +66,20 @@ checkSqrANG EBSDdata{..} = let
 
 renderOM :: [RenderOM] -> EBSDdata -> VTK Double
 renderOM fs ed@EBSDdata{..}
-  | checkSqrANG ed = L.foldl' addData vtkBase fs
+  | checkSqrANG ed = vtk
   | otherwise      = error "[ImageRender] Improper square grid ANG file."
   where
     EBSDinfo{..}    = ebsdInfo
     Gridinfo{..}    = grid
     (row, cEven, _) = rowCols
     (stepX, stepY)  = xystep
-    vtkBase = mkSPVTK "OM map"
-              (cEven , row   , 1     )
-              (xstart, ystart, zstart)
-              (stepX , stepY , 1     )
-    addData vtk (RenderOM name f) = let
-      func i _ = f $ nodes V.! i
-      in addDataPoints vtk (mkPointAttr name func)
-    addData vtk (RenderAlterMap name f) = let
-      func i _ = f i
-      in addDataPoints vtk (mkPointAttr name func)
+    vtk = mkSPVTK "OM map"
+          (cEven , row   , 1     )
+          (xstart, ystart, zstart)
+          (stepX , stepY , 1     )
+          (map getAttr fs)
+    getAttr (RenderOM       name func) = mkPointAttr name (func . (nodes V.!))
+    getAttr (RenderAlterMap name func) = mkPointAttr name func
 
 getOriGID :: EBSDdata -> VoxBox GrainID -> (Vector Quaternion, Vector GrainID)
 getOriGID EBSDdata{..} vboxgid = let
@@ -101,13 +97,10 @@ renderSO3Points symm ref gids qs = let
   quat  = quaternionToSO3 . toFZ symm
   color = unColor . getRGBColor . snd . getIPFColor symm ref
 
-  func1 i _    = color (qs U.! i)
-  addColor vtk = addDataPoints vtk (mkPointAttr "IPF colors" func1)
+  colorAttr = mkPointAttr "IPF colors" (color . (qs U.!))
+  gidAttr   = mkPointAttr "GrainID"    (unGrainID . (gids U.!))
 
-  func2 i _  = unGrainID (gids U.! i)
-  addGID vtk = addDataPoints vtk (mkPointAttr "GrainID" func2)
-
-  in addGID $ addColor vtkBase
+  in addPointAttr (addPointAttr vtkBase colorAttr) gidAttr
 
 renderSO2Points :: Symm -> RefFrame -> Vec3 -> Vector GrainID -> Vector Quaternion -> VTK Vec3
 renderSO2Points symm ref v gidv qs = let
@@ -126,10 +119,7 @@ renderSO2Points symm ref v gidv qs = let
 
   vtkBase = renderSO2PointsVTK ds
 
-  func1 i _    = cs U.! i
-  addColor vtk = addDataPoints vtk (mkPointAttr "IPF colors" func1)
+  colorAttr = mkPointAttr "IPF colors" (cs U.!)
+  gidAttr   = mkPointAttr "GrainID"    (unGrainID . (gs U.!))
 
-  func2 i _  = unGrainID (gs U.! i)
-  addGID vtk = addDataPoints vtk (mkPointAttr "GrainID" func2)
-
-  in addGID $ addColor vtkBase
+  in addPointAttr (addPointAttr vtkBase colorAttr) gidAttr

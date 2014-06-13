@@ -22,7 +22,7 @@ import           System.Process
 import           Control.Parallel.Strategies
 import           Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
 import           Control.Monad.Trans
-import           Control.Monad (liftM)
+import           Control.Monad (liftM, zipWithM_)
 
 import           Hammer.Math.Algebra
 import           Hammer.VoxBox
@@ -31,13 +31,14 @@ import           Hammer.VTK
 import           Hammer.Graph
 import           Hammer.MicroGraph
 
-import           Texture.Symmetry            (Symm (..), getMisoAngle)
+import           Texture.Symmetry            (Symm (..), getMisoAngle, toFZ)
 import           Texture.IPF
 import           Texture.Orientation
 import           File.ANGReader
 
 import           Gamma.Grains
 import           Gamma.OR
+import           Gamma.OMRender
 
 import Debug.Trace
 dbg a = trace (show a) a
@@ -123,63 +124,25 @@ grainClustering = do
     readGroups
   put $ st { grainGroups = gg }
 
-  vtkGID  <- liftM (plotMicroID  "gammaID" ) gammaIDGrain
-  (vbq, vba, vbd, vbm) <- gammaQGrain2
+  (vbq, attrsQGrain) <- gammaQGrain
+  vbid               <- gammaIDGrain
   let
-    vtkGIPF = plotMicroIPF "gammaIPF" vbq
-    vtkGavg = plotMicroID "avgError[Deg]" vba
-    vtkGdev = plotMicroID "devError[Deg]" vbd
-    vtkGmax = plotMicroID "maxError[Deg]" vbm
-
-  liftIO $ mapM_ (plotVTK_D outputDir) [ (vtkGID,  "grain-ID-gamma")
-                                       , (vtkGIPF, "grain-IPF-gamma")
-                                       , (vtkGavg, "grain-avgERR-gamma")
-                                       , (vtkGdev, "grain-devERR-gamma")
-                                       , (vtkGmax, "grain-maxERR-gamma")
-                                       ]
-
-voxelClustering :: Gomes ()
-voxelClustering = do
-  GomesConfig{..} <- ask
-  -- run MCL
-  st <- get
-  gg <- liftIO $ do
-    saveGraph (voxelGraph st)
-    runMCL
-    readGroups
-  put $ st { voxelGroups = gg }
-
-  (vbq, vba, vbd, vbm) <- gammaQVoxel2
-  let
-    vtkGIPF = plotMicroIPF "gammaIPF" vbq
-    vtkGavg = plotMicroID "avgError[Deg]" vba
-    vtkGdev = plotMicroID "devError[Deg]" vbd
-    vtkGmax = plotMicroID "maxError[Deg]" vbm
-  vtkGID  <- liftM (plotMicroID  "gammaID" ) gammaIDVoxel
-
-  liftIO $ mapM_ (plotVTK_D outputDir) [ (vtkGID,  "voxel-ID-gamma")
-                                       , (vtkGIPF, "voxel-IPF-gamma")
-                                       , (vtkGavg, "voxel-avgERR-gamma")
-                                       , (vtkGdev, "voxel-devERR-gamma")
-                                       , (vtkGmax, "voxel-maxERR-gamma")
-                                       ]
+    attrGID  = plotMicroID  "gammaID"  vbid
+    attrGIPF = plotMicroIPF "gammaIPF" vbq
+    vtk      = renderVoxBoxVTK vbq (attrGID:attrGIPF:attrsQGrain)
+  liftIO $ plotVTK_D outputDir (vtk,  "grain-gamma")
 
 plotInput :: Gomes ()
 plotInput = do
   GomesConfig{..} <- ask
-  -- Plot OIMs
-  let vtkIPF = plotMicroIPF "Alpha" orientationBox
-  vtkAIPF   <- liftM (plotMicroIPF "AvgAlpha") alphaQBox
+  alphaQBox <- getAlphaQBox
   vtkGGraph <- plotGrainGraph
-  vtkVGraph <- plotVoxelGraph
-  liftIO $ mapM_ (plotVTK_D outputDir)
-    [ (vtkIPF,  "IPF-alpha" )
-    , (vtkAIPF, "AIPF-alpha")
-    ]
-  liftIO $ mapM_ (plotVTK_V outputDir)
-    [ (vtkGGraph,  "GrainGraph")
-    , (vtkVGraph,  "VoxelGraph")
-    ]
+  let
+    attrIPF  = plotMicroIPF "VoxelAlpha" orientationBox
+    attrAIPF = plotMicroIPF "AvgAlpha"   alphaQBox
+    vtk      = renderVoxBoxVTK orientationBox (attrIPF : [attrAIPF])
+  liftIO $ plotVTK_D outputDir (vtk,  "IPF-alpha")
+  liftIO $ plotVTK_V outputDir (vtkGGraph,  "GrainGraph")
 
 run :: Deg -> FilePath -> FilePath -> IO ()
 run miso fin fout = do
@@ -190,7 +153,8 @@ run miso fin fout = do
     doit = do
       plotInput
       grainClustering
-      -- voxelClustering
+      --voxelClustering
+      --plotGroupSO3
   _ <- case getGomesConfig fout miso 4 4 4 ror vbq of
     Nothing  -> error "No grain detected!"
     Just cfg -> runRWST doit cfg (getInitState cfg)
@@ -198,20 +162,17 @@ run miso fin fout = do
 
 -- ====================================== Plotting =======================================
 
-plotMicroID :: (RenderElemVTK a)=> String -> VoxBox a -> VTK Double
-plotMicroID name iBox = let
-  attr = mkCellAttr name (\i _ _ -> (grainID iBox) U.! i)
-  in renderVoxBoxVTK iBox [attr]
+plotMicroID :: (RenderElemVTK a)=> String -> VoxBox a -> VTKAttrPoint Double
+plotMicroID name iBox = mkPointAttr name ((grainID iBox) U.!)
 
-plotMicroIPF :: String -> VoxBox Quaternion -> VTK Double
+plotMicroIPF :: String -> VoxBox Quaternion -> VTKAttrPoint Double
 plotMicroIPF name qBox = let
   unColor (RGBColor rgb) = rgb
   getIPF = unColor . getRGBColor . snd . getIPFColor Cubic ND
-  attr   = mkCellAttr name (\i _ _ -> getIPF $ (grainID qBox) U.! i)
-  in renderVoxBoxVTK qBox [attr]
+  in mkPointAttr name (getIPF . ((grainID qBox) U.!))
 
-alphaQBox :: Gomes (VoxBox Quaternion)
-alphaQBox = do
+getAlphaQBox :: Gomes (VoxBox Quaternion)
+getAlphaQBox = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
@@ -288,6 +249,34 @@ avgGrainPos vb gmap = HM.map func gmap
 
 -- ================================== Grain clustering ===================================
 
+getFaces :: Vector OR -> VoxBox Quaternion -> [((Int, Int), Double)]
+getFaces ors VoxBox{..} = V.foldl' go [] (V.fromList $ getRangePos dimension)
+  where
+    go acc pos = let
+      v    = pos
+      vx   = pos #+# (VoxelPos (-1)   0    0 )
+      vy   = pos #+# (VoxelPos   0  (-1)   0 )
+      vz   = pos #+# (VoxelPos   0    0  (-1))
+      i    = dimension %@ v
+      ix   = dimension %@? vx
+      iy   = dimension %@? vy
+      iz   = dimension %@? vz
+
+      isInGrain a b = let
+        omega = getMisoAngle Cubic a b
+        in (abs $ fromAngle $ Deg 5) > omega
+
+      getValue (Just j) = let
+        qa  = grainID U.! i
+        qb  = grainID U.! j
+        mOR = misoOR ors Cubic qa qb
+        x   = if isInGrain qa qb then 0 else mOR
+        in Just ((i, j), x)
+      getValue _ = Nothing
+
+      fs = mapMaybe getValue [ix, iy, iz]
+      in fs ++ acc
+
 graphWeight :: VoxBox Quaternion -> MicroVoxel -> OR -> Graph Int Double
 graphWeight vbq micro withOR = let
   fs    = HM.keys $ microFaces micro
@@ -323,9 +312,10 @@ plotGrainGraph = do
     maxi = maximum $ HM.keys positionMap
     ns   = U.replicate (maxi+1) zero U.// (HM.toList positionMap)
     (es, vs) = unzip $ graphToList grainGraph
-    vtk = mkUGVTK "graph" ns es
+    vtk = mkUGVTK "graph" ns es [] [attr]
     vv  = V.fromList vs
-  return $ addDataCells vtk (mkCellAttr "misoOR" (\i _ _ -> vv V.! i))
+    attr = mkCellAttr "misoOR" (\i _ _ -> vv V.! i)
+  return vtk
 
 gammaIDGrain :: Gomes (VoxBox Int)
 gammaIDGrain = do
@@ -342,187 +332,98 @@ gammaIDGrain = do
       return v
   return $ grainIDBox { grainID = vec }
 
-gammaQGrain :: Gomes (VoxBox Quaternion)
+gammaQGrain :: Gomes (VoxBox Quaternion, [VTKAttrPoint Double])
 gammaQGrain = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
-    func v gs = let
-      (gamma, _) = getWGammaOR ws qs
-      is = map (V.convert . getIS) gs
-      ws = U.fromList (map (fromIntegral . U.length) is)
-      qs = U.map getQ (U.fromList gs)
-      iv = U.concat is
-      in U.mapM_ (\i -> MU.write v i gamma) iv
     boxdim    = dimension grainIDBox
     nvox      = U.length $ grainID grainIDBox
     getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
     getQ  gid = maybe zerorot id (HM.lookup gid orientationMap)
-    vec = U.create $ do
-      v <- MU.replicate nvox zerorot
-      mapM_ (func v) grainGroups
-      return v
-  return $ grainIDBox { grainID = vec }
-
-gammaQGrain2 :: Gomes (VoxBox Quaternion, VoxBox Double, VoxBox Double, VoxBox Double)
-gammaQGrain2 = do
-  GomesConfig{..} <- ask
-  GomesState{..}  <- get
-  let
-    boxdim    = dimension grainIDBox
-    nvox      = U.length $ grainID grainIDBox
-    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
-    getQ  gid = maybe zerorot id (HM.lookup gid orientationMap)
-    func q e d m gs = let
+    func q e d m k gs = let
       (gamma, _) = getWGammaOR ws qs
       is  = map (V.convert . getIS) gs
       ws  = U.fromList (map (fromIntegral . U.length) is)
       qs  = U.map getQ (U.fromList gs)
       iv  = U.concat is
-      err = errorProductParent qs gamma realOR
+      err = wErrorProductParent ws qs gamma realOR
+      foo (qi, wi) vids = let
+        gerr = wErrorProductParent (U.singleton wi) (U.singleton qi) gamma realOR
+        in U.mapM_ (\i -> MU.write k i (unDeg $ avgError gerr)) vids
       in do
         U.mapM_ (\i -> MU.write q i gamma) iv
         U.mapM_ (\i -> MU.write e i (unDeg $ avgError err)) iv
         U.mapM_ (\i -> MU.write d i (unDeg $ devError err)) iv
         U.mapM_ (\i -> MU.write m i (unDeg $ maxError err)) iv
-    (vq, ve, vd, vm) = runST $ do
+        zipWithM_ foo (U.toList $ U.zip qs ws) is
+    (vq, ve, vd, vm, vk) = runST $ do
       q <- MU.replicate nvox zerorot
       e <- MU.replicate nvox (-1)
       d <- MU.replicate nvox (-1)
       m <- MU.replicate nvox (-1)
-      mapM_ (func q e d m) grainGroups
+      k <- MU.replicate nvox (-1)
+      mapM_ (func q e d m k) grainGroups
       q' <- U.unsafeFreeze q
       e' <- U.unsafeFreeze e
       d' <- U.unsafeFreeze d
       m' <- U.unsafeFreeze m
-      return (q', e', d', m')
+      k' <- U.unsafeFreeze k
+      return (q', e', d', m', k')
   return ( grainIDBox { grainID = vq }
-         , grainIDBox { grainID = ve }
-         , grainIDBox { grainID = vd }
-         , grainIDBox { grainID = vm }
+         , [ mkPointAttr "avgError[deg]"   (ve U.!)
+           , mkPointAttr "devError[deg]"   (vd U.!)
+           , mkPointAttr "maxError[deg]"   (vm U.!)
+           , mkPointAttr "grainError[deg]" (vk U.!)
+           ]
          )
 
--- ================================ Voxel Clustering =====================================
-
-getFaces :: Vector OR -> VoxBox Quaternion -> [((Int, Int), Double)]
-getFaces ors VoxBox{..} = V.foldl' go [] (V.fromList $ getRangePos dimension)
-  where
-    go acc pos = let
-      v    = pos
-      vx   = pos #+# (VoxelPos (-1)   0    0 )
-      vy   = pos #+# (VoxelPos   0  (-1)   0 )
-      vz   = pos #+# (VoxelPos   0    0  (-1))
-      i    = dimension %@ v
-      ix   = dimension %@? vx
-      iy   = dimension %@? vy
-      iz   = dimension %@? vz
-
-      isInGrain a b = let
-        omega = getMisoAngle Cubic a b
-        in (abs $ fromAngle $ Deg 5) > omega
-
-      getValue (Just j) = let
-        qa  = grainID U.! i
-        qb  = grainID U.! j
-        mOR = misoOR ors Cubic qa qb
-        x   = if isInGrain qa qb then 0 else mOR
-        in Just ((i, j), x)
-      getValue _ = Nothing
-
-      fs = mapMaybe getValue [ix, iy, iz]
-      in fs ++ acc
-
-graphWeightVBox :: VoxBox Quaternion -> OR -> Graph Int Double
-graphWeightVBox vbq withOR = let
-  ors   = genTS withOR
-  ms    = getFaces ors vbq
-  ams
-    | n > 0     = s / (fromIntegral n)
-    | otherwise = 0
-    where
-      n = length ms
-      s = L.foldl' (\acc x -> acc + snd x) 0 ms
-  weight x = let
-    k = -300
-    w = exp (k * x * x)
-    in w -- if w < 0.05 then 0 else 1
-  mspar = ms `using` parListChunk 1000 rpar
-  in filterIsleGrains $ mkUniGraph [] $ filter ((>= 0) . snd) $ map (\(fid, x) -> (fid, weight x)) mspar
-
-plotVoxelGraph :: Gomes (VTK Vec3)
-plotVoxelGraph = do
+plotGroupSO3 :: Gomes ()
+plotGroupSO3 = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
-    (es, vs) = unzip $ graphToList voxelGraph
-    size = sizeVoxBoxRange (dimension orientationBox)
-    ns   = U.generate size (fastEvalVoxelPos orientationBox)
-    vtk  = mkUGVTK "graph" ns es
-    vv   = V.fromList vs
-  return $ addDataCells vtk (mkCellAttr "misoOR" (\i _ _ -> vv V.! i))
+    foo vtk name gid = writeUniVTKfile ( outputDir ++ "gid_" ++
+                                         show gid  ++ name <.> "vtu" ) True vtk
+    func gid mids = do
+      (gamma, qs, _)        <- fitGroupGrains mids
+      (vtk_m, vtk_g, vtk_a) <- plotFitSO3 gamma mids qs
+      liftIO (foo vtk_m "-SO3-alpha"      gid)
+      liftIO (foo vtk_g "-SO3-gamma"      gid)
+      liftIO (foo vtk_a "-SO3-simu_alpha" gid)
+  zipWithM_ func [1..] grainGroups
 
-gammaIDVoxel :: Gomes (VoxBox Int)
-gammaIDVoxel = do
+-- TODO DRY!!! with func get getQGrain2
+fitGroupGrains :: [Int] -> Gomes (Quaternion, Vector Quaternion, FitError)
+fitGroupGrains mids = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
-    nvox      = U.length $ grainID grainIDBox
-    func v (newGID, gs) = mapM_ (\vid -> MU.write v vid newGID) gs
-    vec = U.create $ do
-      v <- MU.replicate nvox (-1)
-      mapM_ (func v) (zip [1..] voxelGroups)
-      return v
-  return $ grainIDBox { grainID = vec }
+    boxdim    = dimension grainIDBox
+    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
+    getQ  gid = maybe zerorot id (HM.lookup gid orientationMap)
+    func gs = let
+      (gamma, _) = getWGammaOR ws qs
+      is  = map (V.convert . getIS) gs
+      ws  = U.fromList (map (fromIntegral . U.length) is)
+      qs  = U.map getQ (U.fromList gs)
+      err = wErrorProductParent ws qs gamma realOR
+      in (gamma, qs, err)
+  return (func mids)
 
-gammaQVoxel :: Gomes (VoxBox Quaternion)
-gammaQVoxel = do
+plotFitSO3 :: Quaternion -> [Int] -> Vector Quaternion -> Gomes (VTK Vec3, VTK Vec3, VTK Vec3)
+plotFitSO3 gamma mids ms = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
-    func v gs = let
-      (gamma, _) = getGammaOR qs
-      is    = U.fromList gs
-      qs    = U.map ((grainID orientationBox) U.!) is
-      in U.mapM_ (\i -> MU.write v i gamma) is
-    nvox      = U.length $ grainID grainIDBox
-    vec = U.create $ do
-      v <- MU.replicate nvox zerorot
-      mapM_ (func v) voxelGroups
-      return v
-  return $ grainIDBox { grainID = vec }
-
-gammaQVoxel2 :: Gomes (VoxBox Quaternion, VoxBox Double, VoxBox Double, VoxBox Double)
-gammaQVoxel2 = do
-  GomesConfig{..} <- ask
-  GomesState{..}  <- get
-  let
-    func q e d m gs = let
-      (gamma, _) = getGammaOR qs
-      is    = U.fromList gs
-      qs    = U.map ((grainID orientationBox) U.!) is
-      err   = errorProductParent qs gamma realOR
-      in do
-        U.mapM_ (\i -> MU.write q i gamma) is
-        U.mapM_ (\i -> MU.write e i (unDeg $ avgError err)) is
-        U.mapM_ (\i -> MU.write d i (unDeg $ devError err)) is
-        U.mapM_ (\i -> MU.write m i (unDeg $ maxError err)) is
-    nvox      = U.length $ grainID grainIDBox
-    (vq, ve, vd, vm) = runST $ do
-      q <- MU.replicate nvox zerorot
-      e <- MU.replicate nvox (-1)
-      d <- MU.replicate nvox (-1)
-      m <- MU.replicate nvox (-1)
-      mapM_ (func q e d m) voxelGroups
-      q' <- U.unsafeFreeze q
-      e' <- U.unsafeFreeze e
-      d' <- U.unsafeFreeze d
-      m' <- U.unsafeFreeze m
-      return (q', e', d', m')
-  return ( grainIDBox { grainID = vq }
-         , grainIDBox { grainID = ve }
-         , grainIDBox { grainID = vd }
-         , grainIDBox { grainID = vm }
-         )
+    ggid = U.singleton (mkGrainID $ -5)
+    as   = U.map (toFZ Cubic . (gamma #<=) . qOR) (genTS realOR)
+    agid = U.replicate (U.length as) (mkGrainID $ -10)
+    mgid = U.map mkGrainID $ U.fromList mids
+    vtkSO3_m = renderSO3Points Cubic ND mgid ms
+    vtkSO3_g = renderSO3Points Cubic ND ggid (U.singleton gamma)
+    vtkSO3_a = renderSO3Points Cubic ND agid as
+  return (vtkSO3_m, vtkSO3_g, vtkSO3_a)
 
 getGammaOR :: Vector Quaternion -> (Quaternion, OR)
 getGammaOR qs = let

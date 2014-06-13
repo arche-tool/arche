@@ -78,7 +78,7 @@ renderGBOR2 ror vbq micro = let
   vtk = renderVoxElemListVTK vbq (V.toList fs)
   getM = V.map (faceMisoOR ts vbq)
   func i _ _ = ms V.! i
-  in addDataCells vtk (mkCellAttr "misoORAvg" func)
+  in addCellAttr vtk (mkCellAttr "misoORAvg" func)
 
 renderGBOR :: OR -> VoxBox Quaternion -> MicroVoxel -> VTK Vec3
 renderGBOR ror vbq micro = let
@@ -88,7 +88,7 @@ renderGBOR ror vbq micro = let
   ms  = V.map (faceMisoOR ts vbq) fs
   vtk = renderVoxElemListVTK vbq (V.toList fs)
   func i _ _ = ms V.! i
-  in addDataCells vtk (mkCellAttr "misoOR" func)
+  in addCellAttr vtk (mkCellAttr "misoOR" func)
 
 faceMisoOR :: U.Vector OR -> VoxBox Quaternion -> FaceVoxelPos -> Double
 faceMisoOR ors vbq face = let

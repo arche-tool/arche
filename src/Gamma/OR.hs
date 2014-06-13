@@ -22,6 +22,7 @@ module Gamma.OR
        , misoOR
        , misoKS
        , errorProductParent
+       , wErrorProductParent
        , weightederrorfunc
        , errorfunc
          -- * Test functions
@@ -111,6 +112,13 @@ data FitError
   } deriving (Show)
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
+
+-- | Find the angular error in rad between product and parent orientations regarding a
+-- given orientation relationship.
+wErrorProductParent :: Vector Double -> Vector Quaternion -> Quaternion -> OR -> FitError
+wErrorProductParent ws qs ga t0 = let
+  fzqs = G.map getQinFZ qs
+  in weightederrorfunc ws fzqs ga (genTS t0)
 
 -- | Find the angular error in rad between product and parent orientations regarding a
 -- given orientation relationship.
@@ -401,9 +409,8 @@ plotErrFunc a = let
   errf = errorfunc fzqs
   (grid, vtk) = mkSO3 35 35 35
   es = G.map (\s -> fromAngle $ avgError $ errorfunc fzqs (so3ToQuaternion s) ksORs) grid
-  func i _ = es U.! i
-  attr = mkPointAttr "Error function" func
-  vtk' = addDataPoints vtk attr
+  attr = mkPointAttr "Error function" (es U.!)
+  vtk' = addPointAttr vtk attr
 
   gi   = so3ToQuaternion $ grid U.! (U.minIndex es)
   in do

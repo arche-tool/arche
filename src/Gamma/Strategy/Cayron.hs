@@ -48,8 +48,8 @@ run miso fin fout = do
       ggh = grainsGraph fs
       vbgid2 = gammaBox gidMap ggh
       vtk2 = renderVoxBoxVTK vbgid2 [cell1, cell2]
-      cell1 = mkCellAttr "GammaGB" (\i _ _ -> (grainID vbgid2) U.! i)
-      cell2 = mkCellAttr "AlphaGB" (\i _ _ -> unGrainID $ (grainID vbgid)  U.! i)
+      cell1 = mkPointAttr "GammaGB" ((grainID vbgid2) U.!)
+      cell2 = mkPointAttr "AlphaGB" (unGrainID . ((grainID vbgid) U.!))
       in do
         print $ grainsGraph fs
         writeUniVTKfile (fout <.> "vtu") True vtk
@@ -102,4 +102,4 @@ renderGB vb micro fs = addData $ renderAllElemProp vb fprop
     fprop = mapMaybe ((flip getFaceProp) micro) fs
     addData vtk = let
       func _ _ _ = 1 :: Int
-      in addDataCells vtk (mkCellAttr "ConnGB" func)
+      in addCellAttr vtk (mkCellAttr "ConnGB" func)

@@ -26,7 +26,7 @@ run miso fin fout = do
     Nothing -> print "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg
-      attrs = [mkCellAttr "GrainID" (\a _ _ -> unGrainID $ (grainID gids) U.! a)]
+      attrs = [mkPointAttr "GrainID" (unGrainID . ((grainID gids) U.!))]
       in do
         writeUniVTKfile (fout ++ ".vtr")        True $ renderVoxBoxVTK      gids attrs
         writeUniVTKfile (fout ++ "_faces.vtu")  True $ renderMicroFacesVTK  gids micro

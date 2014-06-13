@@ -43,7 +43,7 @@ extendBoxFace VoxBox{..} = VoxBox d o spacing (U.empty)
     o = VoxBoxOrigin (x0-dx) (y0-dy) (z0-dz)
 
 renderGB :: [RenderGB] -> VoxBox Quaternion -> VTK Vec3
-renderGB fs box = L.foldl' addData vtkBase fs
+renderGB fs box = vtk
   where
     ps       = getRangePos range
     range    = dimension box
@@ -66,7 +66,8 @@ renderGB fs box = L.foldl' addData vtkBase fs
              then ((box #! a, box #! b), (ib, ib1, ib2, ib3)) : acc
              else acc
     points = U.generate (sizeVoxBoxRange extRange) (evalVoxelPos extBox . (extRange %#))
-    vtkBase = mkUGVTK "GB map" points (U.fromList cells)
-    addData vtk (RenderGB name f) = let
+    vtk    = mkUGVTK "GB map" points (U.fromList cells) [] attrs
+    attrs  = map getAttr fs
+    getAttr (RenderGB name f) = let
       func i _ _ = (uncurry f) $ (U.fromList values) U.! i
-      in addDataCells vtk (mkCellAttr name func)
+      in mkCellAttr name func
