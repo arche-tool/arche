@@ -15,6 +15,7 @@ import           Data.HashMap.Strict (HashMap)
 import           Data.Maybe          (mapMaybe)
 import           Control.Applicative ((<$>))
 import           Control.Monad.ST    (runST)
+import           Text.Printf         (printf)
 
 import           System.FilePath
 import           System.IO
@@ -34,6 +35,7 @@ import           Hammer.MicroGraph
 import           Texture.Symmetry            (Symm (..), getMisoAngle, toFZ)
 import           Texture.IPF
 import           Texture.Orientation
+import           Texture.TesseractGrid
 import           File.ANGReader
 
 import           Gamma.Grains
@@ -68,9 +70,7 @@ data GomesConfig
 data GomesState
   = GomesState
   { grainGraph  :: Graph Int Double
-  , grainGroups :: [[Int]]
-  , voxelGraph  :: Graph Int Double
-  , voxelGroups :: [[Int]]
+  , grainGroups :: V.Vector [Int]
   }
 
 type Gomes = RWST GomesConfig () GomesState IO
@@ -97,14 +97,10 @@ getGomesConfig dirout gmiso mergeGG mergeMG mergeMM ror qBox = let
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
-  --g = graphMisOR orientationBox structureGraph realOR
   gg = graphWeight orientationBox structureGraph realOR
-  vg = graphWeightVBox orientationBox realOR
   in GomesState
      { grainGraph  = gg
-     , grainGroups = []
-     , voxelGraph  = vg
-     , voxelGroups = []
+     , grainGroups = V.empty
      }
 
 plotVTK_D :: (RenderElemVTK a)=> String -> (VTK a, FilePath) -> IO ()
@@ -118,10 +114,7 @@ grainClustering = do
   GomesConfig{..} <- ask
   -- run MCL
   st <- get
-  gg <- liftIO $ do
-    saveGraph (grainGraph st)
-    runMCL
-    readGroups
+  gg <- liftIO $ findClusters (grainGraph st)
   put $ st { grainGroups = gg }
 
   (vbq, attrsQGrain) <- gammaQGrain
@@ -154,7 +147,7 @@ run miso fin fout = do
       plotInput
       grainClustering
       --voxelClustering
-      --plotGroupSO3
+      plotGroupSO3
   _ <- case getGomesConfig fout miso 4 4 4 ror vbq of
     Nothing  -> error "No grain detected!"
     Just cfg -> runRWST doit cfg (getInitState cfg)
@@ -328,7 +321,7 @@ gammaIDGrain = do
     func v (newGID, gs) = mapM_ (\gid -> V.mapM_ (\i -> MU.write v i newGID) $ getIS gid) gs
     vec = U.create $ do
       v <- MU.replicate nvox (-1)
-      mapM_ (func v) (zip [1..] grainGroups)
+      V.mapM_ (func v) (V.imap (,) grainGroups)
       return v
   return $ grainIDBox { grainID = vec }
 
@@ -342,12 +335,11 @@ gammaQGrain = do
     getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
     getQ  gid = maybe zerorot id (HM.lookup gid orientationMap)
     func q e d m k gs = let
-      (gamma, _) = getWGammaOR ws qs
+      (gamma, err) = getWGammaTess realOR ws qs
       is  = map (V.convert . getIS) gs
       ws  = U.fromList (map (fromIntegral . U.length) is)
       qs  = U.map getQ (U.fromList gs)
       iv  = U.concat is
-      err = wErrorProductParent ws qs gamma realOR
       foo (qi, wi) vids = let
         gerr = wErrorProductParent (U.singleton wi) (U.singleton qi) gamma realOR
         in U.mapM_ (\i -> MU.write k i (unDeg $ avgError gerr)) vids
@@ -363,7 +355,7 @@ gammaQGrain = do
       d <- MU.replicate nvox (-1)
       m <- MU.replicate nvox (-1)
       k <- MU.replicate nvox (-1)
-      mapM_ (func q e d m k) grainGroups
+      V.mapM_ (func q e d m k) grainGroups
       q' <- U.unsafeFreeze q
       e' <- U.unsafeFreeze e
       d' <- U.unsafeFreeze d
@@ -385,31 +377,36 @@ plotGroupSO3 = do
   let
     foo vtk name gid = writeUniVTKfile ( outputDir ++ "gid_" ++
                                          show gid  ++ name <.> "vtu" ) True vtk
-    func gid mids = do
-      (gamma, qs, _)        <- fitGroupGrains mids
-      (vtk_m, vtk_g, vtk_a) <- plotFitSO3 gamma mids qs
-      liftIO (foo vtk_m "-SO3-alpha"      gid)
-      liftIO (foo vtk_g "-SO3-gamma"      gid)
-      liftIO (foo vtk_a "-SO3-simu_alpha" gid)
-  zipWithM_ func [1..] grainGroups
+    fii vtk name gid = writeUniVTKfile ( outputDir ++ "gid_" ++
+                                         show gid  ++ name <.> "vti" ) True vtk
+    func (gid, mids) = do
+      (ws, qs) <- getGroupGrainsOrientations mids
+      let
+        (g1, err1, _) = getWGammaOR       realOR ws qs
+        (g2, err2)    = getWGammaTess  realOR ws qs
+        (g3, err3, t) = hotStartTesseract realOR qs
+      liftIO $ putStrLn "---" >> print err1 >> print err2 >> print err3 >> print (g1,g2,g3) >> putStrLn "---"
+      liftIO $ (fii (plotTesseract t) "-TESS" gid)
+      --(vtk_m, vtk_g, vtk_a) <- plotFitSO3 gamma mids qs
+      --(vtk_g, vtk_a, as) <- plotHotSpotSO3 gamma mids qs
+      --liftIO $ saveText as gid
+      --liftIO (foo vtk_m "-SO3-alpha"      gid)
+      --liftIO (foo vtk_g "-SO3-gamma"      gid)
+      --liftIO (foo vtk_a "-SO3-simu_alpha" gid)
+  V.mapM_ func $ V.imap (,) grainGroups
 
--- TODO DRY!!! with func get getQGrain2
-fitGroupGrains :: [Int] -> Gomes (Quaternion, Vector Quaternion, FitError)
-fitGroupGrains mids = do
+getGroupGrainsOrientations :: [Int] -> Gomes (Vector Double, Vector Quaternion)
+getGroupGrainsOrientations mids = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
     boxdim    = dimension grainIDBox
     getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
     getQ  gid = maybe zerorot id (HM.lookup gid orientationMap)
-    func gs = let
-      (gamma, _) = getWGammaOR ws qs
-      is  = map (V.convert . getIS) gs
-      ws  = U.fromList (map (fromIntegral . U.length) is)
-      qs  = U.map getQ (U.fromList gs)
-      err = wErrorProductParent ws qs gamma realOR
-      in (gamma, qs, err)
-  return (func mids)
+    is  = map (V.convert . getIS) mids
+    ws  = U.fromList (map (fromIntegral . U.length) is)
+    qs  = U.map getQ (U.fromList mids)
+  return (ws, qs)
 
 plotFitSO3 :: Quaternion -> [Int] -> Vector Quaternion -> Gomes (VTK Vec3, VTK Vec3, VTK Vec3)
 plotFitSO3 gamma mids ms = do
@@ -425,17 +422,34 @@ plotFitSO3 gamma mids ms = do
     vtkSO3_a = renderSO3Points Cubic ND agid as
   return (vtkSO3_m, vtkSO3_g, vtkSO3_a)
 
-getGammaOR :: Vector Quaternion -> (Quaternion, OR)
-getGammaOR qs = let
-  ef = errorfunc (U.map getQinFZ qs)
-  g0 = hotStartGamma ef
-  in findGammaOR ef g0 ksOR
+plotHotSpotSO3 :: Quaternion -> [Int] -> Vector Quaternion -> Gomes (VTK Vec3, VTK Vec3, Vector Quaternion)
+plotHotSpotSO3 gamma mids ms = do
+  GomesConfig{..} <- ask
+  GomesState{..}  <- get
+  let
+    func m = U.map (toFZ Cubic . (m #<=) . qOR) (genTS realOR)
+    ggid = U.singleton (mkGrainID $ -5)
+    as   = U.concatMap func ms
+    agid = U.replicate (U.length as) (mkGrainID $ -1)
+    vtkSO3_a = renderSO3Points Cubic ND agid as
+    vtkSO3_g = renderSO3Points Cubic ND ggid (U.singleton gamma)
+  return (vtkSO3_g, vtkSO3_a, as)
 
-getWGammaOR :: Vector Double -> Vector Quaternion -> (Quaternion, OR)
-getWGammaOR ws qs = let
-  ef = weightederrorfunc ws (U.map getQinFZ qs)
-  g0 = hotStartGamma ef
-  in findGammaOR ef g0 ksOR
+getWGammaTess :: OR -> Vector Double -> Vector Quaternion -> (Quaternion, FitError)
+getWGammaTess rOR ws qs = (gamma, err)
+  where
+    ef  = weightederrorfunc ws (U.map getQinFZ qs)
+    (g0, err2, t) = hotStartTesseract rOR qs
+    err = wErrorProductParent ws qs gamma rOR
+    gamma = findGamma ef g0 rOR
+
+getWGammaOR :: OR -> Vector Double -> Vector Quaternion -> (Quaternion, FitError, OR)
+getWGammaOR rOR ws qs = (gamma, err, rOR2)
+  where
+    ef  = weightederrorfunc ws (U.map getQinFZ qs)
+    g0  = hotStartGamma ef
+    err = wErrorProductParent ws qs gamma rOR
+    (gamma, rOR2) = findGammaOR ef g0 rOR
 
 -- ========================================= MCL =========================================
 
@@ -451,5 +465,11 @@ saveGraph g = let
 runMCL :: IO ()
 runMCL = callCommand "mcl test.txt --abc -I 1.2 -o test.out"
 
-readGroups :: IO ([[Int]])
-readGroups = readFile "test.out" >>= return . map (map read . words) . lines
+readGroups :: IO (V.Vector [Int])
+readGroups = readFile "test.out" >>= return . V.fromList . map (map read . words) . lines
+
+findClusters :: Graph Int Double -> IO (V.Vector [Int])
+findClusters g = do
+  saveGraph g
+  runMCL
+  readGroups

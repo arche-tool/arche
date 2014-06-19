@@ -11,6 +11,7 @@ module Gamma.OR
        , findORFace
        , hotStartGamma
        , hotStartOR
+       , hotStartTesseract
        , OR (..)
        , FitError (avgError, devError, maxError)
        , convert
@@ -25,12 +26,12 @@ module Gamma.OR
        , wErrorProductParent
        , weightederrorfunc
        , errorfunc
+       , shitQAvg
          -- * Test functions
        , testGammaFit
        , testFindGamma
-       , testMisFunc
+       , testTesseractFitting
        , testMisoKS
-       , shitQAvg
        ) where
 
 import qualified Data.Packed                 as HV
@@ -56,8 +57,10 @@ import           Hammer.Math.Optimum
 
 import           Hammer.VTK
 import           Texture.HyperSphere
+import           Texture.TesseractGrid
 
---dbg a = trace (show a) a
+import           Debug.Trace
+dbg a = trace (show a) a
 
 -- ======================================================================================= 
 
@@ -277,6 +280,36 @@ weightederrorfunc ws gms1FZ ga ts = let
      , maxError = toAngle (G.maximum wq / wt)
      }
 
+shitQAvg :: Vector Quaternion -> Quaternion
+shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)
+  where
+    os = getSymmOps Cubic
+    func avg q = let
+      qs = U.map ((q #<=) . symmOp) os
+      ms = U.map (composeQ0 avg) qs
+      i  = U.minIndex ms
+      vi = quaterVec (qs U.! i)
+      in mkQuaternion $ vi &+ (quaterVec avg)
+
+-- ===================================== Teseeract binning ===============================
+
+hotStartTesseract :: OR -> Vector Quaternion -> (Quaternion, FitError, TesseractGrid Double)
+hotStartTesseract realOR ms
+  | avgError ermax > avgError eravg = (gavg, eravg, tess)
+  | otherwise                       = (gmax, ermax, tess)
+  where
+    func m = U.map (toFZ Cubic . (m #<=) . qOR) (genTS realOR)
+    grid  = 30
+    range = 4 / (fromIntegral grid)
+    gs    = U.concatMap func ms
+    t0    = emptyTesseract grid 0
+    tess  = binningTesseract (U.convert gs) t0
+    gmax  = tesseractToQuaternion $ maxTesseractPoint tess
+    gc    = U.filter ((> range) . getMisoAngle Cubic gmax) gs
+    gavg  = shitQAvg gc
+    eravg = errorProductParent ms gavg realOR
+    ermax = errorProductParent ms gmax realOR
+
 -- =========================================== Unbox FZ  =================================
 
 newtype instance U.MVector s FZ = MV_FZ (U.MVector s Quaternion)
@@ -378,13 +411,6 @@ testGammaFit ga gs t = let
   m2  = errorfuncSlowButSure ga gs (qOR t)
   in (m1, m2)
 
-testMisFunc :: IO ()
-testMisFunc = do
-  a <- randomIO
-  let gms = G.map (getQinFZ . (a #<=) . toQuaternion) ksORs
-  print $ errorfuncSlowButSure a (G.map qFZ gms) (qOR ksOR)
-  print $ errorfunc gms a ksORs
-
 testFindOR :: IO ()
 testFindOR = do
   a <- randomIO
@@ -398,6 +424,14 @@ testFindOR = do
   print (convert t  :: AxisPair)
   print (convert t' :: AxisPair)
   print ((convert $ hotStartOR errf a) :: AxisPair)
+
+getWGammaOR :: OR -> Vector Double -> Vector Quaternion -> (Quaternion, FitError, OR)
+getWGammaOR rOR ws qs = (gamma, err, rOR2)
+  where
+    ef  = weightederrorfunc ws (U.map getQinFZ qs)
+    g0  = hotStartGamma ef
+    err = wErrorProductParent ws qs gamma rOR
+    (gamma, rOR2) = findGammaOR ef g0 rOR
 
 testFindGamma :: IO ()
 testFindGamma = randomIO >>= plotErrFunc
@@ -467,17 +501,6 @@ testMisoKS ks = do
     miso = getMisoAngle Cubic m1 m2
   return (toAngle miso :: Deg)
 
-shitQAvg :: Vector Quaternion -> Quaternion
-shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)
-  where
-    os = getSymmOps Cubic
-    func avg q = let
-      qs = U.map ((q #<=) . symmOp) os
-      ms = U.map (composeQ0 avg) qs
-      i  = U.minIndex ms
-      vi = quaterVec (qs U.! i)
-      in mkQuaternion $ vi &+ (quaterVec avg)
-
 testAvg :: Int -> IO ()
 testAvg n = do
   gen <- newStdGen
@@ -488,3 +511,26 @@ testAvg n = do
     qs = U.fromList $ map (q #<=) rs
   print q
   print $ averageQuaternion qs
+
+applyDeviation :: Deg -> Quaternion -> IO Quaternion
+applyDeviation w q = do
+  v <- randomIO
+  let d = toQuaternion $ mkAxisPair v w
+  return (q #<= d)
+
+testTesseractFitting :: IO ()
+testTesseractFitting = do
+  qg  <- randomIO
+  ors <- U.mapM (applyDeviation (Deg 5) . qOR) ksORs
+  let
+    gamma = qFZ $ getQinFZ qg
+    ms    = G.map (getQinFZ . (gamma #<=) . toQuaternion) (U.map OR ors)
+    (gt, et, tt)  = hotStartTesseract ksOR (G.map qFZ ms)
+    --(gf, ef, orf) = getWGammaOR       ksOR ws (G.map qFZ ms)
+    ps = U.fromList [gamma, gt]
+  print $ errorfunc ms gamma ksORs
+  print gamma
+  print $ (gt, et)
+  --print $ (gf, ef)
+  writeUniVTKfile ( "/home/edgar/Desktop/tess-fittest.vti" ) True (plotTesseract tt)
+  writeUniVTKfile ( "/home/edgar/Desktop/tess-fittest.vtu" ) True (plotTesseractPoints ps)
