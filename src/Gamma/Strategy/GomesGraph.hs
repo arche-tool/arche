@@ -12,10 +12,8 @@ import qualified Data.List                    as L
 
 import           Data.Vector.Unboxed (Vector)
 import           Data.HashMap.Strict (HashMap)
-import           Data.Maybe          (mapMaybe)
 import           Control.Applicative ((<$>))
 import           Control.Monad.ST    (runST)
-import           Text.Printf         (printf)
 
 import           System.FilePath
 import           System.IO
@@ -23,7 +21,7 @@ import           System.Process
 import           Control.Parallel.Strategies
 import           Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
 import           Control.Monad.Trans
-import           Control.Monad (liftM, zipWithM_)
+import           Control.Monad (zipWithM_)
 
 import           Hammer.Math.Algebra
 import           Hammer.VoxBox
@@ -32,7 +30,7 @@ import           Hammer.VTK
 import           Hammer.Graph
 import           Hammer.MicroGraph
 
-import           Texture.Symmetry            (Symm (..), getMisoAngle, toFZ)
+import           Texture.Symmetry            (Symm (..), toFZ)
 import           Texture.IPF
 import           Texture.Orientation
 import           Texture.TesseractGrid
@@ -242,34 +240,6 @@ avgGrainPos vb gmap = HM.map func gmap
 
 -- ================================== Grain clustering ===================================
 
-getFaces :: Vector OR -> VoxBox Quaternion -> [((Int, Int), Double)]
-getFaces ors VoxBox{..} = V.foldl' go [] (V.fromList $ getRangePos dimension)
-  where
-    go acc pos = let
-      v    = pos
-      vx   = pos #+# (VoxelPos (-1)   0    0 )
-      vy   = pos #+# (VoxelPos   0  (-1)   0 )
-      vz   = pos #+# (VoxelPos   0    0  (-1))
-      i    = dimension %@ v
-      ix   = dimension %@? vx
-      iy   = dimension %@? vy
-      iz   = dimension %@? vz
-
-      isInGrain a b = let
-        omega = getMisoAngle Cubic a b
-        in (abs $ fromAngle $ Deg 5) > omega
-
-      getValue (Just j) = let
-        qa  = grainID U.! i
-        qb  = grainID U.! j
-        mOR = misoOR ors Cubic qa qb
-        x   = if isInGrain qa qb then 0 else mOR
-        in Just ((i, j), x)
-      getValue _ = Nothing
-
-      fs = mapMaybe getValue [ix, iy, iz]
-      in fs ++ acc
-
 graphWeight :: VoxBox Quaternion -> MicroVoxel -> OR -> Graph Int Double
 graphWeight vbq micro withOR = let
   fs    = HM.keys $ microFaces micro
@@ -290,12 +260,6 @@ graphWeight vbq micro withOR = let
      mkUniGraph [] $
      filter ((>= 0) . snd) $
      zipWith (\fid x -> (unFaceID fid, maybe (-1) weight x)) fs mspar
-
-cluster :: Gomes ()
-cluster = do
-  st@GomesState{..} <- get
-  let g = applyNSOperator 3 grainGraph
-  put $ st { grainGraph = g }
 
 plotGrainGraph :: Gomes (VTK Vec3)
 plotGrainGraph = do
@@ -473,3 +437,11 @@ findClusters g = do
   saveGraph g
   runMCL
   readGroups
+
+-- =================================== Native Clustering =================================
+
+cluster :: Gomes ()
+cluster = do
+  st@GomesState{..} <- get
+  let g = applyNSOperator 3 grainGraph
+  put $ st { grainGraph = g }
