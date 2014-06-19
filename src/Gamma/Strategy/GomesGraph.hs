@@ -51,24 +51,24 @@ data OrientationType
 
 data GomesConfig
   = GomesConfig
-  { outputDir         :: FilePath
-  , minGrainMisoAngle :: Deg
-  , ggAngle           :: Deg
-  , mgAngle           :: Deg
-  , mmAngle           :: Deg
-  , realOR            :: OR
-  , orientationBox    :: VoxBox Quaternion
-  , grainIDBox        :: VoxBox GrainID
-  , grainVoxelMap     :: HashMap Int (V.Vector VoxelPos)
-  , orientationMap    :: HashMap Int Quaternion
-  , positionMap       :: HashMap Int Vec3
-  , structureGraph    :: MicroVoxel
+  { outputDir             :: FilePath
+  , minGrainMisoAngle     :: Deg
+  , ggAngle               :: Deg
+  , mgAngle               :: Deg
+  , mmAngle               :: Deg
+  , realOR                :: OR
+  , orientationBox        :: VoxBox Quaternion
+  , grainIDBox            :: VoxBox GrainID
+  , structureGraph        :: MicroVoxel
+  , productVoxelPos       :: HashMap Int (V.Vector VoxelPos)
+  , productAvgOrientation :: HashMap Int Quaternion
+  , productAvgPos         :: HashMap Int Vec3
+  , productGraph          :: Graph Int Double
   }
 
 data GomesState
   = GomesState
-  { grainGraph  :: Graph Int Double
-  , grainGroups :: V.Vector [Int]
+  { parentMembers :: V.Vector [Int]
   }
 
 type Gomes = RWST GomesConfig () GomesState IO
@@ -77,29 +77,28 @@ type Gomes = RWST GomesConfig () GomesState IO
 
 getGomesConfig ::FilePath -> Deg -> Deg -> Deg -> Deg -> OR -> VoxBox Quaternion -> Maybe GomesConfig
 getGomesConfig dirout gmiso mergeGG mergeMG mergeMM ror qBox = let
-  func (gidBox, voxMap) = GomesConfig
-     { outputDir         = dirout
-     , minGrainMisoAngle = gmiso
-     , ggAngle           = mergeGG
-     , mgAngle           = mergeMG
-     , mmAngle           = mergeMM
-     , realOR            = ror
-     , orientationBox    = qBox
-     , grainIDBox        = gidBox
-     , grainVoxelMap     = voxMap
-     , orientationMap    = avgGrainOrientation qBox voxMap
-     , positionMap       = avgGrainPos         qBox voxMap
-     , structureGraph    = fst $ getMicroVoxel (gidBox, voxMap)
+  func (gidBox, voxMap) = let
+    micro = fst $ getMicroVoxel (gidBox, voxMap)
+    in GomesConfig
+     { outputDir             = dirout
+     , minGrainMisoAngle     = gmiso
+     , ggAngle               = mergeGG
+     , mgAngle               = mergeMG
+     , mmAngle               = mergeMM
+     , realOR                = ror
+     , orientationBox        = qBox
+     , grainIDBox            = gidBox
+     , productVoxelPos       = voxMap
+     , productAvgOrientation = avgGrainOrientation qBox voxMap
+     , productAvgPos         = avgGrainPos         qBox voxMap
+     , structureGraph        = micro
+     , productGraph          = graphWeight qBox micro ror
      }
   in fmap func (getGrainID gmiso Cubic qBox)
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
-  gg = graphWeight orientationBox structureGraph realOR
-  in GomesState
-     { grainGraph  = gg
-     , grainGroups = V.empty
-     }
+  in GomesState { parentMembers = V.empty }
 
 plotVTK_D :: (RenderElemVTK a)=> String -> (VTK a, FilePath) -> IO ()
 plotVTK_D dirout (vtk, name) = writeUniVTKfile (dirout ++ name  <.> "vtr") True vtk
@@ -112,8 +111,8 @@ grainClustering = do
   GomesConfig{..} <- ask
   -- run MCL
   st <- get
-  gg <- liftIO $ findClusters (grainGraph st)
-  put $ st { grainGroups = gg }
+  gg <- liftIO $ findClusters productGraph
+  put $ st { parentMembers = gg }
 
   (vbq, attrsQGrain) <- gammaQGrain
   vbid               <- gammaIDGrain
@@ -170,10 +169,10 @@ getAlphaQBox = do
     func v (gid, q) = V.mapM_ (\i -> MU.write v i q) $ getIS gid
     boxdim    = dimension grainIDBox
     nvox      = U.length $ grainID grainIDBox
-    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
+    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid productVoxelPos)
     vec = U.create $ do
       v <- MU.replicate nvox zerorot
-      mapM_ (func v) (HM.toList orientationMap)
+      mapM_ (func v) (HM.toList productAvgOrientation)
       return v
   return $ grainIDBox { grainID = vec }
 
@@ -266,9 +265,9 @@ plotGrainGraph = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
-    maxi = maximum $ HM.keys positionMap
-    ns   = U.replicate (maxi+1) zero U.// (HM.toList positionMap)
-    (es, vs) = unzip $ graphToList grainGraph
+    maxi = maximum $ HM.keys productAvgPos
+    ns   = U.replicate (maxi+1) zero U.// (HM.toList productAvgPos)
+    (es, vs) = unzip $ graphToList productGraph
     vtk = mkUGVTK "graph" ns es [] [attr]
     vv  = V.fromList vs
     attr = mkCellAttr "misoOR" (\i _ _ -> vv V.! i)
@@ -281,11 +280,11 @@ gammaIDGrain = do
   let
     boxdim    = dimension grainIDBox
     nvox      = U.length $ grainID grainIDBox
-    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
+    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid productVoxelPos)
     func v (newGID, gs) = mapM_ (\gid -> V.mapM_ (\i -> MU.write v i newGID) $ getIS gid) gs
     vec = U.create $ do
       v <- MU.replicate nvox (-1)
-      V.mapM_ (func v) (V.imap (,) grainGroups)
+      V.mapM_ (func v) (V.imap (,) parentMembers)
       return v
   return $ grainIDBox { grainID = vec }
 
@@ -296,8 +295,8 @@ gammaQGrain = do
   let
     boxdim    = dimension grainIDBox
     nvox      = U.length $ grainID grainIDBox
-    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
-    getQ  gid = maybe zerorot id (HM.lookup gid orientationMap)
+    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid productVoxelPos)
+    getQ  gid = maybe zerorot id (HM.lookup gid productAvgOrientation)
     func q e d m k gs = let
       (gamma, err) = getWGammaTess realOR ws qs
       is  = map (V.convert . getIS) gs
@@ -319,7 +318,7 @@ gammaQGrain = do
       d <- MU.replicate nvox (-1)
       m <- MU.replicate nvox (-1)
       k <- MU.replicate nvox (-1)
-      V.mapM_ (func q e d m k) grainGroups
+      V.mapM_ (func q e d m k) parentMembers
       q' <- U.unsafeFreeze q
       e' <- U.unsafeFreeze e
       d' <- U.unsafeFreeze d
@@ -357,7 +356,7 @@ plotGroupSO3 = do
       --liftIO (foo vtk_m "-SO3-alpha"      gid)
       --liftIO (foo vtk_g "-SO3-gamma"      gid)
       --liftIO (foo vtk_a "-SO3-simu_alpha" gid)
-  V.mapM_ func $ V.imap (,) grainGroups
+  V.mapM_ func $ V.imap (,) parentMembers
 
 getGroupGrainsOrientations :: [Int] -> Gomes (Vector Double, Vector Quaternion)
 getGroupGrainsOrientations mids = do
@@ -365,8 +364,8 @@ getGroupGrainsOrientations mids = do
   GomesState{..}  <- get
   let
     boxdim    = dimension grainIDBox
-    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid grainVoxelMap)
-    getQ  gid = maybe zerorot id (HM.lookup gid orientationMap)
+    getIS gid = maybe (V.empty) (V.map (boxdim %@)) (HM.lookup gid productVoxelPos)
+    getQ  gid = maybe zerorot id (HM.lookup gid productAvgOrientation)
     is  = map (V.convert . getIS) mids
     ws  = U.fromList (map (fromIntegral . U.length) is)
     qs  = U.map getQ (U.fromList mids)
@@ -402,8 +401,8 @@ plotHotSpotSO3 gamma mids ms = do
 getWGammaTess :: OR -> Vector Double -> Vector Quaternion -> (Quaternion, FitError)
 getWGammaTess rOR ws qs = (gamma, err)
   where
+    (g0, _, _) = hotStartTesseract rOR qs
     ef  = weightederrorfunc ws (U.map getQinFZ qs)
-    (g0, err2, t) = hotStartTesseract rOR qs
     err = wErrorProductParent ws qs gamma rOR
     gamma = findGamma ef g0 rOR
 
@@ -437,11 +436,3 @@ findClusters g = do
   saveGraph g
   runMCL
   readGroups
-
--- =================================== Native Clustering =================================
-
-cluster :: Gomes ()
-cluster = do
-  st@GomesState{..} <- get
-  let g = applyNSOperator 3 grainGraph
-  put $ st { grainGraph = g }
