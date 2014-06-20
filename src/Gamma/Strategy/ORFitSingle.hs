@@ -64,7 +64,7 @@ getGammaOR2 EBSDdata{..} = (gf, tf)
   where
     is = U.convert $ V.findIndices ((> 0.1) . ci) nodes
     qs = U.map (rotation . (nodes V.!)) is
-    ef = errorfunc (U.map getQinFZ qs)
+    ef = uniformerrorfunc (U.map getQinFZ qs)
     g0 = hotStartGamma ef
     (gf, tf) = findGammaOR ef g0 ksOR
 
@@ -74,20 +74,20 @@ getGammaOR n EBSDdata{..} = go n t0
     t0 = mkOR (Vec3 1 1 2) (Deg 90)
     is = V.convert $ V.findIndices ((> 0.1) . ci) nodes
     qs = U.map (rotation . (nodes V.!)) is
-    ef = errorfunc (U.map getQinFZ qs)
+    ef = uniformerrorfunc (U.map getQinFZ qs)
     g0 = hotStartGamma ef
     func t = let
-      g = findGamma ef g0 t
+      g = findGamma ef g0 (genTS t)
       in findOR ef g t
     go k t
-      | k <= 0    = (findGamma ef g0 t, convert t)
+      | k <= 0    = (findGamma ef g0 (genTS t), convert t)
       | otherwise = go (k-1) (func t)
 
 getGamma :: EBSDdata -> Quaternion
 getGamma EBSDdata{..} = let
   is = V.convert $ V.findIndices ((> 0.1) . ci) nodes
   qs = U.map (rotation . (nodes V.!)) is
-  ef = errorfunc (U.map getQinFZ qs)
+  ef = uniformerrorfunc (U.map getQinFZ qs)
   g0 = hotStartGamma ef
-  gamma = toFZ Cubic $ findGamma ef g0 ksOR
+  gamma = toFZ Cubic $ findGamma ef g0 ksORs
   in gamma

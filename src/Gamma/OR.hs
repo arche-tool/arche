@@ -5,27 +5,29 @@
 {-# LANGUAGE TypeFamilies               #-}
 
 module Gamma.OR
-       ( findGamma
+       ( -- * Product-Parent mismatch evaluation
+         findGamma
        , findGammaOR
        , findOR
        , findORFace
        , hotStartGamma
        , hotStartOR
        , hotStartTesseract
-       , OR (..)
        , FitError (avgError, devError, maxError)
-       , convert
-       , mkOR
-       , genTS
-       , getQinFZ
-       , ksORs
-       , ksOR
        , misoOR
        , misoKS
-       , errorProductParent
-       , wErrorProductParent
+       , singleerrorfunc
        , weightederrorfunc
-       , errorfunc
+       , uniformerrorfunc
+         -- * Orientation Relationship
+       , OR (..)
+       , mkOR
+       , ksORs
+       , ksOR
+       , genTS
+       , QuaternionFZ (qFZ)
+       , getQinFZ
+       , convert
        , shitQAvg
          -- * Test functions
        , testGammaFit
@@ -64,8 +66,16 @@ dbg a = trace (show a) a
 
 -- ======================================================================================= 
 
-newtype FZ = FZ {qFZ :: Quaternion} deriving (Show)
+newtype QuaternionFZ = QuaternionFZ {qFZ :: Quaternion} deriving (Show)
 newtype OR = OR {qOR :: Quaternion} deriving (Show)
+
+instance Rot QuaternionFZ where
+  p #<= q        = QuaternionFZ $ (qFZ p) #<= (qFZ q)
+  invert         = QuaternionFZ . invert . qFZ
+  toQuaternion   = qFZ
+  fromQuaternion = getQinFZ
+  zerorot        = QuaternionFZ zerorot
+  getOmega       = getOmega . qFZ
 
 instance Rot OR where
   (OR p) #<= (OR q) = OR $ p #<= q
@@ -81,8 +91,8 @@ mkOR v = OR . toQuaternion . mkAxisPair v
 convert :: (Rot a, Rot b) => a -> b
 convert = fromQuaternion . toQuaternion
 
-getQinFZ :: Quaternion -> FZ
-getQinFZ = FZ . toFZ Cubic
+getQinFZ :: Quaternion -> QuaternionFZ
+getQinFZ = QuaternionFZ . toFZ Cubic
 
 ksOR :: OR
 ksOR = OR $ toQuaternion $ mkAxisPair (Vec3 1 1 2) (Deg 90)
@@ -116,20 +126,6 @@ data FitError
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
 
--- | Find the angular error in rad between product and parent orientations regarding a
--- given orientation relationship.
-wErrorProductParent :: Vector Double -> Vector Quaternion -> Quaternion -> OR -> FitError
-wErrorProductParent ws qs ga t0 = let
-  fzqs = G.map getQinFZ qs
-  in weightederrorfunc ws fzqs ga (genTS t0)
-
--- | Find the angular error in rad between product and parent orientations regarding a
--- given orientation relationship.
-errorProductParent :: Vector Quaternion -> Quaternion -> OR -> FitError
-errorProductParent qs ga t0 = let
-  fzqs = G.map getQinFZ qs
-  in errorfunc fzqs ga (genTS t0)
-
 findORFace :: Vector (Quaternion, Quaternion) -> OR -> OR
 findORFace qs t0 = let
   err t = let
@@ -162,11 +158,11 @@ findOR errf ga t0 = let
   guess = rodriVec $ fromQuaternion $ qOR t0
   in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS foo guess
 
-findGamma :: ErrorFunc -> Quaternion -> OR -> Quaternion
-findGamma errf q0 or0 = let
+findGamma :: ErrorFunc -> Quaternion -> Vector OR -> Quaternion
+findGamma errf q0 ors = let
   func v = let
     gamma = toQuaternion $ mkUnsafeRodrigues v
-    in fromAngle $ avgError $ errf gamma (genTS or0)
+    in fromAngle $ avgError $ errf gamma ors
   foo v = let
     k  = 0.001
     x  = func v
@@ -241,43 +237,44 @@ hotStartOR errf q = let
   i = V.minIndex $ V.map foo ts
   in ts V.! i
 
+singleerrorfunc :: QuaternionFZ -> Quaternion-> Vector OR -> Deg
+singleerrorfunc productQ parentQ ors = let
+  toAng = toAngle . (2 *) . acosSafe
+  func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
+  qps = G.map (toFZ Cubic . (parentQ #<=) . qOR) ors
+  in toAng $ G.maximum $ G.map (func productQ) qps
+
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
-errorfunc :: Vector FZ -> Quaternion-> Vector OR -> FitError
-errorfunc gms1FZ ga ts = let
-  toAng = toAngle . (2 *) . acosSafe
-  func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
-  gms2  = G.map (toFZ Cubic . (ga #<=) . qOR) ts
-  q0s   = G.map (\gm1 -> G.maximum $ G.map (func gm1) gms2) gms1FZ
-  n     = fromIntegral (G.length gms1FZ)
-  dev   = let s = G.map ((\x->x*x) . ((-) avg)) q0s in sqrt (abs $ 1 - G.sum s / n)
-  avg   = G.sum q0s / n
+uniformerrorfunc :: Vector QuaternionFZ -> Quaternion-> Vector OR -> FitError
+uniformerrorfunc ms gamma ors = let
+  n     = fromIntegral (G.length ms)
+  errs  = G.map (\m -> unDeg $ singleerrorfunc m gamma ors) ms
+  avg   = G.sum errs / n
+  diff  = G.map ((\x->x*x) . ((-) avg)) errs
+  dev   = sqrt (G.sum diff / n)
   in FitError
-     { avgError = toAng avg
-     , devError = toAng dev
-     , maxError = toAng (G.minimum q0s)
+     { avgError = Deg avg
+     , devError = Deg dev
+     , maxError = Deg (G.maximum errs)
      }
 
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
-weightederrorfunc :: Vector Double -> Vector FZ -> Quaternion-> Vector OR -> FitError
-weightederrorfunc ws gms1FZ ga ts = let
-  func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
-  toRad = abs . (2 *) . acosSafe
-  gms2  = G.map (toFZ Cubic . (ga #<=) . qOR) ts
-  q0s   = G.map (\gm1 -> toRad . G.maximum $ G.map (func gm1) gms2) gms1FZ
-  wt    = G.sum ws
-  wq    = G.zipWith (*) ws q0s
-  dev   = let
-    s = G.map ((\x->x*x) . ((-) avg)) q0s
-    in sqrt (G.sum (G.zipWith (*) ws s) / wt)
-  avg   = G.sum wq / wt
+weightederrorfunc :: Vector Double -> Vector QuaternionFZ -> Quaternion-> Vector OR -> FitError
+weightederrorfunc ws ms gamma ors = let
+  errs = G.map (\m -> unDeg $ singleerrorfunc m gamma ors) ms
+  wt   = G.sum ws
+  wq   = G.zipWith (*) ws errs
+  diff = G.map ((\x->x*x) . ((-) avg)) errs
+  dev  = sqrt (G.sum (G.zipWith (*) ws diff) / wt)
+  avg  = G.sum wq / wt
   in FitError
-     { avgError = toAngle avg
-     , devError = toAngle dev
-     , maxError = toAngle (G.maximum wq / wt)
+     { avgError = Deg avg
+     , devError = Deg dev
+     , maxError = Deg (G.maximum wq / wt)
      }
 
 shitQAvg :: Vector Quaternion -> Quaternion
@@ -293,31 +290,31 @@ shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)
 
 -- ===================================== Teseeract binning ===============================
 
-hotStartTesseract :: OR -> Vector Quaternion -> (Quaternion, FitError, TesseractGrid Double)
-hotStartTesseract realOR ms
+hotStartTesseract :: Vector OR -> Vector QuaternionFZ -> (Quaternion, FitError, TesseractGrid Double)
+hotStartTesseract ors ms
   | avgError ermax > avgError eravg = (gavg, eravg, tess)
   | otherwise                       = (gmax, ermax, tess)
   where
-    func m = U.map (toFZ Cubic . (m #<=) . qOR) (genTS realOR)
+    func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
     grid  = 30
     range = 4 / (fromIntegral grid)
-    gs    = U.concatMap func ms
+    gs    = U.concatMap (func . qFZ) ms
     t0    = emptyTesseract grid 0
     tess  = binningTesseract (U.convert gs) t0
     gmax  = tesseractToQuaternion $ maxTesseractPoint tess
     gc    = U.filter ((> range) . getMisoAngle Cubic gmax) gs
     gavg  = shitQAvg gc
-    eravg = errorProductParent ms gavg realOR
-    ermax = errorProductParent ms gmax realOR
+    eravg = uniformerrorfunc ms gavg ors
+    ermax = uniformerrorfunc ms gmax ors
 
--- =========================================== Unbox FZ  =================================
+-- =========================================== Unbox QuaternionFZ  =================================
 
-newtype instance U.MVector s FZ = MV_FZ (U.MVector s Quaternion)
-newtype instance U.Vector    FZ = V_FZ  (U.Vector    Quaternion)
+newtype instance U.MVector s QuaternionFZ = MV_FZ (U.MVector s Quaternion)
+newtype instance U.Vector    QuaternionFZ = V_FZ  (U.Vector    Quaternion)
 
-instance U.Unbox FZ
+instance U.Unbox QuaternionFZ
 
-instance GM.MVector U.MVector FZ where
+instance GM.MVector U.MVector QuaternionFZ where
   {-# INLINE basicLength #-}
   {-# INLINE basicUnsafeSlice #-}
   {-# INLINE basicOverlaps #-}
@@ -329,19 +326,19 @@ instance GM.MVector U.MVector FZ where
   {-# INLINE basicSet #-}
   {-# INLINE basicUnsafeCopy #-}
   {-# INLINE basicUnsafeGrow #-}
-  basicLength (MV_FZ v)                 = GM.basicLength v
-  basicUnsafeSlice i n (MV_FZ v)        = MV_FZ $ GM.basicUnsafeSlice i n v
-  basicOverlaps (MV_FZ v1) (MV_FZ v2)   = GM.basicOverlaps v1 v2
-  basicUnsafeNew n                      = MV_FZ `liftM` GM.basicUnsafeNew n
-  basicUnsafeReplicate n (FZ x)         = MV_FZ `liftM` GM.basicUnsafeReplicate n x
-  basicUnsafeRead (MV_FZ v) i           = GM.basicUnsafeRead v i >>= (return . FZ)
-  basicUnsafeWrite (MV_FZ v) i (FZ x)   = GM.basicUnsafeWrite v i x
-  basicClear (MV_FZ v)                  = GM.basicClear v
-  basicSet (MV_FZ v) (FZ x)             = GM.basicSet v x
-  basicUnsafeCopy (MV_FZ v1) (MV_FZ v2) = GM.basicUnsafeCopy v1 v2
-  basicUnsafeGrow (MV_FZ v) n           = MV_FZ `liftM` GM.basicUnsafeGrow v n
+  basicLength (MV_FZ v)                         = GM.basicLength v
+  basicUnsafeSlice i n (MV_FZ v)                = MV_FZ $ GM.basicUnsafeSlice i n v
+  basicOverlaps (MV_FZ v1) (MV_FZ v2)           = GM.basicOverlaps v1 v2
+  basicUnsafeNew n                              = MV_FZ `liftM` GM.basicUnsafeNew n
+  basicUnsafeReplicate n (QuaternionFZ x)       = MV_FZ `liftM` GM.basicUnsafeReplicate n x
+  basicUnsafeRead (MV_FZ v) i                   = GM.basicUnsafeRead v i >>= (return . QuaternionFZ)
+  basicUnsafeWrite (MV_FZ v) i (QuaternionFZ x) = GM.basicUnsafeWrite v i x
+  basicClear (MV_FZ v)                          = GM.basicClear v
+  basicSet (MV_FZ v) (QuaternionFZ x)           = GM.basicSet v x
+  basicUnsafeCopy (MV_FZ v1) (MV_FZ v2)         = GM.basicUnsafeCopy v1 v2
+  basicUnsafeGrow (MV_FZ v) n                   = MV_FZ `liftM` GM.basicUnsafeGrow v n
 
-instance GB.Vector U.Vector FZ where
+instance GB.Vector U.Vector QuaternionFZ where
   {-# INLINE basicUnsafeFreeze #-}
   {-# INLINE basicUnsafeThaw #-}
   {-# INLINE basicLength #-}
@@ -352,9 +349,9 @@ instance GB.Vector U.Vector FZ where
   basicUnsafeThaw (V_FZ v)            = MV_FZ `liftM` GB.basicUnsafeThaw v
   basicLength (V_FZ v)                = GB.basicLength v
   basicUnsafeSlice i n (V_FZ v)       = V_FZ $ GB.basicUnsafeSlice i n v
-  basicUnsafeIndexM (V_FZ v) i        = GB.basicUnsafeIndexM v i >>= (return . FZ)
+  basicUnsafeIndexM (V_FZ v) i        = GB.basicUnsafeIndexM v i >>= (return . QuaternionFZ)
   basicUnsafeCopy (MV_FZ mv) (V_FZ v) = GB.basicUnsafeCopy mv v
-  elemseq _ (FZ x) t                  = GB.elemseq (undefined :: Vector a) x t
+  elemseq _ (QuaternionFZ x) t        = GB.elemseq (undefined :: Vector a) x t
 
 -- =========================================== Unbox OR =================================
 
@@ -407,7 +404,7 @@ instance GB.Vector U.Vector OR where
 testGammaFit :: Quaternion -> Vector Quaternion -> OR -> (FitError, FitError)
 testGammaFit ga gs t = let
   gms = G.map getQinFZ gs
-  m1  = errorfunc gms ga (genTS t)
+  m1  = uniformerrorfunc gms ga (genTS t)
   m2  = errorfuncSlowButSure ga gs (qOR t)
   in (m1, m2)
 
@@ -419,19 +416,11 @@ testFindOR = do
     ts = genTS t
     ms = G.map ((a #<=) . qOR) ts
     t' = findOR errf a t
-    errf = errorfunc fzqs
+    errf = uniformerrorfunc fzqs
     fzqs = G.map getQinFZ ms
   print (convert t  :: AxisPair)
   print (convert t' :: AxisPair)
   print ((convert $ hotStartOR errf a) :: AxisPair)
-
-getWGammaOR :: OR -> Vector Double -> Vector Quaternion -> (Quaternion, FitError, OR)
-getWGammaOR rOR ws qs = (gamma, err, rOR2)
-  where
-    ef  = weightederrorfunc ws (U.map getQinFZ qs)
-    g0  = hotStartGamma ef
-    err = wErrorProductParent ws qs gamma rOR
-    (gamma, rOR2) = findGammaOR ef g0 rOR
 
 testFindGamma :: IO ()
 testFindGamma = randomIO >>= plotErrFunc
@@ -440,16 +429,16 @@ plotErrFunc :: Quaternion -> IO ()
 plotErrFunc a = let
   gms  = G.map ((a #<=) . qOR) ksORs
   fzqs = G.map getQinFZ gms
-  errf = errorfunc fzqs
+  errf = uniformerrorfunc fzqs
   (grid, vtk) = mkSO3 35 35 35
-  es = G.map (\s -> fromAngle $ avgError $ errorfunc fzqs (so3ToQuaternion s) ksORs) grid
+  es = G.map (\s -> fromAngle $ avgError $ uniformerrorfunc fzqs (so3ToQuaternion s) ksORs) grid
   attr = mkPointAttr "Error function" (es U.!)
   vtk' = addPointAttr vtk attr
 
   gi   = so3ToQuaternion $ grid U.! (U.minIndex es)
   in do
     let
-      a'   = findGamma errf zerorot ksOR
+      a'   = findGamma errf zerorot ksORs
       (a'', t'') = findGammaOR errf zerorot ksOR
       fa   = toFZ Cubic a
       fa'  = toFZ Cubic a'
@@ -525,10 +514,10 @@ testTesseractFitting = do
   let
     gamma = qFZ $ getQinFZ qg
     ms    = G.map (getQinFZ . (gamma #<=) . toQuaternion) (U.map OR ors)
-    (gt, et, tt)  = hotStartTesseract ksOR (G.map qFZ ms)
+    (gt, et, tt)  = hotStartTesseract ksORs ms
     --(gf, ef, orf) = getWGammaOR       ksOR ws (G.map qFZ ms)
     ps = U.fromList [gamma, gt]
-  print $ errorfunc ms gamma ksORs
+  print $ uniformerrorfunc ms gamma ksORs
   print gamma
   print $ (gt, et)
   --print $ (gf, ef)

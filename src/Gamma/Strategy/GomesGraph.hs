@@ -44,15 +44,10 @@ import Debug.Trace
 dbg a = trace (show a) a
 dbgs s a = trace (show s ++ " <=> " ++ show a) a
 
-data OrientationType
-  = Parent  !Quaternion
-  | Product !Quaternion
-  deriving (Show)
-
 data ProductGrain =
   ProductGrain
   { productVoxelPos       :: V.Vector Int
-  , productAvgOrientation :: Quaternion
+  , productAvgOrientation :: QuaternionFZ
   , productAvgPos         :: Vec3
   } deriving (Show)
 
@@ -61,22 +56,23 @@ data ParentGrain =
   { productMembers        :: [Int]
   , parentOrientation     :: Quaternion
   , parentAvgErrorFit     :: FitError
-  , parentErrorPerProduct :: [(Int, Deg)]
+  , parentErrorPerProduct :: [(Double, Deg)]
   } deriving (Show)
 
 data GomesConfig
   = GomesConfig
-  { outputDir             :: FilePath
-  , minGrainMisoAngle     :: Deg
-  , ggAngle               :: Deg
-  , mgAngle               :: Deg
-  , mmAngle               :: Deg
-  , realOR                :: OR
-  , orientationBox        :: VoxBox Quaternion
-  , grainIDBox            :: VoxBox GrainID
-  , structureGraph        :: MicroVoxel
-  , productGrains         :: HashMap Int ProductGrain
-  , productGraph          :: Graph Int Double
+  { outputDir         :: FilePath
+  , minGrainMisoAngle :: Deg
+  , ggAngle           :: Deg
+  , mgAngle           :: Deg
+  , mmAngle           :: Deg
+  , realOR            :: OR
+  , realORs           :: Vector OR
+  , orientationBox    :: VoxBox Quaternion
+  , grainIDBox        :: VoxBox GrainID
+  , structureGraph    :: MicroVoxel
+  , productGrains     :: HashMap Int ProductGrain
+  , productGraph      :: Graph Int Double
   }
 
 data GomesState
@@ -99,6 +95,7 @@ getGomesConfig dirout gmiso mergeGG mergeMG mergeMM ror qBox = let
      , mgAngle           = mergeMG
      , mmAngle           = mergeMM
      , realOR            = ror
+     , realORs           = genTS ror
      , orientationBox    = qBox
      , grainIDBox        = gidBox
      , productGrains     = calcProductGrains qBox voxMap
@@ -129,7 +126,7 @@ plotResults = do
   attrDevErr <- genParentVTKAttr (-1) (unDeg . devError . parentAvgErrorFit . snd) "DevError"
   attrMaxErr <- genParentVTKAttr (-1) (unDeg . maxError . parentAvgErrorFit . snd) "MaxError"
 
-  attrMID    <- genLocalErrorVTKAttr (-1) fst "ProductGrainID"
+  attrMID    <- genLocalErrorVTKAttr (-1) fst           "ProductGrainAreaFraction"
   attrLocErr <- genLocalErrorVTKAttr (-1) (unDeg . snd) "ErrorPerProduct"
 
   attrAvgAIPF <- genProductVTKAttr (255,255,255) (getCubicIPFColor . productAvgOrientation . snd) "AlphaIPF"
@@ -212,7 +209,7 @@ calcProductGrains :: VoxBox Quaternion ->
                HashMap Int (V.Vector VoxelPos) ->
                HashMap Int ProductGrain
 calcProductGrains vbq gmap = let
-  getAvgQ = shitQAvg . V.convert . V.map (vbq #!)
+  getAvgQ = getQinFZ . shitQAvg . V.convert . V.map (vbq #!)
   getAvgPos v = let
     t = V.foldl' (&+) zero $ V.map (evalCentralVoxelPos vbq) v
     n = V.length v
@@ -253,21 +250,22 @@ getParentGrainData GomesConfig{..} mids = let
   getIS mid = maybe (V.empty) productVoxelPos (HM.lookup mid productGrains)
   getQ  mid = maybe zerorot productAvgOrientation (HM.lookup mid productGrains)
   -- Calculate parent's properties
-  (gamma, err) = getWGammaTess realOR ws qs
-  is  = map (V.convert . getIS) mids
-  qs  = U.map getQ (U.fromList mids)
-  ws  = U.fromList (map (fromIntegral . U.length) is)
-  foo qi wi mid = let
-    gerr = wErrorProductParent (U.singleton wi) (U.singleton qi) gamma realOR
-    in (mid, avgError gerr)
+  (gamma, err) = getWGammaTess realORs ws qs
+  is = map (V.convert . getIS) mids
+  qs = U.map getQ (U.fromList mids)
+  ws = U.fromList (map (fromIntegral . U.length) is)
+  wt = U.sum ws
+  foo qi wi = let
+    gerr = singleerrorfunc qi gamma realORs
+    in (wi / wt, gerr)
   in ParentGrain
      { productMembers        = mids
      , parentOrientation     = gamma
      , parentAvgErrorFit     = err
-     , parentErrorPerProduct = V.toList $ V.zipWith3 foo (U.convert qs) (U.convert ws) (V.fromList mids)
+     , parentErrorPerProduct = V.toList $ V.zipWith foo (U.convert qs) (V.convert ws)
      }
 
-getGroupGrainsOrientations :: [Int] -> Gomes (Vector Double, Vector Quaternion)
+getGroupGrainsOrientations :: [Int] -> Gomes (Vector Double, Vector QuaternionFZ)
 getGroupGrainsOrientations mids = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
@@ -279,21 +277,21 @@ getGroupGrainsOrientations mids = do
     qs  = U.map getQ (U.fromList mids)
   return (ws, qs)
 
-getWGammaTess :: OR -> Vector Double -> Vector Quaternion -> (Quaternion, FitError)
-getWGammaTess rOR ws qs = (gamma, err)
+getWGammaTess :: Vector OR -> Vector Double -> Vector QuaternionFZ -> (Quaternion, FitError)
+getWGammaTess ors ws qs = (gamma, err)
   where
-    (g0, _, _) = hotStartTesseract rOR qs
-    ef  = weightederrorfunc ws (U.map getQinFZ qs)
-    err = wErrorProductParent ws qs gamma rOR
-    gamma = findGamma ef g0 rOR
+    (g0, _, _) = hotStartTesseract ors qs
+    errfunc = weightederrorfunc ws qs
+    err     = errfunc gamma ors
+    gamma   = findGamma errfunc g0 ors
 
-getWGammaOR :: OR -> Vector Double -> Vector Quaternion -> (Quaternion, FitError, OR)
-getWGammaOR rOR ws qs = (gamma, err, rOR2)
+getWGammaOR :: OR -> Vector Double -> Vector QuaternionFZ -> (Quaternion, FitError, OR)
+getWGammaOR or0 ws qs = (gamma, err, rOR2)
   where
-    ef  = weightederrorfunc ws (U.map getQinFZ qs)
-    g0  = hotStartGamma ef
-    err = wErrorProductParent ws qs gamma rOR
-    (gamma, rOR2) = findGammaOR ef g0 rOR
+    errfunc = weightederrorfunc ws qs
+    g0      = hotStartGamma errfunc
+    err     = errfunc gamma (genTS or0)
+    (gamma, rOR2) = findGammaOR errfunc g0 or0
 
 -- ========================================= MCL =========================================
 
@@ -346,7 +344,7 @@ genProductVTKAttr nullvalue func name = do
   return $ mkPointAttr name (vec U.!)
 
 genLocalErrorVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=>
-                        a -> ((Int, Deg) -> a) -> String -> Gomes (VTKAttrPoint b)
+                        a -> ((Double, Deg) -> a) -> String -> Gomes (VTKAttrPoint b)
 genLocalErrorVTKAttr nullvalue func name = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
@@ -400,7 +398,7 @@ plotFitSO3 gamma mids ms = do
   GomesState{..}  <- get
   let
     ggid = U.singleton (mkGrainID $ -5)
-    as   = U.map (toFZ Cubic . (gamma #<=) . qOR) (genTS realOR)
+    as   = U.map (toFZ Cubic . (gamma #<=) . qOR) realORs
     agid = U.replicate (U.length as) (mkGrainID $ -10)
     mgid = U.map mkGrainID $ U.fromList mids
     vtkSO3_m = renderSO3Points Cubic ND mgid ms
@@ -413,7 +411,7 @@ plotHotSpotSO3 gamma mids ms = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
-    func m = U.map (toFZ Cubic . (m #<=) . qOR) (genTS realOR)
+    func m = U.map (toFZ Cubic . (m #<=) . qOR) realORs
     ggid = U.singleton (mkGrainID $ -5)
     as   = U.concatMap func ms
     agid = U.replicate (U.length as) (mkGrainID $ -1)
@@ -433,9 +431,9 @@ plotGroupSO3 = do
     func (gid, mids) = do
       (ws, qs) <- getGroupGrainsOrientations mids
       let
-        (g1, err1, _) = getWGammaOR       realOR ws qs
-        (g2, err2)    = getWGammaTess  realOR ws qs
-        (g3, err3, t) = hotStartTesseract realOR qs
+        (g1, err1, _) = getWGammaOR       realOR  ws qs
+        (g2, err2)    = getWGammaTess     realORs ws qs
+        (g3, err3, t) = hotStartTesseract realORs qs
       liftIO $ putStrLn "---" >> print err1 >> print err2 >> print err3 >> print (g1,g2,g3) >> putStrLn "---"
       liftIO $ (fii (plotTesseract t) "-TESS" gid)
       --(vtk_m, vtk_g, vtk_a) <- plotFitSO3 gamma mids qs
@@ -447,7 +445,7 @@ plotGroupSO3 = do
   --V.mapM_ func $ V.imap (,) parentGrains
   return()
 
-getCubicIPFColor :: Quaternion -> (Word8, Word8, Word8)
+getCubicIPFColor :: (Rot q)=> q -> (Word8, Word8, Word8)
 getCubicIPFColor = let
   unColor (RGBColor rgb) = rgb
-  in unColor . getRGBColor . snd . getIPFColor Cubic ND
+  in unColor . getRGBColor . snd . getIPFColor Cubic ND . convert
