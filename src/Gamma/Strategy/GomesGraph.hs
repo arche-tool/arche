@@ -8,6 +8,7 @@ import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
 import qualified Data.Vector.Unboxed.Mutable  as MU
 import qualified Data.HashMap.Strict          as HM
+import qualified Data.HashSet                 as HS
 import qualified Data.List                    as L
 
 import           Control.Applicative ((<$>))
@@ -113,12 +114,12 @@ grainClustering = do
   cfg@GomesConfig{..} <- ask
   -- run MCL
   st <- get
-  gg <- liftIO $ findClusters productGraph
+  gg <- liftIO $ findClusters productGraph 1.2
   let ps = V.map (getParentGrainData cfg) gg
   put $ st { parentGrains = ps }
 
-plotResults :: Gomes ()
-plotResults = do
+plotResults :: String -> Gomes ()
+plotResults name = do
   GomesConfig{..} <- ask
   attrGID    <- genParentVTKAttr (-1) fst "ParentGrainID"
   attrIPF    <- genParentVTKAttr (255,255,255) (getCubicIPFColor . parentOrientation . snd) "GammaIPF"
@@ -136,7 +137,7 @@ plotResults = do
     attrs = [ attrIPF, attrGID, attrMID, attrAvgErr
             , attrDevErr, attrMaxErr, attrLocErr
             , attrAvgAIPF, attrVoxAIPF ]
-  liftIO $ plotVTK_D outputDir (vtkD,  "gamma-reconstruction")
+  liftIO $ plotVTK_D outputDir (vtkD,  name)
 
 plotGraph :: Gomes ()
 plotGraph = do
@@ -153,8 +154,10 @@ run miso fin fout = do
     doit = do
       grainClustering
       --plotGraph
-      plotResults
-      plotGroupSO3
+      --plotGroupSO3
+      plotResults "1st-step"
+      clusteringRefinement
+      plotResults "2nd-step"
   _ <- case getGomesConfig fout miso 4 4 4 ror vbq of
     Nothing  -> error "No grain detected!"
     Just cfg -> runRWST doit cfg (getInitState cfg)
@@ -293,6 +296,51 @@ getWGammaOR or0 ws qs = (gamma, err, rOR2)
     err     = errfunc gamma (genTS or0)
     (gamma, rOR2) = findGammaOR errfunc g0 or0
 
+-- ================================ Clustering Refinement ================================
+
+clusteringRefinement :: Gomes ()
+clusteringRefinement = do
+  GomesConfig{..} <- ask
+  st@GomesState{..}  <- get
+  ps <- V.mapM refineParentGrain parentGrains
+  put $ st { parentGrains = V.concatMap id ps }
+
+goodParent :: ParentGrain -> Bool
+goodParent ParentGrain{..} = badarea < 0.1
+  where
+    offlimit = filter ((> Deg 15) . snd) parentErrorPerProduct
+    badarea  = sum $ map fst offlimit
+
+getBadGrains :: ParentGrain -> [Int]
+getBadGrains ParentGrain{..} = map fst bads
+  where
+    errs = zip productMembers parentErrorPerProduct
+    bads = filter ((> Deg 15) . snd . snd) errs
+
+reinforceCluster :: [Int] -> Graph Int Double -> Graph Int Double
+reinforceCluster ns Graph{..} = let
+  set  = HS.fromList ns
+  foo k2 v2
+    | HS.member k2 set = v2 * 2
+    | otherwise        = v2
+  func k1 v1
+    | HS.member k1 set = HM.mapWithKey foo v1
+    | otherwise        = v1
+  in Graph $ HM.mapWithKey func graph
+
+refineParentGrain :: ParentGrain -> Gomes (V.Vector ParentGrain)
+refineParentGrain p@ParentGrain{..}
+  | goodParent p = return (V.singleton p)
+  | otherwise    = do
+    cfg@GomesConfig{..} <- ask
+    let
+      graingraph  = getSubGraph productGraph productMembers
+      badboys     = getBadGrains p
+      graingraph2 = reinforceCluster badboys graingraph
+    gg <- liftIO $ findClusters graingraph2 1.25
+    liftIO $ print (gg, productMembers)
+    return $ V.map (getParentGrainData cfg) gg
+
 -- ========================================= MCL =========================================
 
 saveGraph :: (Show a, Show b)=> Graph a b -> IO ()
@@ -304,16 +352,16 @@ saveGraph g = let
     mapM_ (func f) xs
     hClose f
 
-runMCL :: IO ()
-runMCL = callCommand "mcl test.txt --abc -I 1.2 -o test.out"
+runMCL :: Double -> IO ()
+runMCL i = callCommand $ "mcl test.txt --abc -o test.out -I " ++ show i
 
 readGroups :: IO (V.Vector [Int])
 readGroups = readFile "test.out" >>= return . V.fromList . map (map read . words) . lines
 
-findClusters :: Graph Int Double -> IO (V.Vector [Int])
-findClusters g = do
+findClusters :: Graph Int Double -> Double -> IO (V.Vector [Int])
+findClusters g i = do
   saveGraph g
-  runMCL
+  runMCL i
   readGroups
 
 -- ====================================== Plotting =======================================
