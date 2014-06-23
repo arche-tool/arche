@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Gamma.Strategy.Miyamoto
-       ( run ) where
+       ( run
+       , Cfg(..)
+       ) where
 
 import qualified Data.Vector                 as V
 import qualified Data.Vector.Unboxed         as U
@@ -21,15 +23,22 @@ import           Texture.Orientation
 import           Gamma.OMRender
 import           Gamma.OR
 
+data Cfg =
+  Cfg
+  { boxSize     :: Int -- default = 100
+  , ang_input   :: FilePath
+  , base_output :: FilePath
+  } deriving (Show)
+
 -- | Simlpe reconstruction strategy were the orientation map is divided in non-overlapping
 -- areas and the parent phase is calculated from all product orientation within the subarea.
 -- The calculation is done by function minimization with pure KS.
-run :: FilePath -> FilePath -> IO ()
-run fin fout = do
-  ang <- parseANG fin
+run :: Cfg -> IO ()
+run Cfg{..} = do
+  ang <- parseANG ang_input
   let
     vb     = ebsdToVoxBox ang rotation
-    vb'    = scanBox 100 vb
+    vb'    = scanBox (max 1 boxSize) vb
     node'  = V.zipWith (\p q -> p {rotation = q}) (nodes ang) (U.convert $ grainID vb')
     ang'   = ang {nodes = node'}
     viewOM = [ showOMQI
@@ -38,7 +47,7 @@ run fin fout = do
              , showOMIPF    Cubic ND
              ]
     vtkOM  = renderOM viewOM ang'
-  writeUniVTKfile (fout <.> "vti") True vtkOM
+  writeUniVTKfile (base_output <.> "vti") True vtkOM
 
 scanBox :: Int -> VoxBox Quaternion -> VoxBox Quaternion
 scanBox n vb@VoxBox{..} = vb {grainID = newVec}

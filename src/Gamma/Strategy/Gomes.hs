@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Gamma.Strategy.Gomes
-       ( run ) where
+       ( run
+       , Cfg(..)
+       ) where
 
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
@@ -46,12 +48,19 @@ data OrientationType
   | Product !Quaternion
   deriving (Show)
 
+data Cfg =
+  Cfg
+  { misoAngle   :: Deg
+  , ggAngle     :: Deg
+  , mgAngle     :: Deg
+  , mmAngle     :: Deg
+  , ang_input   :: FilePath
+  , base_output :: FilePath
+  } deriving (Show)
+
 data GomesConfig
   = GomesConfig
-  { minGrainMisoAngle :: Deg
-  , ggAngle           :: Deg
-  , mgAngle           :: Deg
-  , mmAngle           :: Deg
+  { inputCfg          :: Cfg
   , realOR            :: OR
   , realORs           :: Vector OR
   , orientationBox    :: VoxBox Quaternion
@@ -71,22 +80,19 @@ type Gomes = RWS GomesConfig () GomesState
 
 -- =======================================================================================
 
-getGomesConfig :: Deg -> Deg -> Deg -> Deg -> OR -> VoxBox Quaternion -> Maybe GomesConfig
-getGomesConfig gmiso mergeGG mergeMG mergeMM ror qBox = let
+getGomesConfig :: Cfg -> OR -> VoxBox Quaternion -> Maybe GomesConfig
+getGomesConfig cfg ror qBox = let
   func (gidBox, voxMap) = GomesConfig
-     { minGrainMisoAngle = gmiso
-     , ggAngle           = mergeGG
-     , mgAngle           = mergeMG
-     , mmAngle           = mergeMM
-     , realOR            = ror
-     , realORs           = genTS ror
-     , orientationBox    = qBox
-     , grainIDBox        = gidBox
-     , grainVoxelMap     = voxMap
-     , orientationMap    = avgGrainOrientation qBox voxMap
-     , structureGraph    = fst $ getMicroVoxel (gidBox, voxMap)
+     { inputCfg       = cfg
+     , realOR         = ror
+     , realORs        = genTS ror
+     , orientationBox = qBox
+     , grainIDBox     = gidBox
+     , grainVoxelMap  = voxMap
+     , orientationMap = avgGrainOrientation qBox voxMap
+     , structureGraph = fst $ getMicroVoxel (gidBox, voxMap)
      }
-  in fmap func (getGrainID gmiso Cubic qBox)
+  in fmap func (getGrainID (misoAngle cfg) Cubic qBox)
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
@@ -137,16 +143,16 @@ seeResults = do
          , (vtkIPF4, "IPF4")
          ]
 
-run :: Deg -> FilePath -> FilePath -> IO ()
-run miso fin fout = do
-  ang <- parseANG fin
-  let plot (vtk, name) = writeUniVTKfile (fout ++ name  <.> "vtr") True vtk
+run :: Cfg -> IO ()
+run cfg@Cfg{..} = do
+  ang <- parseANG ang_input
+  let plot (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
   let
     vbq = ebsdToVoxBox ang rotation
     ror = fromQuaternion $ mkQuaternion $ Vec4 7.126e-1 2.895e-1 2.238e-1 5.986e-1
-    (vtks, _) = case getGomesConfig miso 4 4 4 ror vbq of
-      Nothing  -> error "No grain detected!"
-      Just cfg -> evalRWS seeResults cfg (getInitState cfg)
+    (vtks, _) = case getGomesConfig cfg ror vbq of
+      Nothing       -> error "No grain detected!"
+      Just gomescfg -> evalRWS seeResults gomescfg (getInitState gomescfg)
   mapM_ plot vtks
 
 -- =======================================================================================

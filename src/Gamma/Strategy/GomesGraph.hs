@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Gamma.Strategy.GomesGraph
-       ( run ) where
+       ( run
+       , Cfg(..)
+       ) where
 
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
@@ -45,6 +47,17 @@ import Debug.Trace
 dbg a = trace (show a) a
 dbgs s a = trace (show s ++ " <=> " ++ show a) a
 
+data Cfg =
+  Cfg
+  { misoAngle         :: Deg
+  , ang_input         :: FilePath
+  , base_output       :: FilePath
+  , refinementSteps   :: Word8
+  , initClusterFactor :: Double
+  , stepClusterFactor :: Double
+  , badAngle          :: Deg
+  } deriving (Show)
+
 data ProductGrain =
   ProductGrain
   { productVoxelPos       :: V.Vector Int
@@ -62,11 +75,7 @@ data ParentGrain =
 
 data GomesConfig
   = GomesConfig
-  { outputDir         :: FilePath
-  , minGrainMisoAngle :: Deg
-  , ggAngle           :: Deg
-  , mgAngle           :: Deg
-  , mmAngle           :: Deg
+  { inputCfg          :: Cfg
   , realOR            :: OR
   , realORs           :: Vector OR
   , orientationBox    :: VoxBox Quaternion
@@ -85,25 +94,22 @@ type Gomes = RWST GomesConfig () GomesState IO
 
 -- =======================================================================================
 
-getGomesConfig ::FilePath -> Deg -> Deg -> Deg -> Deg -> OR -> VoxBox Quaternion -> Maybe GomesConfig
-getGomesConfig dirout gmiso mergeGG mergeMG mergeMM ror qBox = let
+--getGomesConfig :: FilePath -> Deg -> Word8 -> Double -> Double -> Deg
+getGomesConfig :: Cfg -> OR -> VoxBox Quaternion -> Maybe GomesConfig
+getGomesConfig cfg ror qBox = let
   func (gidBox, voxMap) = let
     micro = fst $ getMicroVoxel (gidBox, voxMap)
     in GomesConfig
-     { outputDir         = dirout
-     , minGrainMisoAngle = gmiso
-     , ggAngle           = mergeGG
-     , mgAngle           = mergeMG
-     , mmAngle           = mergeMM
-     , realOR            = ror
-     , realORs           = genTS ror
-     , orientationBox    = qBox
-     , grainIDBox        = gidBox
-     , productGrains     = calcProductGrains qBox voxMap
-     , structureGraph    = micro
-     , productGraph      = graphWeight qBox micro ror
+     { inputCfg       = cfg
+     , realOR         = ror
+     , realORs        = genTS ror
+     , orientationBox = qBox
+     , grainIDBox     = gidBox
+     , productGrains  = getProductGrainData qBox voxMap
+     , structureGraph = micro
+     , productGraph   = graphWeight qBox micro ror
      }
-  in fmap func (getGrainID gmiso Cubic qBox)
+  in fmap func (getGrainID (misoAngle cfg) Cubic qBox)
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
@@ -137,17 +143,17 @@ plotResults name = do
     attrs = [ attrIPF, attrGID, attrMID, attrAvgErr
             , attrDevErr, attrMaxErr, attrLocErr
             , attrAvgAIPF, attrVoxAIPF ]
-  liftIO $ plotVTK_D outputDir (vtkD,  name)
+  liftIO $ plotVTK_D inputCfg (vtkD,  name)
 
 plotGraph :: Gomes ()
 plotGraph = do
   GomesConfig{..} <- ask
   vtkGGraph <- plotGrainGraph
-  liftIO $ plotVTK_V outputDir (vtkGGraph,  "GrainGraph")
+  liftIO $ plotVTK_V inputCfg (vtkGGraph,  "GrainGraph")
 
-run :: Deg -> FilePath -> FilePath -> IO ()
-run miso fin fout = do
-  ang <- parseANG fin
+run :: Cfg -> IO ()
+run cfg@Cfg{..} = do
+  ang <- parseANG ang_input
   let
     vbq = ebsdToVoxBox ang rotation
     ror = fromQuaternion $ mkQuaternion $ Vec4 7.126e-1 2.895e-1 2.238e-1 5.986e-1
@@ -158,9 +164,9 @@ run miso fin fout = do
       plotResults "1st-step"
       clusteringRefinement
       plotResults "2nd-step"
-  _ <- case getGomesConfig fout miso 4 4 4 ror vbq of
-    Nothing  -> error "No grain detected!"
-    Just cfg -> runRWST doit cfg (getInitState cfg)
+  _ <- case getGomesConfig cfg ror vbq of
+    Nothing       -> error "No grain detected!"
+    Just gomescfg -> runRWST doit gomescfg (getInitState gomescfg)
   return ()
 
 -- ==================================== Initial Graph ====================================
@@ -209,8 +215,8 @@ graphWeight vbq micro withOR = let
     k = -300
     in exp (k * x * x)
   mspar = ms `using` parListChunk 100 rpar
-  in filterIsleGrains $
-     mkUniGraph [] $
+  in filterIsleGrains      $
+     mkUniGraph []         $
      filter ((>= 0) . snd) $
      zipWith (\fid x -> (unFaceID fid, maybe 0 weight x)) fs mspar
 
@@ -339,11 +345,11 @@ findClusters g i = do
 
 -- ====================================== Plotting =======================================
 
-plotVTK_D :: (RenderElemVTK a)=> String -> (VTK a, FilePath) -> IO ()
-plotVTK_D dirout (vtk, name) = writeUniVTKfile (dirout ++ name  <.> "vtr") True vtk
+plotVTK_D :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
+plotVTK_D Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
 
-plotVTK_V :: (RenderElemVTK a)=> String -> (VTK a, FilePath) -> IO ()
-plotVTK_V dirout (vtk, name) = writeUniVTKfile (dirout ++ name  <.> "vtu") True vtk
+plotVTK_V :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
+plotVTK_V Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtu") True vtk
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
                  String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
@@ -445,6 +451,7 @@ plotGroupSO3 = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
+    outputDir = base_output inputCfg
     foo vtk name gid = writeUniVTKfile ( outputDir ++ "gid_" ++
                                          show gid  ++ name <.> "vtu" ) True vtk
     fii vtk name gid = writeUniVTKfile ( outputDir ++ "gid_" ++

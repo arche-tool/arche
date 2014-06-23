@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Gamma.Strategy.Graph
-       ( run ) where
+       ( run
+       , Cfg(..)
+       ) where
 
 import qualified Data.Vector.Unboxed as U
 
@@ -18,17 +20,24 @@ import           Texture.Orientation
 
 import           Gamma.Grains
 
-run :: Deg -> FilePath -> FilePath -> IO ()
-run miso fin fout = do
-  ang <- parseANG fin
+data Cfg =
+  Cfg
+  { misoAngle   :: Deg
+  , ang_input   :: FilePath
+  , base_output :: FilePath
+  } deriving (Show)
+
+run :: Cfg -> IO ()
+run Cfg{..} = do
+  ang <- parseANG ang_input
   let vboxQ = ebsdToVoxBox ang rotation
-  case getGrainID miso Cubic vboxQ of
+  case getGrainID misoAngle Cubic vboxQ of
     Nothing -> print "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg
       attrs = [mkPointAttr "GrainID" (unGrainID . ((grainID gids) U.!))]
       in do
-        writeUniVTKfile (fout ++ ".vtr")        True $ renderVoxBoxVTK      gids attrs
-        writeUniVTKfile (fout ++ "_faces.vtu")  True $ renderMicroFacesVTK  gids micro
-        writeUniVTKfile (fout ++ "_edges.vtu")  True $ renderMicroEdgesVTK  gids micro
-        writeUniVTKfile (fout ++ "_vertex.vtu") True $ renderMicroVertexVTK gids micro
+        writeUniVTKfile (base_output ++ ".vtr")        True $ renderVoxBoxVTK      gids attrs
+        writeUniVTKfile (base_output ++ "_faces.vtu")  True $ renderMicroFacesVTK  gids micro
+        writeUniVTKfile (base_output ++ "_edges.vtu")  True $ renderMicroEdgesVTK  gids micro
+        writeUniVTKfile (base_output ++ "_vertex.vtu") True $ renderMicroVertexVTK gids micro

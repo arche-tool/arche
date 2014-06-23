@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Gamma.Strategy.Cayron
-       ( run ) where
+       ( run
+       , Cfg(..)
+       ) where
 
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
@@ -35,11 +37,18 @@ import Debug.Trace
 dbg a = trace (show a) a
 dbgs s a = trace (show s ++ " <=> " ++ show a) a
 
-run :: Deg -> FilePath -> FilePath -> IO ()
-run miso fin fout = do
-  ang <- parseANG fin
+data Cfg =
+  Cfg
+  { misoAngle   :: Deg
+  , ang_input   :: FilePath
+  , base_output :: FilePath
+  } deriving (Show)
+
+run :: Cfg -> IO ()
+run Cfg{..} = do
+  ang <- parseANG ang_input
   let vbq = ebsdToVoxBox ang rotation
-  case getGrainID miso Cubic vbq of
+  case getGrainID misoAngle Cubic vbq of
     Nothing               -> print "No grain detected!"
     Just gidMap@(vbgid, gtree) -> let
       mkr = fst $ getMicroVoxel gidMap
@@ -52,8 +61,8 @@ run miso fin fout = do
       cell2 = mkPointAttr "AlphaGB" (unGrainID . ((grainID vbgid) U.!))
       in do
         print $ grainsGraph fs
-        writeUniVTKfile (fout <.> "vtu") True vtk
-        writeUniVTKfile (fout <.> "vtr") True vtk2
+        writeUniVTKfile (base_output <.> "vtu") True vtk
+        writeUniVTKfile (base_output <.> "vtr") True vtk2
 
 gammaBox :: (VoxBox GrainID, HashMap Int (V.Vector VoxelPos)) -> [HashSet Int] -> VoxBox Int
 gammaBox (vb@VoxBox{..}, gidMap) gs = let

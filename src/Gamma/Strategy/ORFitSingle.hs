@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Gamma.Strategy.ORFitSingle
-       ( run ) where
+       ( run
+       , Cfg(..)
+       ) where
 
 import qualified Data.Vector         as V
 import qualified Data.Vector.Unboxed as U
@@ -22,11 +24,18 @@ import           Gamma.GBRender
 import           Gamma.Grains
 import           Gamma.OR
 
-run :: Deg -> FilePath -> FilePath -> IO ()
-run miso fin fout = do
-  ang <- parseANG fin
+data Cfg =
+  Cfg
+  { misoAngle   :: Deg
+  , ang_input   :: FilePath
+  , base_output :: FilePath
+  } deriving (Show)
+
+run :: Cfg -> IO ()
+run Cfg{..} = do
+  ang <- parseANG ang_input
   let vboxQ = ebsdToVoxBox ang rotation
-  case getGrainID miso Cubic vboxQ of
+  case getGrainID misoAngle Cubic vboxQ of
     Nothing        -> print "No grain detected!"
     Just (gids, _) -> let
       viewGB = [ showGBMiso   Cubic
@@ -46,7 +55,7 @@ run miso fin fout = do
         print (U.length vecQ, U.length vecGID)
         --writeUniVTKfile (fout <.> "vti") True vtkOM
         --writeUniVTKfile (fout <.> "vtu") True vtkGB
-        writeUniVTKfile (fout <.> "SO3" <.> "vtu") True vtkSO3
+        writeUniVTKfile (base_output <.> "SO3" <.> "vtu") True vtkSO3
         let
           (g, t)   = getGammaOR2 ang
           --g        = getGamma ang
@@ -56,8 +65,8 @@ run miso fin fout = do
           vtkSO3_g = renderSO3Points Cubic ND ggid (U.singleton g)
           vtkSO3_a = renderSO3Points Cubic ND agid as
         print (g, t)
-        writeUniVTKfile (fout <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
-        writeUniVTKfile (fout <.> "SO3-alpha" <.> "vtu") True vtkSO3_a
+        writeUniVTKfile (base_output <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
+        writeUniVTKfile (base_output <.> "SO3-alpha" <.> "vtu") True vtkSO3_a
 
 getGammaOR2 :: EBSDdata -> (Quaternion, OR)
 getGammaOR2 EBSDdata{..} = (gf, tf)

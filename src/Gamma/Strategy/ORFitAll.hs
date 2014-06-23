@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Gamma.Strategy.ORFitAll
-       ( run ) where
+       ( run
+       , Cfg(..)
+       ) where
 
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
@@ -27,12 +29,18 @@ import           File.ANGReader
 import           Gamma.Grains
 import           Gamma.OR
 
+data Cfg =
+  Cfg
+  { misoAngle   :: Deg
+  , ang_input   :: FilePath
+  , base_output :: FilePath
+  } deriving (Show)
 
-run :: Deg -> FilePath -> FilePath -> IO ()
-run miso fin fout = do
-  ang <- parseANG fin
+run :: Cfg -> IO ()
+run Cfg{..} = do
+  ang <- parseANG ang_input
   let vbq = ebsdToVoxBox ang rotation
-  case getGrainID miso Cubic vbq of
+  case getGrainID misoAngle Cubic vbq of
     Nothing     -> print "No grain detected!"
     Just gidMap -> let
       mkr = fst $ getMicroVoxel gidMap
@@ -41,9 +49,9 @@ run miso fin fout = do
       vtkReal = renderGBOR realOR vbq mkr
       vtkRealAvg = renderGBOR2 realOR vbq mkr
       in do
-        writeUniVTKfile (fout ++ "-KS-OR"  <.> "vtu") True vtkKS
-        writeUniVTKfile (fout ++ "-RealOR" <.> "vtu") True vtkReal
-        writeUniVTKfile (fout ++ "-RealORAvg" <.> "vtu") True vtkRealAvg
+        writeUniVTKfile (base_output ++ "-KS-OR"  <.> "vtu") True vtkKS
+        writeUniVTKfile (base_output ++ "-RealOR" <.> "vtu") True vtkReal
+        writeUniVTKfile (base_output ++ "-RealORAvg" <.> "vtu") True vtkRealAvg
 
 getOR :: VoxBox Quaternion -> MicroVoxel -> OR
 getOR vbq micro = let
