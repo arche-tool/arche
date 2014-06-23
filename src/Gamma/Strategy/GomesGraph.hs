@@ -163,7 +163,7 @@ run miso fin fout = do
     Just cfg -> runRWST doit cfg (getInitState cfg)
   return ()
 
--- =======================================================================================
+-- ==================================== Initial Graph ====================================
 
 filterIsleGrains :: Graph Int Double -> Graph Int Double
 filterIsleGrains Graph{..} = let
@@ -176,14 +176,6 @@ filterIsleGrains Graph{..} = let
   clean1  = HM.filter ((/= 1) . HM.size) graph
   clean2  = L.foldl' foo clean1 singles
   in Graph clean2
-
-graphMisOR :: VoxBox Quaternion -> MicroVoxel -> OR -> Graph Int Double
-graphMisOR vbq micro withOR = let
-  fs    = HM.keys $ microFaces micro
-  ors   = genTS withOR
-  ms    = map (getFaceIDmisOR vbq micro ors) fs
-  mspar = ms `using` parListChunk 100 rpar
-  in mkUniGraph [] $ zipWith (\fid x -> (unFaceID fid, maybe (-1) abs x)) fs mspar
 
 getFaceIDmisOR :: VoxBox Quaternion -> MicroVoxel -> Vector OR -> FaceID -> Maybe Double
 getFaceIDmisOR vbq micro ors fid = let
@@ -208,10 +200,26 @@ getFaceVoxels (Fx pos) = (pos, pos #+# (VoxelPos (-1) 0 0))
 getFaceVoxels (Fy pos) = (pos, pos #+# (VoxelPos 0 (-1) 0))
 getFaceVoxels (Fz pos) = (pos, pos #+# (VoxelPos 0 0 (-1)))
 
-calcProductGrains :: VoxBox Quaternion ->
-               HashMap Int (V.Vector VoxelPos) ->
-               HashMap Int ProductGrain
-calcProductGrains vbq gmap = let
+graphWeight :: VoxBox Quaternion -> MicroVoxel -> OR -> Graph Int Double
+graphWeight vbq micro withOR = let
+  fs    = HM.keys $ microFaces micro
+  ors   = genTS withOR
+  ms    = map (getFaceIDmisOR vbq micro ors) fs
+  weight x = let
+    k = -300
+    in exp (k * x * x)
+  mspar = ms `using` parListChunk 100 rpar
+  in filterIsleGrains $
+     mkUniGraph [] $
+     filter ((>= 0) . snd) $
+     zipWith (\fid x -> (unFaceID fid, maybe 0 weight x)) fs mspar
+
+-- ================================== Grain Data ===================================
+
+getProductGrainData :: VoxBox Quaternion ->
+                       HashMap Int (V.Vector VoxelPos) ->
+                       HashMap Int ProductGrain
+getProductGrainData vbq gmap = let
   getAvgQ = getQinFZ . shitQAvg . V.convert . V.map (vbq #!)
   getAvgPos v = let
     t = V.foldl' (&+) zero $ V.map (evalCentralVoxelPos vbq) v
@@ -224,29 +232,6 @@ calcProductGrains vbq gmap = let
            , productAvgPos         = getAvgPos x
            }
   in HM.map func gmap
-
--- ================================== Grain clustering ===================================
-
-graphWeight :: VoxBox Quaternion -> MicroVoxel -> OR -> Graph Int Double
-graphWeight vbq micro withOR = let
-  fs    = HM.keys $ microFaces micro
-  ors   = genTS withOR
-  ms    = map (getFaceIDmisOR vbq micro ors) fs
-  ams
-    | n > 0     = s / (fromIntegral n)
-    | otherwise = 0
-    where
-      n = length ms
-      s = L.foldl' (\acc x -> maybe acc (acc +) x) 0 ms
-  weight x = let
-    k = -300
-    w = 10 * exp (k * x * x)
-    in w -- if w < 0.05 then 0 else 1
-  mspar = ms `using` parListChunk 100 rpar
-  in filterIsleGrains $
-     mkUniGraph [] $
-     filter ((>= 0) . snd) $
-     zipWith (\fid x -> (unFaceID fid, maybe (-1) weight x)) fs mspar
 
 getParentGrainData :: GomesConfig -> [Int] -> ParentGrain
 getParentGrainData GomesConfig{..} mids = let
@@ -267,18 +252,6 @@ getParentGrainData GomesConfig{..} mids = let
      , parentAvgErrorFit     = err
      , parentErrorPerProduct = V.toList $ V.zipWith foo (U.convert qs) (V.convert ws)
      }
-
-getGroupGrainsOrientations :: [Int] -> Gomes (Vector Double, Vector QuaternionFZ)
-getGroupGrainsOrientations mids = do
-  GomesConfig{..} <- ask
-  GomesState{..}  <- get
-  let
-    getIS gid = maybe (V.empty) productVoxelPos (HM.lookup gid productGrains)
-    getQ  gid = maybe zerorot productAvgOrientation (HM.lookup gid productGrains)
-    is  = map (V.convert . getIS) mids
-    ws  = U.fromList (map (fromIntegral . U.length) is)
-    qs  = U.map getQ (U.fromList mids)
-  return (ws, qs)
 
 getWGammaTess :: Vector OR -> Vector Double -> Vector QuaternionFZ -> (Quaternion, FitError)
 getWGammaTess ors ws qs = (gamma, err)
@@ -497,3 +470,15 @@ getCubicIPFColor :: (Rot q)=> q -> (Word8, Word8, Word8)
 getCubicIPFColor = let
   unColor (RGBColor rgb) = rgb
   in unColor . getRGBColor . snd . getIPFColor Cubic ND . convert
+
+getGroupGrainsOrientations :: [Int] -> Gomes (Vector Double, Vector QuaternionFZ)
+getGroupGrainsOrientations mids = do
+  GomesConfig{..} <- ask
+  GomesState{..}  <- get
+  let
+    getIS gid = maybe (V.empty) productVoxelPos (HM.lookup gid productGrains)
+    getQ  gid = maybe zerorot productAvgOrientation (HM.lookup gid productGrains)
+    is  = map (V.convert . getIS) mids
+    ws  = U.fromList (map (fromIntegral . U.length) is)
+    qs  = U.map getQ (U.fromList mids)
+  return (ws, qs)
