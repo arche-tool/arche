@@ -14,6 +14,8 @@ import qualified Data.HashSet                 as HS
 import qualified Data.List                    as L
 
 import           Control.Applicative ((<$>))
+import           Control.Monad       (replicateM_, zipWithM_)
+import           Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
 import           Data.Vector.Unboxed (Vector)
 import           Data.HashMap.Strict (HashMap)
 import           Data.Word           (Word8)
@@ -22,9 +24,7 @@ import           System.FilePath
 import           System.IO
 import           System.Process
 import           Control.Parallel.Strategies
-import           Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
 import           Control.Monad.Trans
-import           Control.Monad (zipWithM_)
 
 import           Hammer.Math.Algebra
 import           Hammer.VoxBox
@@ -88,6 +88,7 @@ data GomesConfig
 data GomesState
   = GomesState
   { parentGrains :: V.Vector ParentGrain
+  , mclFactor    :: Double
   } deriving (Show)
 
 type Gomes = RWST GomesConfig () GomesState IO
@@ -113,16 +114,21 @@ getGomesConfig cfg ror qBox = let
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
-  in GomesState { parentGrains = V.empty }
+  k = initClusterFactor inputCfg
+  in GomesState { parentGrains = V.empty
+                , mclFactor    = k
+                }
 
 grainClustering :: Gomes ()
 grainClustering = do
   cfg@GomesConfig{..} <- ask
+  st@GomesState{..}   <- get
   -- run MCL
-  st <- get
-  gg <- liftIO $ findClusters productGraph 1.2
+  gg <- liftIO $ findClusters productGraph mclFactor
   let ps = V.map (getParentGrainData cfg) gg
-  put $ st { parentGrains = ps }
+  put $ st { parentGrains = ps
+           , mclFactor    = mclFactor * stepClusterFactor inputCfg
+           }
 
 plotResults :: String -> Gomes ()
 plotResults name = do
@@ -155,15 +161,16 @@ run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ang <- parseANG ang_input
   let
-    vbq = ebsdToVoxBox ang rotation
-    ror = fromQuaternion $ mkQuaternion $ Vec4 7.126e-1 2.895e-1 2.238e-1 5.986e-1
+    vbq  = ebsdToVoxBox ang rotation
+    ror  = fromQuaternion $ mkQuaternion $ Vec4 7.126e-1 2.895e-1 2.238e-1 5.986e-1
+    nref = fromIntegral refinementSteps
     doit = do
       grainClustering
       --plotGraph
       --plotGroupSO3
       plotResults "1st-step"
-      clusteringRefinement
-      plotResults "2nd-step"
+      replicateM_ nref clusteringRefinement
+      plotResults "final-step"
   _ <- case getGomesConfig cfg ror vbq of
     Nothing       -> error "No grain detected!"
     Just gomescfg -> runRWST doit gomescfg (getInitState gomescfg)
@@ -279,22 +286,24 @@ getWGammaOR or0 ws qs = (gamma, err, rOR2)
 
 clusteringRefinement :: Gomes ()
 clusteringRefinement = do
-  GomesConfig{..} <- ask
-  st@GomesState{..}  <- get
+  GomesConfig{..}   <- ask
+  st@GomesState{..} <- get
   ps <- V.mapM refineParentGrain parentGrains
-  put $ st { parentGrains = V.concatMap id ps }
+  put $ st { parentGrains = V.concatMap id ps
+           , mclFactor    = mclFactor * stepClusterFactor inputCfg
+           }
 
-goodParent :: ParentGrain -> Bool
-goodParent ParentGrain{..} = badarea < 0.1
+goodParent :: Deg -> ParentGrain -> Bool
+goodParent badW ParentGrain{..} = badarea < 0.1
   where
-    offlimit = filter ((> Deg 15) . snd) parentErrorPerProduct
+    offlimit = filter ((> badW) . snd) parentErrorPerProduct
     badarea  = sum $ map fst offlimit
 
-getBadGrains :: ParentGrain -> [Int]
-getBadGrains ParentGrain{..} = map fst bads
+getBadGrains :: Deg -> ParentGrain -> [Int]
+getBadGrains badW ParentGrain{..} = map fst bads
   where
     errs = zip productMembers parentErrorPerProduct
-    bads = filter ((> Deg 15) . snd . snd) errs
+    bads = filter ((> badW) . snd . snd) errs
 
 reinforceCluster :: [Int] -> Graph Int Double -> Graph Int Double
 reinforceCluster ns Graph{..} = let
@@ -308,15 +317,18 @@ reinforceCluster ns Graph{..} = let
   in Graph $ HM.mapWithKey func graph
 
 refineParentGrain :: ParentGrain -> Gomes (V.Vector ParentGrain)
-refineParentGrain p@ParentGrain{..}
-  | goodParent p = return (V.singleton p)
-  | otherwise    = do
-    cfg@GomesConfig{..} <- ask
-    let
-      graingraph  = getSubGraph productGraph productMembers
-      badboys     = getBadGrains p
-      graingraph2 = reinforceCluster badboys graingraph
-    gg <- liftIO $ findClusters graingraph2 1.25
+refineParentGrain p@ParentGrain{..} = do
+  cfg@GomesConfig{..} <- ask
+  GomesState{..}      <- get
+  let
+    badFitAngle  = badAngle inputCfg
+    graingraph   = getSubGraph productGraph productMembers
+    badboys      = getBadGrains badFitAngle p
+    graingraph2  = reinforceCluster badboys graingraph
+  if goodParent badFitAngle p
+    then return (V.singleton p)
+    else do
+    gg <- liftIO $ findClusters graingraph2 mclFactor
     liftIO $ print (gg, productMembers)
     return $ V.map (getParentGrainData cfg) gg
 
