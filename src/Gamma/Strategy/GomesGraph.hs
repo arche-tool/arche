@@ -160,8 +160,10 @@ plotGraph = do
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ang <- parseANG ang_input
+  vbq <- case ebsdToVoxBox ang rotation of
+    Right x -> return x
+    Left s  -> error s
   let
-    vbq  = ebsdToVoxBox ang rotation
     ror  = fromQuaternion $ mkQuaternion $ Vec4 7.126e-1 2.895e-1 2.238e-1 5.986e-1
     nref = fromIntegral refinementSteps
     doit = do
@@ -171,10 +173,8 @@ run cfg@Cfg{..} = do
       plotResults "1st-step"
       replicateM_ nref clusteringRefinement
       plotResults "final-step"
-  _ <- case getGomesConfig cfg ror vbq of
-    Nothing       -> error "No grain detected!"
-    Just gomescfg -> runRWST doit gomescfg (getInitState gomescfg)
-  return ()
+  gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror vbq)
+  runRWST doit gomescfg (getInitState gomescfg) >> return ()
 
 -- ==================================== Initial Graph ====================================
 

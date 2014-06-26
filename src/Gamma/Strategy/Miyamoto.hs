@@ -36,9 +36,11 @@ data Cfg =
 run :: Cfg -> IO ()
 run Cfg{..} = do
   ang <- parseANG ang_input
+  vbq <- case ebsdToVoxBox ang rotation of
+    Right x -> return x
+    Left s  -> error s
   let
-    vb     = ebsdToVoxBox ang rotation
-    vb'    = scanBox (max 1 boxSize) vb
+    vb'    = scanBox (max 1 boxSize) vbq
     node'  = V.zipWith (\p q -> p {rotation = q}) (nodes ang) (U.convert $ grainID vb')
     ang'   = ang {nodes = node'}
     viewOM = [ showOMQI

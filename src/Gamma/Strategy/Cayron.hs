@@ -47,7 +47,9 @@ data Cfg =
 run :: Cfg -> IO ()
 run Cfg{..} = do
   ang <- parseANG ang_input
-  let vbq = ebsdToVoxBox ang rotation
+  vbq <- case ebsdToVoxBox ang rotation of
+    Right x -> return x
+    Left s  -> error s
   case getGrainID misoAngle Cubic vbq of
     Nothing               -> print "No grain detected!"
     Just gidMap@(vbgid, gtree) -> let

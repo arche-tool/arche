@@ -146,9 +146,11 @@ seeResults = do
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ang <- parseANG ang_input
+  vbq <- case ebsdToVoxBox ang rotation of
+    Right x -> return x
+    Left s  -> error s
   let plot (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
   let
-    vbq = ebsdToVoxBox ang rotation
     ror = fromQuaternion $ mkQuaternion $ Vec4 7.126e-1 2.895e-1 2.238e-1 5.986e-1
     (vtks, _) = case getGomesConfig cfg ror vbq of
       Nothing       -> error "No grain detected!"

@@ -34,8 +34,10 @@ data Cfg =
 run :: Cfg -> IO ()
 run Cfg{..} = do
   ang <- parseANG ang_input
-  let vboxQ = ebsdToVoxBox ang rotation
-  case getGrainID misoAngle Cubic vboxQ of
+  vbq <- case ebsdToVoxBox ang rotation of
+    Right x -> return x
+    Left s  -> error s
+  case getGrainID misoAngle Cubic vbq of
     Nothing        -> print "No grain detected!"
     Just (gids, _) -> let
       viewGB = [ showGBMiso   Cubic
@@ -48,7 +50,7 @@ run Cfg{..} = do
                , showGrainIDs gids
                ]
       (vecQ, vecGID) = getOriGID ang gids
-      vtkGB  = renderGB viewGB vboxQ
+      vtkGB  = renderGB viewGB vbq
       vtkOM  = renderOM viewOM ang
       vtkSO3 = renderSO3Points Cubic ND vecGID vecQ
       in do

@@ -30,8 +30,10 @@ data Cfg =
 run :: Cfg -> IO ()
 run Cfg{..} = do
   ang <- parseANG ang_input
-  let vboxQ = ebsdToVoxBox ang rotation
-  case getGrainID misoAngle Cubic vboxQ of
+  vbq <- case ebsdToVoxBox ang rotation of
+    Right x -> return x
+    Left s  -> error s
+  case getGrainID misoAngle Cubic vbq of
     Nothing -> print "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg

@@ -56,18 +56,10 @@ showGrainIDs gids = let
 
 -- =======================================================================================
 
-checkSqrANG :: EBSDdata -> Bool
-checkSqrANG EBSDdata{..} = let
-  Gridinfo{..}       = grid
-  (row, cEven, cOdd) = rowCols
-  in not hexGrid
-     && cEven          == cOdd
-     && V.length nodes == (row * cEven)
-
 renderOM :: [RenderOM] -> EBSDdata -> VTK Double
-renderOM fs ed@EBSDdata{..}
-  | checkSqrANG ed = vtk
-  | otherwise      = error "[ImageRender] Improper square grid ANG file."
+renderOM fs EBSDdata{..}
+  | not hexGrid = vtk
+  | otherwise   = error "[ImageRender] Improper square grid ANG file."
   where
     EBSDinfo{..}    = ebsdInfo
     Gridinfo{..}    = grid
