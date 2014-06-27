@@ -157,6 +157,13 @@ parseORFitAll = let
   in func
      <$> parseMisoAngle
      <*> parseInOut
+     <*> parseORbyAvg
+
+parseORbyAvg :: Parser Bool
+parseORbyAvg = switch
+   (  long "or-by-avg"
+   <> short 'a'
+   <> help "Uses average grain orientation when optimizing OR")
 
 -- ========================================= Cayron ======================================
 

@@ -11,9 +11,12 @@ import qualified Data.Vector.Unboxed          as U
 import qualified Data.HashMap.Strict          as HM
 
 import           Data.Maybe          (mapMaybe)
+import           Data.Vector.Unboxed (Vector)
+import           Data.HashMap.Strict (HashMap)
 
 import           System.FilePath
 import           System.Random.TF.Instances
+import           System.Random.TF.Init
 import           System.Random.TF
 
 import           Hammer.Math.Algebra         (Vec3(..))
@@ -34,6 +37,7 @@ data Cfg =
   { misoAngle   :: Deg
   , ang_input   :: FilePath
   , base_output :: FilePath
+  , optByAvg    :: Bool
   } deriving (Show)
 
 run :: Cfg -> IO ()
@@ -42,28 +46,76 @@ run Cfg{..} = do
   vbq <- case ebsdToVoxBox ang rotation of
     Right x -> return x
     Left s  -> error s
-  case getGrainID misoAngle Cubic vbq of
-    Nothing     -> print "No grain detected!"
-    Just gidMap -> let
-      mkr = fst $ getMicroVoxel gidMap
-      vtkKS   = renderGBOR ksOR vbq mkr
-      realOR  = getOR vbq mkr
-      vtkReal = renderGBOR realOR vbq mkr
-      vtkRealAvg = renderGBOR2 realOR vbq mkr
-      in do
-        writeUniVTKfile (base_output ++ "-KS-OR"  <.> "vtu") True vtkKS
-        writeUniVTKfile (base_output ++ "-RealOR" <.> "vtu") True vtkReal
-        writeUniVTKfile (base_output ++ "-RealORAvg" <.> "vtu") True vtkRealAvg
+  gen <- initTFGen
+  (gidBox, voxMap) <- maybe (error "No grain detected!") return
+                      (getGrainID misoAngle Cubic vbq)
+  let
+    mkr  = fst $ getMicroVoxel (gidBox, voxMap)
+    qmap = getGrainAverageQ vbq voxMap
+    realOR
+      | optByAvg  = findORbyAverage  qmap mkr gen 1000
+      | otherwise = findORbySegments vbq  mkr gen 1000
+    vtkKS      = renderGBOR  ksOR   vbq mkr
+    vtkReal    = renderGBOR  realOR vbq mkr
+    vtkRealAvg = renderGBOR2 realOR vbq mkr
+  writeUniVTKfile (base_output ++ "-KS-OR"     <.> "vtu") True vtkKS
+  writeUniVTKfile (base_output ++ "-RealOR"    <.> "vtu") True vtkReal
+  writeUniVTKfile (base_output ++ "-RealORAvg" <.> "vtu") True vtkRealAvg
 
-getOR :: VoxBox Quaternion -> MicroVoxel -> OR
-getOR vbq micro = let
-  gs  = HM.elems $ microFaces micro
-  fs  = V.concat $ mapMaybe getPropValue gs
-  sd  = mkTFGen (V.length fs)
-  rs  = take 1000 $ randomRs (0, V.length fs - 1) sd
-  qs  = U.fromList $ map (foo . getFaceVoxels . (fs V.!)) rs
+-- ================================== Find OR ============================================
+
+findORbySegments :: VoxBox Quaternion -> MicroVoxel -> TFGen -> Int -> OR
+findORbySegments vbq micro gen n = let
+  segs     = getGBbySegments vbq micro gen n
+  goodSegs = U.filter ((5 >) . evalMisoORWithKS) segs
+  in findORFace goodSegs ksOR
+
+findORbyAverage :: HashMap Int Quaternion -> MicroVoxel -> TFGen -> Int -> OR
+findORbyAverage qmap micro gen n = let
+  segs     = getGBbyAverage qmap micro gen n
+  goodSegs = U.filter ((5 >) . evalMisoORWithKS) segs
+  in findORFace goodSegs ksOR
+
+evalMisoORWithKS :: (Quaternion, Quaternion) -> Deg
+evalMisoORWithKS (q1, q2) = toAngle $ misoOR ksORs Cubic q1 q2
+
+getGBbySegments :: VoxBox Quaternion -> MicroVoxel -> TFGen ->
+                   Int -> Vector (Quaternion, Quaternion)
+getGBbySegments vbq micro gen n = let
+  gs = HM.elems $ microFaces micro
+  fs = V.concat $ mapMaybe getPropValue gs
+  rs = take n $ randomRs (0, V.length fs - 1) gen
   foo (f1, f2) = (vbq #! f1, vbq #! f2)
-  in findORFace qs ksOR
+  in U.fromList $ map (foo . getFaceVoxels . (fs V.!)) rs
+
+-- TODO move to Hammer
+-- | Get both voxels that forms a given face.
+getFaceVoxels :: FaceVoxelPos -> (VoxelPos, VoxelPos)
+getFaceVoxels (Fx pos) = (pos, pos #+# (VoxelPos (-1) 0 0))
+getFaceVoxels (Fy pos) = (pos, pos #+# (VoxelPos 0 (-1) 0))
+getFaceVoxels (Fz pos) = (pos, pos #+# (VoxelPos 0 0 (-1)))
+
+getGBbyAverage :: HashMap Int Quaternion -> MicroVoxel -> TFGen ->
+                  Int -> Vector (Quaternion, Quaternion)
+getGBbyAverage qmap micro gen n = let
+  fs = V.fromList $ HM.keys $ microFaces micro
+  rs = take n $ randomRs (0, V.length fs - 1) gen
+  foo fid = let
+    (g1, g2) = unFaceID fid
+    in do
+      q1 <- HM.lookup g1 qmap
+      q2 <- HM.lookup g2 qmap
+      return (q1, q2)
+  in U.fromList $ mapMaybe (foo . (fs V.!)) rs
+
+getGrainAverageQ :: VoxBox Quaternion ->
+                    HashMap Int (V.Vector VoxelPos) ->
+                    HashMap Int Quaternion
+getGrainAverageQ vbq gmap = let
+  getAvgQ = shitQAvg . V.convert . V.map (vbq #!)
+  in HM.map getAvgQ gmap
+
+-- ================================== Plotting ===========================================
 
 avg :: V.Vector Double -> Double
 avg x
@@ -106,10 +158,3 @@ faceMisoOR ors vbq face = let
   q1 = vbq #! v1
   q2 = vbq #! v2
   in misoOR ors Cubic q1 q2
-
--- TODO move to Hammer
--- | Get both voxels that forms a given face.
-getFaceVoxels :: FaceVoxelPos -> (VoxelPos, VoxelPos)
-getFaceVoxels (Fx pos) = (pos, pos #+# (VoxelPos (-1) 0 0))
-getFaceVoxels (Fy pos) = (pos, pos #+# (VoxelPos 0 (-1) 0))
-getFaceVoxels (Fz pos) = (pos, pos #+# (VoxelPos 0 0 (-1)))
