@@ -13,19 +13,20 @@ import qualified Data.HashMap.Strict          as HM
 import           Data.Maybe          (mapMaybe)
 import           Data.Vector.Unboxed (Vector)
 import           Data.HashMap.Strict (HashMap)
+import           Control.Monad       (when)
 
 import           System.FilePath
 import           System.Random.TF.Instances
 import           System.Random.TF.Init
 import           System.Random.TF
 
-import           Hammer.Math.Algebra         (Vec3(..))
+import           Hammer.Math.Algebra
 import           Hammer.VoxBox
 import           Hammer.VTK.VoxBox
 import           Hammer.VTK
 import           Hammer.MicroGraph
 
-import           Texture.Symmetry            (Symm (..))
+import           Texture.Symmetry
 import           Texture.Orientation
 import           File.ANGReader
 
@@ -38,6 +39,7 @@ data Cfg =
   , ang_input   :: FilePath
   , base_output :: FilePath
   , optByAvg    :: Bool
+  , renderORMap :: Bool
   } deriving (Show)
 
 run :: Cfg -> IO ()
@@ -52,29 +54,37 @@ run Cfg{..} = do
   let
     mkr  = fst $ getMicroVoxel (gidBox, voxMap)
     qmap = getGrainAverageQ vbq voxMap
-    realOR
-      | optByAvg  = findORbyAverage  qmap mkr gen 1000
-      | otherwise = findORbySegments vbq  mkr gen 1000
+    getGoods = U.filter ((5 >) . evalMisoORWithKS)
+    segs
+      | optByAvg  = getGoods $ getGBbyAverage  qmap mkr gen 1000
+      | otherwise = getGoods $ getGBbySegments vbq  mkr gen 1000
+
+    -- fitting OR
+    realOR = findORFace segs ksOR
+
+    -- evaluate errors
+    err0   = faceerrorfunc segs ksORs
+    err1   = faceerrorfunc segs (genTS realOR)
+
+    -- render VTK images
     vtkKS      = renderGBOR  ksOR   vbq mkr
     vtkReal    = renderGBOR  realOR vbq mkr
     vtkRealAvg = renderGBOR2 realOR vbq mkr
-  writeUniVTKfile (base_output ++ "-KS-OR"     <.> "vtu") True vtkKS
-  writeUniVTKfile (base_output ++ "-RealOR"    <.> "vtu") True vtkReal
-  writeUniVTKfile (base_output ++ "-RealORAvg" <.> "vtu") True vtkRealAvg
+
+  -- printout results
+  putStrLn "========================================================================="
+  putStrLn $ "Initial error using KS: " ++ show err0
+  putStrLn $ "Optimum OR found: " ++ show ((fromQuaternion $ qOR realOR)::AxisPair)
+  showResult realOR
+  putStrLn $ "Final error using real OR: " ++ show err1
+
+  -- write maps to disk
+  when renderORMap $ do
+    writeUniVTKfile (base_output ++ "-KS-OR"     <.> "vtu") True vtkKS
+    writeUniVTKfile (base_output ++ "-RealOR"    <.> "vtu") True vtkReal
+    writeUniVTKfile (base_output ++ "-RealORAvg" <.> "vtu") True vtkRealAvg
 
 -- ================================== Find OR ============================================
-
-findORbySegments :: VoxBox Quaternion -> MicroVoxel -> TFGen -> Int -> OR
-findORbySegments vbq micro gen n = let
-  segs     = getGBbySegments vbq micro gen n
-  goodSegs = U.filter ((5 >) . evalMisoORWithKS) segs
-  in findORFace goodSegs ksOR
-
-findORbyAverage :: HashMap Int Quaternion -> MicroVoxel -> TFGen -> Int -> OR
-findORbyAverage qmap micro gen n = let
-  segs     = getGBbyAverage qmap micro gen n
-  goodSegs = U.filter ((5 >) . evalMisoORWithKS) segs
-  in findORFace goodSegs ksOR
 
 evalMisoORWithKS :: (Quaternion, Quaternion) -> Deg
 evalMisoORWithKS (q1, q2) = toAngle $ misoOR ksORs Cubic q1 q2
@@ -158,3 +168,30 @@ faceMisoOR ors vbq face = let
   q1 = vbq #! v1
   q2 = vbq #! v2
   in misoOR ors Cubic q1 q2
+
+-- ================================== Results ============================================
+
+ks = OR $ toQuaternion $ mkAxisPair (Vec3 2 2 11) (Deg 42.85)
+nw = OR $ toQuaternion $ mkAxisPair (Vec3 2 5 24) (Deg 45.98)
+gt = OR $ toQuaternion $ mkAxisPair (Vec3 2 3 15) (Deg 44.23)
+
+showResult :: OR -> IO ()
+showResult ror = let
+  rors = genTS ror
+
+  evalManyOR :: (OR -> Double) -> Deg
+  evalManyOR func = toAngle $ U.minimum $ U.map func rors
+
+  evalVecRot v1 v2 = let
+    allVec = getAllSymmVec (getSymmOps Cubic) v2
+    in U.minimum . (\v -> U.map (angle v) allVec) . passiveVecRotation v1 . qOR
+
+  devPlane = evalVecRot (Vec3 1 1 0) (Vec3 1 1 1)
+  devDir   = evalVecRot (Vec3 1 1 1) (Vec3 1 1 0)
+  devDir2  = evalVecRot (Vec3 1 1 0) (Vec3 1 1 2)
+  dev      = getMisoAngle Cubic (qOR ksOR) . qOR
+  in do
+    putStrLn ("Direct deviation from KS: "       ++ show (evalManyOR dev))
+    putStrLn ("Deviation from (111) <-> (110): " ++ show (evalManyOR devPlane))
+    putStrLn ("Deviation from [110] <-> [111]: " ++ show (evalManyOR devDir))
+    putStrLn ("Deviation from [112] <-> [110]: " ++ show (evalManyOR devDir2))

@@ -19,6 +19,7 @@ module Gamma.OR
        , singleerrorfunc
        , weightederrorfunc
        , uniformerrorfunc
+       , faceerrorfunc
          -- * Orientation Relationship
        , OR (..)
        , mkOR
@@ -126,13 +127,26 @@ data FitError
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
 
+-- | Evaluates the average angular error in rad between given parent and product
+-- orientations and given orientation relationship. The list of products is given in the
+-- fundamental zone.
+faceerrorfunc :: Vector (Quaternion, Quaternion) -> Vector OR -> FitError
+faceerrorfunc ms ors = let
+  n     = fromIntegral (G.length ms)
+  errs  = G.map (\(q1,q2) -> misoOR ors Cubic q1 q2) ms
+  avg   = G.sum errs / n
+  diff  = G.map ((\x->x*x) . ((-) avg)) errs
+  dev   = sqrt (G.sum diff / n)
+  in FitError
+     { avgError = toAngle avg
+     , devError = toAngle dev
+     , maxError = toAngle (G.maximum errs)
+     }
+
 findORFace :: Vector (Quaternion, Quaternion) -> OR -> OR
 findORFace qs t0 = let
-  err t = let
-    n    = U.length qs
-    errs = U.map (\(q1, q2) -> misoOR (genTS t) Cubic q1 q2) qs
-    in U.sum errs / (fromIntegral n)
-  func = err . OR . toQuaternion . mkUnsafeRodrigues
+  func = fromAngle . avgError . faceerrorfunc qs .
+         genTS . OR . toQuaternion . mkUnsafeRodrigues
   foo v = let
     k  = 0.001
     x  = func v

@@ -158,12 +158,19 @@ parseORFitAll = let
      <$> parseMisoAngle
      <*> parseInOut
      <*> parseORbyAvg
+     <*> parseRenderORMap
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch
    (  long "or-by-avg"
    <> short 'a'
    <> help "Uses average grain orientation when optimizing OR")
+
+parseRenderORMap :: Parser Bool
+parseRenderORMap = switch
+   (  long "render-or-map"
+   <> short 'r'
+   <> help "Renders grain boundaries map with OR misorientation values.")
 
 -- ========================================= Cayron ======================================
 
