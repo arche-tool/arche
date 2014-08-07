@@ -40,10 +40,11 @@ data Cfg =
   , base_output :: FilePath
   , optByAvg    :: Bool
   , renderORMap :: Bool
+  , moreOR      :: AxisPair
   } deriving (Show)
 
 run :: Cfg -> IO ()
-run Cfg{..} = do
+run cfg@Cfg{..} = do
   ang <- parseANG ang_input
   vbq <- case ebsdToVoxBox ang rotation of
     Right x -> return x
@@ -62,27 +63,26 @@ run Cfg{..} = do
     -- fitting OR
     realOR = findORFace segs ksOR
 
-    -- evaluate errors
-    err0   = faceerrorfunc segs ksORs
-    err1   = faceerrorfunc segs (genTS realOR)
+    doit (name, ror) = analyse cfg vbq qmap mkr segs name ror
+    inOR = OR $ toQuaternion moreOR
 
-    -- render VTK images
-    vtkKS      = renderGBOR  ksOR   vbq mkr
-    vtkReal    = renderGBOR  realOR vbq mkr
-    vtkRealAvg = renderGBOR2 realOR vbq mkr
+  mapM_ doit $ [("Given", inOR), ("Calculated", realOR)]
 
-  -- printout results
-  putStrLn "========================================================================="
-  putStrLn $ "Initial error using KS: " ++ show err0
-  putStrLn $ "Optimum OR found: " ++ show ((fromQuaternion $ qOR realOR)::AxisPair)
-  showResult realOR
-  putStrLn $ "Final error using real OR: " ++ show err1
-
-  -- write maps to disk
-  when renderORMap $ do
-    writeUniVTKfile (base_output ++ "-KS-OR"     <.> "vtu") True vtkKS
-    writeUniVTKfile (base_output ++ "-RealOR"    <.> "vtu") True vtkReal
-    writeUniVTKfile (base_output ++ "-RealORAvg" <.> "vtu") True vtkRealAvg
+analyse :: Cfg -> VoxBox Quaternion -> HashMap Int Quaternion -> MicroVoxel
+        -> Vector (Quaternion, Quaternion) -> String -> OR -> IO ()
+analyse Cfg{..} vbq qmap mkr segs name ror = let
+  err = faceerrorfunc segs (genTS ror)
+  -- render VTK images
+  vtk
+    | optByAvg  = renderGBOR        ror vbq qmap mkr
+    | otherwise = renderFaceVoxelOR ror vbq      mkr
+  in do
+    -- printout results
+    putStrLn $ "====================== " ++ name ++ " ======================"
+    putStrLn $ "Error: " ++ show err
+    showOR ror
+    showResult ror
+    when renderORMap $ writeUniVTKfile (base_output ++ name <.> "vtu") True vtk
 
 -- ================================== Find OR ============================================
 
@@ -141,39 +141,58 @@ avgVector x
   where
     n = fromIntegral $ V.length x
 
-renderGBOR2 :: OR -> VoxBox Quaternion -> MicroVoxel -> VTK Vec3
-renderGBOR2 ror vbq micro = let
+renderFaceVoxelOR :: OR -> VoxBox Quaternion -> MicroVoxel -> VTK Vec3
+renderFaceVoxelOR ror vbq micro = let
   gs  = mapMaybe (getPropValue) $ HM.elems $ microFaces micro
   fs  = V.concat gs
   ms  = V.concat $ map (avgVector . getM) gs
   ts  = genTS ror
   vtk = renderVoxElemListVTK vbq (V.toList fs)
-  getM = V.map (faceMisoOR ts vbq)
+  getM = V.map (faceVoxelMisoOR ts vbq)
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoORAvg" func)
 
-renderGBOR :: OR -> VoxBox Quaternion -> MicroVoxel -> VTK Vec3
-renderGBOR ror vbq micro = let
-  gs  = HM.elems $ microFaces micro
-  fs  = V.concat $ mapMaybe getPropValue gs
-  ts  = genTS ror
-  ms  = V.map (faceMisoOR ts vbq) fs
-  vtk = renderVoxElemListVTK vbq (V.toList fs)
+renderGBOR :: OR -> VoxBox Quaternion -> HashMap Int Quaternion -> MicroVoxel -> VTK Vec3
+renderGBOR ror vbq qmap micro = let
+  fids = HM.keys  $ microFaces micro
+  vs   = HM.elems $ microFaces micro
+  fs   = mapMaybe getPropValue vs
+  ts   = genTS ror
+  ms   = V.concat $ zipWith foo fids fs
+  vtk  = renderVoxElemListVTK vbq (concatMap V.toList fs)
+  foo fid vf = V.replicate (V.length vf) (faceMisoOR ts qmap fid)
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoOR" func)
 
-faceMisoOR :: U.Vector OR -> VoxBox Quaternion -> FaceVoxelPos -> Double
-faceMisoOR ors vbq face = let
+faceVoxelMisoOR :: U.Vector OR -> VoxBox Quaternion -> FaceVoxelPos -> Double
+faceVoxelMisoOR ors vbq face = let
   (v1, v2) = getFaceVoxels face
   q1 = vbq #! v1
   q2 = vbq #! v2
   in misoOR ors Cubic q1 q2
 
+faceMisoOR :: U.Vector OR -> HashMap Int Quaternion -> FaceID -> Double
+faceMisoOR ors qmap face = maybe pi id getM
+  where
+    (v1, v2) = unFaceID face
+    getM = do
+      q1 <- HM.lookup v1 qmap
+      q2 <- HM.lookup v2 qmap
+      return $ misoOR ors Cubic q1 q2
+
 -- ================================== Results ============================================
 
-ks = OR $ toQuaternion $ mkAxisPair (Vec3 2 2 11) (Deg 42.85)
-nw = OR $ toQuaternion $ mkAxisPair (Vec3 2 5 24) (Deg 45.98)
-gt = OR $ toQuaternion $ mkAxisPair (Vec3 2 3 15) (Deg 44.23)
+--ks = OR $ toQuaternion $ mkAxisPair (Vec3 2 2 11) (Deg 42.85)
+--nw = OR $ toQuaternion $ mkAxisPair (Vec3 2 5 24) (Deg 45.98)
+--gt = OR $ toQuaternion $ mkAxisPair (Vec3 2 3 15) (Deg 44.23)
+
+showOR :: OR -> IO ()
+showOR ror = let
+  ap      = fromQuaternion (qOR ror)
+  (v,w)   = axisAngle ap
+  (h,k,l) = aproxToIdealAxis v 0.01
+  msg = "OR: " ++ show [h, k, l] ++ " " ++ show ((toAngle w):: Deg)
+  in putStrLn msg
 
 showResult :: OR -> IO ()
 showResult ror = let
@@ -188,10 +207,8 @@ showResult ror = let
 
   devPlane = evalVecRot (Vec3 1 1 0) (Vec3 1 1 1)
   devDir   = evalVecRot (Vec3 1 1 1) (Vec3 1 1 0)
-  devDir2  = evalVecRot (Vec3 1 1 0) (Vec3 1 1 2)
   dev      = getMisoAngle Cubic (qOR ksOR) . qOR
   in do
     putStrLn ("Direct deviation from KS: "       ++ show (evalManyOR dev))
     putStrLn ("Deviation from (111) <-> (110): " ++ show (evalManyOR devPlane))
     putStrLn ("Deviation from [110] <-> [111]: " ++ show (evalManyOR devDir))
-    putStrLn ("Deviation from [112] <-> [110]: " ++ show (evalManyOR devDir2))

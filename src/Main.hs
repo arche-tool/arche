@@ -172,6 +172,7 @@ parseORFitAll = let
      <*> parseInOut
      <*> parseORbyAvg
      <*> parseRenderORMap
+     <*> parseOR
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch
@@ -181,8 +182,8 @@ parseORbyAvg = switch
 
 parseRenderORMap :: Parser Bool
 parseRenderORMap = switch
-   (  long "render-or-map"
-   <> short 'r'
+   (  long "vtk"
+   <> short 'v'
    <> help "Renders grain boundaries map with OR misorientation values.")
 
 -- ========================================= Cayron ======================================
