@@ -56,6 +56,7 @@ data Cfg =
   , initClusterFactor :: Double
   , stepClusterFactor :: Double
   , badAngle          :: Deg
+  , withOR            :: AxisPair
   } deriving (Show)
 
 data ProductGrain =
@@ -125,7 +126,10 @@ grainClustering = do
   st@GomesState{..}   <- get
   -- run MCL
   gg <- liftIO $ findClusters productGraph mclFactor
-  let ps = V.map (getParentGrainData cfg) gg
+  let
+    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
+    --gg = V.fromList $ runMCL cfgMCL productGraph
+    ps = V.map (getParentGrainData cfg) gg
   put $ st { parentGrains = ps
            , mclFactor    = mclFactor * stepClusterFactor inputCfg
            }
@@ -164,7 +168,7 @@ run cfg@Cfg{..} = do
     Right x -> return x
     Left s  -> error s
   let
-    ror  = fromQuaternion $ mkQuaternion $ Vec4 7.126e-1 2.895e-1 2.238e-1 5.986e-1
+    ror  = convert withOR
     nref = fromIntegral refinementSteps
     doit = do
       grainClustering
@@ -174,6 +178,7 @@ run cfg@Cfg{..} = do
       replicateM_ nref clusteringRefinement
       plotResults "final-step"
   gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror vbq)
+  putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
   runRWST doit gomescfg (getInitState gomescfg) >> return ()
 
 -- ==================================== Initial Graph ====================================
@@ -325,6 +330,8 @@ refineParentGrain p@ParentGrain{..} = do
     graingraph   = getSubGraph productGraph productMembers
     badboys      = getBadGrains badFitAngle p
     graingraph2  = reinforceCluster badboys graingraph
+    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
+    --gg = V.fromList $ runMCL cfgMCL graingraph2
   if goodParent badFitAngle p
     then return (V.singleton p)
     else do
@@ -343,8 +350,8 @@ saveGraph g = let
     mapM_ (func f) xs
     hClose f
 
-runMCL :: Double -> IO ()
-runMCL i = callCommand $ "mcl test.txt --abc -o test.out -I " ++ show i
+runMCLIO :: Double -> IO ()
+runMCLIO i = callCommand $ "mcl test.txt --abc -o test.out -I " ++ show i
 
 readGroups :: IO (V.Vector [Int])
 readGroups = readFile "test.out" >>= return . V.fromList . map (map read . words) . lines
@@ -352,7 +359,7 @@ readGroups = readFile "test.out" >>= return . V.fromList . map (map read . words
 findClusters :: Graph Int Double -> Double -> IO (V.Vector [Int])
 findClusters g i = do
   saveGraph g
-  runMCL i
+  runMCLIO i
   readGroups
 
 -- ====================================== Plotting =======================================

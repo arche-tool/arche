@@ -18,7 +18,8 @@ import           Data.Word                   (Word8)
 import           Options.Applicative
 import           System.FilePath
 
-import           Texture.Orientation         (Deg(..))
+import           Texture.Orientation         (Deg(..), mkAxisPair, AxisPair)
+import           Hammer.Math.Algebra
 
 -- ===================================== Data & class ====================================
 
@@ -91,6 +92,18 @@ parseMisoAngle = ((Deg . abs) <$> option
    <> metavar "[Deg]"
    <> value 15
    <> help "The default error is 15 deg."))
+
+parseOR :: Parser AxisPair
+parseOR = let
+  func :: (Int, Int, Int, Double) -> AxisPair
+  func (v1, v2, v3, w) = mkAxisPair v (Deg w)
+      where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
+  in (func <$> option
+   (  long "or"
+   <> short 'r'
+   <> metavar "[Double Double Double Double]"
+   <> value (1,1,2,90)
+   <> help "The default OR is KS <1,1,2> (Deg 90)."))
 
 parseInOut :: Parser (FilePath, FilePath)
 parseInOut = let
@@ -222,6 +235,7 @@ parseGomesGraph = let
      <*> parseInitCluster
      <*> parseStepCluster
      <*> parseBadAngle
+     <*> parseOR
 
 parseRefinementSteps :: Parser Word8
 parseRefinementSteps = option
