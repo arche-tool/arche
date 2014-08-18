@@ -14,6 +14,7 @@ import qualified Gamma.Strategy.GomesGraph  as GomesGraph
 import           System.Directory            (doesFileExist)
 import           Control.Monad               (when)
 import           Data.Word                   (Word8)
+import           Text.Read                   (readMaybe)
 
 import           Options.Applicative
 import           System.FilePath
@@ -172,7 +173,16 @@ parseORFitAll = let
      <*> parseInOut
      <*> parseORbyAvg
      <*> parseRenderORMap
-     <*> parseOR
+     <*> parseORs
+
+parseORs :: Parser [AxisPair]
+parseORs = let
+  func :: (Int, Int, Int, Double) -> AxisPair
+  func (v1, v2, v3, w) = mkAxisPair v (Deg w)
+      where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
+  in (map func <$> arguments readMaybe
+   (  metavar "[Double Double Double Double]"
+   <> help "The default OR is KS <1,1,2> (Deg 90)."))
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch

@@ -40,7 +40,7 @@ data Cfg =
   , base_output :: FilePath
   , optByAvg    :: Bool
   , renderORMap :: Bool
-  , moreOR      :: AxisPair
+  , moreOR      :: [AxisPair]
   } deriving (Show)
 
 run :: Cfg -> IO ()
@@ -64,9 +64,9 @@ run cfg@Cfg{..} = do
     realOR = findORFace segs ksOR
 
     doit (name, ror) = analyse cfg vbq qmap mkr segs name ror
-    inOR = OR $ toQuaternion moreOR
+    inOR = zip (map (("OR"++) . show) [1::Int ..]) (map (OR . toQuaternion) moreOR)
 
-  mapM_ doit $ [("Given", inOR), ("Calculated", realOR)]
+  mapM_ doit $ ("Calculated", realOR) : inOR
 
 analyse :: Cfg -> VoxBox Quaternion -> HashMap Int Quaternion -> MicroVoxel
         -> Vector (Quaternion, Quaternion) -> String -> OR -> IO ()
@@ -190,7 +190,7 @@ showOR :: OR -> IO ()
 showOR ror = let
   ap      = fromQuaternion (qOR ror)
   (v,w)   = axisAngle ap
-  (h,k,l) = aproxToIdealAxis v 0.01
+  (h,k,l) = aproxToIdealAxis v 0.001
   msg = "OR: " ++ show [h, k, l] ++ " " ++ show ((toAngle w):: Deg)
   in putStrLn msg
 
