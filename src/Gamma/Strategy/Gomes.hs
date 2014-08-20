@@ -270,7 +270,7 @@ testSingleFace vbq ors face = let
   (v1, v2) = getFaceVoxels face
   q1 = vbq #! v1
   q2 = vbq #! v2
-  in (fromAngle $ Deg 3) > misoOR ors Cubic q1 q2
+  in (fromAngle $ Deg 3) > misoDoubleOR ors Cubic q1 q2
 
 renderGB :: VoxBox Quaternion -> MicroVoxel -> [FaceID] -> VTK Vec3
 renderGB vb micro fs = addData $ renderAllElemProp vb fprop

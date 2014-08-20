@@ -105,7 +105,7 @@ testFace grains fid = let
   in dbgs (g1, g2) $ maybe False id test
 
 hasOR :: Quaternion -> Quaternion -> Bool
-hasOR q1 q2 = (fromAngle $ Deg 7.5) > misoKS Cubic q1 q2
+hasOR q1 q2 = (fromAngle $ Deg 7.5) > misoDoubleKS Cubic q1 q2
 
 renderGB :: VoxBox Quaternion -> MicroVoxel -> [FaceID] -> VTK Vec3
 renderGB vb micro fs = addData $ renderAllElemProp vb fprop

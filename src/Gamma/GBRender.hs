@@ -29,7 +29,7 @@ showGBMiso :: Symm -> RenderGB
 showGBMiso symm = RenderGB "Misorientation" (\q1 q2 -> unDeg $ toAngle $ (getMisoAngle symm q1 q2))
 
 showGBMisoKS :: Symm -> RenderGB
-showGBMisoKS symm = RenderGB "Misorientation KS" (\q1 q2 -> unDeg $ toAngle $ (misoKS symm q1 q2))
+showGBMisoKS symm = RenderGB "Misorientation KS" (\q1 q2 -> unDeg $ toAngle $ (misoDoubleKS symm q1 q2))
 
 -- =======================================================================================
 

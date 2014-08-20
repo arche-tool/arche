@@ -14,8 +14,10 @@ module Gamma.OR
        , hotStartOR
        , hotStartTesseract
        , FitError (avgError, devError, maxError)
-       , misoOR
-       , misoKS
+       , evalMisoOR
+       , misoSingleOR
+       , misoDoubleOR
+       , misoDoubleKS
        , singleerrorfunc
        , weightederrorfunc
        , uniformerrorfunc
@@ -107,16 +109,22 @@ genTS (OR t) = let
   vs = V.convert $ getAllSymmVec (getSymmOps Cubic) v
   in G.map (OR . mergeQuaternion . ((,) w)) vs
 
-misoKS :: Symm -> Quaternion -> Quaternion -> Double
-misoKS = misoOR ksORs
+misoDoubleKS :: Symm -> Quaternion -> Quaternion -> Double
+misoDoubleKS = misoDoubleOR ksORs
 
-misoOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
-misoOR ors symm q1 q2 = let
+misoDoubleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
+misoDoubleOR ors symm q1 q2 = let
   ks1 = U.map ((q1 #<=) . qOR) ors
   ks2 = U.map ((q2 #<=) . qOR) ors
   -- Fully correct. Need prove that works!
   foo q = U.map (getMisoAngle symm q) ks2
   in U.minimum $ U.concatMap foo ks1
+
+misoSingleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
+misoSingleOR ors symm q1 q2 = let
+  ks = U.map ((q2 #<=) . qOR) ors
+  -- Fully correct. Need prove that works!
+  in U.minimum $ U.map (getMisoAngle symm q1) ks
 
 data FitError
   = FitError
@@ -127,13 +135,18 @@ data FitError
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
 
+evalMisoOR :: Vector OR -> (Quaternion, Int) -> (Quaternion, Int) -> Double
+evalMisoOR ors (qa, pa) (qb, pb)
+  | pa == pb  = misoDoubleOR ors Cubic qa qb
+  | otherwise = misoSingleOR ors Cubic qa qb
+
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
-faceerrorfunc :: Vector (Quaternion, Quaternion) -> Vector OR -> FitError
+faceerrorfunc :: Vector ((Quaternion, Int), (Quaternion, Int)) -> Vector OR -> FitError
 faceerrorfunc ms ors = let
   n     = fromIntegral (G.length ms)
-  errs  = G.map (\(q1,q2) -> misoOR ors Cubic q1 q2) ms
+  errs  = G.map (\(q1,q2) -> evalMisoOR ors q1 q2) ms
   avg   = G.sum errs / n
   diff  = G.map ((\x->x*x) . ((-) avg)) errs
   dev   = sqrt (G.sum diff / n)
@@ -143,7 +156,7 @@ faceerrorfunc ms ors = let
      , maxError = toAngle (G.maximum errs)
      }
 
-findORFace :: Vector (Quaternion, Quaternion) -> OR -> OR
+findORFace :: Vector ((Quaternion, Int), (Quaternion, Int)) -> OR -> OR
 findORFace qs t0 = let
   func = fromAngle . avgError . faceerrorfunc qs .
          genTS . OR . toQuaternion . mkUnsafeRodrigues
@@ -262,34 +275,38 @@ singleerrorfunc productQ parentQ ors = let
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
 uniformerrorfunc :: Vector QuaternionFZ -> Quaternion-> Vector OR -> FitError
-uniformerrorfunc ms gamma ors = let
-  n     = fromIntegral (G.length ms)
-  errs  = G.map (\m -> unDeg $ singleerrorfunc m gamma ors) ms
-  avg   = G.sum errs / n
-  diff  = G.map ((\x->x*x) . ((-) avg)) errs
-  dev   = sqrt (G.sum diff / n)
-  in FitError
-     { avgError = Deg avg
-     , devError = Deg dev
-     , maxError = Deg (G.maximum errs)
-     }
+uniformerrorfunc ms gamma ors
+  | G.null ms = FitError 0 0 0
+  | otherwise = let
+    n     = fromIntegral (G.length ms)
+    errs  = G.map (\m -> unDeg $ singleerrorfunc m gamma ors) ms
+    avg   = G.sum errs / n
+    diff  = G.map ((\x->x*x) . ((-) avg)) errs
+    dev   = sqrt (G.sum diff / n)
+    in FitError
+       { avgError = Deg avg
+       , devError = Deg dev
+       , maxError = Deg (G.maximum errs)
+       }
 
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
 weightederrorfunc :: Vector Double -> Vector QuaternionFZ -> Quaternion-> Vector OR -> FitError
-weightederrorfunc ws ms gamma ors = let
-  errs = G.map (\m -> unDeg $ singleerrorfunc m gamma ors) ms
-  wt   = G.sum ws
-  wq   = G.zipWith (*) ws errs
-  diff = G.map ((\x->x*x) . ((-) avg)) errs
-  dev  = sqrt (G.sum (G.zipWith (*) ws diff) / wt)
-  avg  = G.sum wq / wt
-  in FitError
-     { avgError = Deg avg
-     , devError = Deg dev
-     , maxError = Deg (G.maximum wq / wt)
-     }
+weightederrorfunc ws ms gamma ors
+  | G.null ws || G.null ms = FitError 0 0 0
+  | otherwise = let
+    errs = G.map (\m -> unDeg $ singleerrorfunc m gamma ors) ms
+    wt   = G.sum ws
+    wq   = G.zipWith (*) ws errs
+    diff = G.map ((\x->x*x) . ((-) avg)) errs
+    dev  = sqrt (G.sum (G.zipWith (*) ws diff) / wt)
+    avg  = G.sum wq / wt
+    in FitError
+       { avgError = Deg avg
+       , devError = Deg dev
+       , maxError = Deg (G.maximum wq / wt)
+       }
 
 shitQAvg :: Vector Quaternion -> Quaternion
 shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)

@@ -19,6 +19,7 @@ import           Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
 import           Data.Vector.Unboxed (Vector)
 import           Data.HashMap.Strict (HashMap)
 import           Data.Word           (Word8)
+import           Data.Maybe          (mapMaybe)
 
 import           System.FilePath
 import           System.IO
@@ -64,6 +65,7 @@ data ProductGrain =
   { productVoxelPos       :: V.Vector Int
   , productAvgOrientation :: QuaternionFZ
   , productAvgPos         :: Vec3
+  , productPhase          :: Int
   } deriving (Show)
 
 data ParentGrain =
@@ -79,7 +81,7 @@ data GomesConfig
   { inputCfg          :: Cfg
   , realOR            :: OR
   , realORs           :: Vector OR
-  , orientationBox    :: VoxBox Quaternion
+  , orientationBox    :: VoxBox (Quaternion, Int)
   , grainIDBox        :: VoxBox GrainID
   , structureGraph    :: MicroVoxel
   , productGrains     :: HashMap Int ProductGrain
@@ -97,21 +99,22 @@ type Gomes = RWST GomesConfig () GomesState IO
 -- =======================================================================================
 
 --getGomesConfig :: FilePath -> Deg -> Word8 -> Double -> Double -> Deg
-getGomesConfig :: Cfg -> OR -> VoxBox Quaternion -> Maybe GomesConfig
-getGomesConfig cfg ror qBox = let
+getGomesConfig :: Cfg -> OR -> VoxBox (Quaternion, Int) -> Maybe GomesConfig
+getGomesConfig cfg ror qpBox = let
+  qBox = qpBox { grainID = U.map fst (grainID qpBox)}
   func (gidBox, voxMap) = let
     micro = fst $ getMicroVoxel (gidBox, voxMap)
     in GomesConfig
      { inputCfg       = cfg
      , realOR         = ror
      , realORs        = genTS ror
-     , orientationBox = qBox
+     , orientationBox = qpBox
      , grainIDBox     = gidBox
-     , productGrains  = getProductGrainData qBox voxMap
+     , productGrains  = getProductGrainData qpBox voxMap
      , structureGraph = micro
-     , productGraph   = graphWeight qBox micro ror
+     , productGraph   = graphWeight qpBox micro ror
      }
-  in fmap func (getGrainID (misoAngle cfg) Cubic qBox)
+  in fmap func (getGrainID' (misoAngle cfg) Cubic qpBox)
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
@@ -125,10 +128,10 @@ grainClustering = do
   cfg@GomesConfig{..} <- ask
   st@GomesState{..}   <- get
   -- run MCL
-  gg <- liftIO $ findClusters productGraph mclFactor
+  --gg <- liftIO $ findClusters productGraph mclFactor
   let
-    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
-    --gg = V.fromList $ runMCL cfgMCL productGraph
+    cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
+    gg = V.fromList $ runMCL cfgMCL productGraph
     ps = V.map (getParentGrainData cfg) gg
   put $ st { parentGrains = ps
            , mclFactor    = mclFactor * stepClusterFactor inputCfg
@@ -148,11 +151,12 @@ plotResults name = do
 
   attrAvgAIPF <- genProductVTKAttr (255,255,255) (getCubicIPFColor . productAvgOrientation . snd) "AlphaIPF"
   let
-    attrVoxAIPF = genVoxBoxAttr "VoxelAlpha" getCubicIPFColor orientationBox
+    attrVoxAIPF  = genVoxBoxAttr "VoxelAlpha" (getCubicIPFColor . fst) orientationBox
+    attrVoxPhase = genVoxBoxAttr "Phases" snd orientationBox
     vtkD  = renderVoxBoxVTK grainIDBox attrs
     attrs = [ attrIPF, attrGID, attrMID, attrAvgErr
             , attrDevErr, attrMaxErr, attrLocErr
-            , attrAvgAIPF, attrVoxAIPF ]
+            , attrAvgAIPF, attrVoxAIPF, attrVoxPhase ]
   liftIO $ plotVTK_D inputCfg (vtkD,  name)
 
 plotGraph :: Gomes ()
@@ -164,7 +168,7 @@ plotGraph = do
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ang <- parseANG ang_input
-  vbq <- case ebsdToVoxBox ang rotation of
+  vbq <- case ebsdToVoxBox ang (\p -> (rotation p, phaseNum p)) of
     Right x -> return x
     Left s  -> error s
   let
@@ -195,7 +199,8 @@ filterIsleGrains Graph{..} = let
   clean2  = L.foldl' foo clean1 singles
   in Graph clean2
 
-getFaceIDmisOR :: VoxBox Quaternion -> MicroVoxel -> Vector OR -> FaceID -> Maybe Double
+getFaceIDmisOR :: VoxBox (Quaternion, Int) -> MicroVoxel -> Vector OR
+               -> FaceID -> Maybe Double
 getFaceIDmisOR vbq micro ors fid = let
   facelist = getFaceProp fid micro >>= getPropValue
   func fs = let
@@ -204,12 +209,12 @@ getFaceIDmisOR vbq micro ors fid = let
     in dbgs fid $ (t / n) :: Double
   in func <$> facelist
 
-getFaceVoxelmisOR :: VoxBox Quaternion -> Vector OR -> FaceVoxelPos -> Double
+getFaceVoxelmisOR :: VoxBox (Quaternion, Int) -> Vector OR -> FaceVoxelPos -> Double
 getFaceVoxelmisOR vbq ors face = let
   (v1, v2) = getFaceVoxels face
   q1 = vbq #! v1
   q2 = vbq #! v2
-  in misoOR ors Cubic q1 q2
+  in evalMisoOR ors q1 q2
 
 -- TODO move to Hammer
 -- | Get both voxels that forms a given face.
@@ -218,7 +223,7 @@ getFaceVoxels (Fx pos) = (pos, pos #+# (VoxelPos (-1) 0 0))
 getFaceVoxels (Fy pos) = (pos, pos #+# (VoxelPos 0 (-1) 0))
 getFaceVoxels (Fz pos) = (pos, pos #+# (VoxelPos 0 0 (-1)))
 
-graphWeight :: VoxBox Quaternion -> MicroVoxel -> OR -> Graph Int Double
+graphWeight :: VoxBox (Quaternion, Int) -> MicroVoxel -> OR -> Graph Int Double
 graphWeight vbq micro withOR = let
   fs    = HM.keys $ microFaces micro
   ors   = genTS withOR
@@ -234,47 +239,53 @@ graphWeight vbq micro withOR = let
 
 -- ================================== Grain Data ===================================
 
-getProductGrainData :: VoxBox Quaternion ->
+getProductGrainData :: VoxBox (Quaternion, Int) ->
                        HashMap Int (V.Vector VoxelPos) ->
                        HashMap Int ProductGrain
 getProductGrainData vbq gmap = let
-  getAvgQ = getQinFZ . shitQAvg . V.convert . V.map (vbq #!)
+  getAvgQ = getQinFZ . shitQAvg . V.convert . V.map (fst . (vbq #!))
   getAvgPos v = let
     t = V.foldl' (&+) zero $ V.map (evalCentralVoxelPos vbq) v
     n = V.length v
     in t &* (1 / fromIntegral n)
   boxdim = dimension vbq
-  func x = ProductGrain
+  func gid x = ProductGrain
            { productVoxelPos       = V.map (boxdim %@) x
            , productAvgOrientation = getAvgQ x
            , productAvgPos         = getAvgPos x
+           , productPhase          = maybe (-1) id (getGrainPhase vbq gmap gid)
            }
-  in HM.map func gmap
+  in HM.mapWithKey func gmap
 
 getParentGrainData :: GomesConfig -> [Int] -> ParentGrain
 getParentGrainData GomesConfig{..} mids = let
-  getIS mid = maybe (V.empty) productVoxelPos (HM.lookup mid productGrains)
-  getQ  mid = maybe zerorot productAvgOrientation (HM.lookup mid productGrains)
+  getInfo mid = HM.lookup mid productGrains >>= \ProductGrain{..} ->
+    return (fromIntegral $ V.length productVoxelPos, productAvgOrientation, productPhase)
   -- Calculate parent's properties
-  (gamma, err) = getWGammaTess realORs ws qs
-  is = map (V.convert . getIS) mids
-  qs = U.map getQ (U.fromList mids)
-  ws = U.fromList (map (fromIntegral . U.length) is)
-  wt = U.sum ws
-  foo qi wi = let
+  info = U.fromList $ mapMaybe getInfo mids
+  wt   = U.foldl' (\acc (w,_,_) -> acc + w) 0 info
+  (gamma, err) = getWGammaTess realORs info
+  foo :: (Double, QuaternionFZ, Int) -> (Double, Deg)
+  foo (wi, qi, pi) = let
     gerr = singleerrorfunc qi gamma realORs
     in (wi / wt, gerr)
   in ParentGrain
      { productMembers        = mids
      , parentOrientation     = gamma
      , parentAvgErrorFit     = err
-     , parentErrorPerProduct = V.toList $ V.zipWith foo (U.convert qs) (V.convert ws)
+     , parentErrorPerProduct = map foo (U.toList info)
      }
 
-getWGammaTess :: Vector OR -> Vector Double -> Vector QuaternionFZ -> (Quaternion, FitError)
-getWGammaTess ors ws qs = (gamma, err)
+-- | Find the parent orientation from an set of products and remained parents. It takes
+-- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
+-- parent orientation and a list of product orientations.
+getWGammaTess :: Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
+getWGammaTess ors xs = (gamma, err)
   where
-    (g0, _, _) = hotStartTesseract ors qs
+    (gs, as) = U.partition (\(_,_,p) -> p == 1) xs
+    g0 | U.null gs = let (g, _, _) = hotStartTesseract ors qs in g
+       | otherwise = shitQAvg $ U.map (\(_,q,_) -> qFZ q) gs
+    (ws, qs, _) = U.unzip3 as
     errfunc = weightederrorfunc ws qs
     err     = errfunc gamma ors
     gamma   = findGamma errfunc g0 ors
@@ -330,12 +341,12 @@ refineParentGrain p@ParentGrain{..} = do
     graingraph   = getSubGraph productGraph productMembers
     badboys      = getBadGrains badFitAngle p
     graingraph2  = reinforceCluster badboys graingraph
-    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
-    --gg = V.fromList $ runMCL cfgMCL graingraph2
+    cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
+    gg = V.fromList $ runMCL cfgMCL graingraph2
   if goodParent badFitAngle p
     then return (V.singleton p)
     else do
-    gg <- liftIO $ findClusters graingraph2 mclFactor
+    --gg <- liftIO $ findClusters graingraph2 mclFactor
     liftIO $ print (gg, productMembers)
     return $ V.map (getParentGrainData cfg) gg
 
@@ -365,10 +376,10 @@ findClusters g i = do
 -- ====================================== Plotting =======================================
 
 plotVTK_D :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
-plotVTK_D Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
+plotVTK_D Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") False vtk
 
 plotVTK_V :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
-plotVTK_V Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtu") True vtk
+plotVTK_V Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtu") False vtk
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
                  String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
@@ -479,7 +490,7 @@ plotGroupSO3 = do
       (ws, qs) <- getGroupGrainsOrientations mids
       let
         (g1, err1, _) = getWGammaOR       realOR  ws qs
-        (g2, err2)    = getWGammaTess     realORs ws qs
+        (g2, err2)    = getWGammaTess     realORs $ U.zip3 ws qs (U.replicate (U.length ws) (-1))
         (g3, err3, t) = hotStartTesseract realORs qs
       liftIO $ putStrLn "---" >> print err1 >> print err2 >> print err3 >> print (g1,g2,g3) >> putStrLn "---"
       liftIO $ (fii (plotTesseract t) "-TESS" gid)

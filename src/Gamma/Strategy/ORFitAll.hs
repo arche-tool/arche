@@ -46,12 +46,12 @@ data Cfg =
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ang <- parseANG ang_input
-  vbq <- case ebsdToVoxBox ang rotation of
+  vbq <- case ebsdToVoxBox ang (\p -> (rotation p, phaseNum p)) of
     Right x -> return x
     Left s  -> error s
   gen <- initTFGen
   (gidBox, voxMap) <- maybe (error "No grain detected!") return
-                      (getGrainID misoAngle Cubic vbq)
+                      (getGrainID' misoAngle Cubic vbq)
   let
     mkr  = fst $ getMicroVoxel (gidBox, voxMap)
     qmap = getGrainAverageQ vbq voxMap
@@ -68,8 +68,8 @@ run cfg@Cfg{..} = do
 
   mapM_ doit $ ("Calculated", realOR) : inOR
 
-analyse :: Cfg -> VoxBox Quaternion -> HashMap Int Quaternion -> MicroVoxel
-        -> Vector (Quaternion, Quaternion) -> String -> OR -> IO ()
+analyse :: Cfg -> VoxBox (Quaternion, Int) -> HashMap Int (Quaternion, Int) -> MicroVoxel
+        -> Vector ((Quaternion, Int), (Quaternion, Int)) -> String -> OR -> IO ()
 analyse Cfg{..} vbq qmap mkr segs name ror = let
   err = faceerrorfunc segs (genTS ror)
   -- render VTK images
@@ -86,11 +86,11 @@ analyse Cfg{..} vbq qmap mkr segs name ror = let
 
 -- ================================== Find OR ============================================
 
-evalMisoORWithKS :: (Quaternion, Quaternion) -> Deg
-evalMisoORWithKS (q1, q2) = toAngle $ misoOR ksORs Cubic q1 q2
+evalMisoORWithKS :: ((Quaternion, Int), (Quaternion, Int)) -> Deg
+evalMisoORWithKS (q1, q2) = toAngle $ evalMisoOR ksORs q1 q2
 
-getGBbySegments :: VoxBox Quaternion -> MicroVoxel -> TFGen ->
-                   Int -> Vector (Quaternion, Quaternion)
+getGBbySegments :: VoxBox (Quaternion, Int) -> MicroVoxel -> TFGen
+                -> Int -> Vector ((Quaternion, Int), (Quaternion, Int))
 getGBbySegments vbq micro gen n = let
   gs = HM.elems $ microFaces micro
   fs = V.concat $ mapMaybe getPropValue gs
@@ -105,8 +105,8 @@ getFaceVoxels (Fx pos) = (pos, pos #+# (VoxelPos (-1) 0 0))
 getFaceVoxels (Fy pos) = (pos, pos #+# (VoxelPos 0 (-1) 0))
 getFaceVoxels (Fz pos) = (pos, pos #+# (VoxelPos 0 0 (-1)))
 
-getGBbyAverage :: HashMap Int Quaternion -> MicroVoxel -> TFGen ->
-                  Int -> Vector (Quaternion, Quaternion)
+getGBbyAverage :: HashMap Int (Quaternion, Int) -> MicroVoxel -> TFGen
+               -> Int -> Vector ((Quaternion, Int), (Quaternion, Int))
 getGBbyAverage qmap micro gen n = let
   fs = V.fromList $ HM.keys $ microFaces micro
   rs = take n $ randomRs (0, V.length fs - 1) gen
@@ -118,12 +118,15 @@ getGBbyAverage qmap micro gen n = let
       return (q1, q2)
   in U.fromList $ mapMaybe (foo . (fs V.!)) rs
 
-getGrainAverageQ :: VoxBox Quaternion ->
+getGrainAverageQ :: VoxBox (Quaternion, Int)->
                     HashMap Int (V.Vector VoxelPos) ->
-                    HashMap Int Quaternion
+                    HashMap Int (Quaternion, Int)
 getGrainAverageQ vbq gmap = let
-  getAvgQ = shitQAvg . V.convert . V.map (vbq #!)
-  in HM.map getAvgQ gmap
+  getAvgQ gid vs = let
+    q = shitQAvg $ V.convert $ V.map (fst . (vbq #!)) vs
+    p = maybe (-1) id (getGrainPhase vbq gmap gid)
+    in (q, p)
+  in HM.mapWithKey getAvgQ gmap
 
 -- ================================== Plotting ===========================================
 
@@ -141,7 +144,7 @@ avgVector x
   where
     n = fromIntegral $ V.length x
 
-renderFaceVoxelOR :: OR -> VoxBox Quaternion -> MicroVoxel -> VTK Vec3
+renderFaceVoxelOR :: OR -> VoxBox (Quaternion, Int) -> MicroVoxel -> VTK Vec3
 renderFaceVoxelOR ror vbq micro = let
   gs  = mapMaybe (getPropValue) $ HM.elems $ microFaces micro
   fs  = V.concat gs
@@ -152,7 +155,8 @@ renderFaceVoxelOR ror vbq micro = let
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoORAvg" func)
 
-renderGBOR :: OR -> VoxBox Quaternion -> HashMap Int Quaternion -> MicroVoxel -> VTK Vec3
+renderGBOR :: OR -> VoxBox (Quaternion, Int) -> HashMap Int (Quaternion, Int)
+           -> MicroVoxel -> VTK Vec3
 renderGBOR ror vbq qmap micro = let
   fids = HM.keys  $ microFaces micro
   vs   = HM.elems $ microFaces micro
@@ -164,21 +168,21 @@ renderGBOR ror vbq qmap micro = let
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoOR" func)
 
-faceVoxelMisoOR :: U.Vector OR -> VoxBox Quaternion -> FaceVoxelPos -> Double
+faceVoxelMisoOR :: U.Vector OR -> VoxBox (Quaternion, Int) -> FaceVoxelPos -> Double
 faceVoxelMisoOR ors vbq face = let
   (v1, v2) = getFaceVoxels face
   q1 = vbq #! v1
   q2 = vbq #! v2
-  in misoOR ors Cubic q1 q2
+  in evalMisoOR ors q1 q2
 
-faceMisoOR :: U.Vector OR -> HashMap Int Quaternion -> FaceID -> Double
+faceMisoOR :: U.Vector OR -> HashMap Int (Quaternion, Int) -> FaceID -> Double
 faceMisoOR ors qmap face = maybe pi id getM
   where
     (v1, v2) = unFaceID face
     getM = do
       q1 <- HM.lookup v1 qmap
       q2 <- HM.lookup v2 qmap
-      return $ misoOR ors Cubic q1 q2
+      return $ evalMisoOR ors q1 q2
 
 -- ================================== Results ============================================
 
