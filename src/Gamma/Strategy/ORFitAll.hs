@@ -164,7 +164,7 @@ renderGBOR ror vbq qmap micro = let
   ts   = genTS ror
   ms   = V.concat $ zipWith foo fids fs
   vtk  = renderVoxElemListVTK vbq (concatMap V.toList fs)
-  foo fid vf = V.replicate (V.length vf) (faceMisoOR ts qmap fid)
+  foo fid vf = V.replicate (V.length vf) ((180/pi) * faceMisoOR ts qmap fid)
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoOR" func)
 
