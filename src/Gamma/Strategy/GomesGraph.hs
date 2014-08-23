@@ -58,6 +58,7 @@ data Cfg =
   , stepClusterFactor :: Double
   , badAngle          :: Deg
   , withOR            :: AxisPair
+  , gammaPhaseID      :: Int
   } deriving (Show)
 
 data ProductGrain =
@@ -264,7 +265,7 @@ getParentGrainData GomesConfig{..} mids = let
   -- Calculate parent's properties
   info = U.fromList $ mapMaybe getInfo mids
   wt   = U.foldl' (\acc (w,_,_) -> acc + w) 0 info
-  (gamma, err) = getWGammaTess realORs info
+  (gamma, err) = getWGammaTess (gammaPhaseID inputCfg) realORs info
   foo :: (Double, QuaternionFZ, Int) -> (Double, Deg)
   foo (wi, qi, pi) = let
     gerr = singleerrorfunc qi gamma realORs
@@ -279,10 +280,10 @@ getParentGrainData GomesConfig{..} mids = let
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
-getWGammaTess :: Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
-getWGammaTess ors xs = (gamma, err)
+getWGammaTess :: Int -> Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
+getWGammaTess phaseID ors xs = (gamma, err)
   where
-    (gs, as) = U.partition (\(_,_,p) -> p == 1) xs
+    (gs, as) = U.partition (\(_,_,p) -> p == phaseID) xs
     g0 | U.null gs = let (g, _, _) = hotStartTesseract ors qs in g
        | otherwise = shitQAvg $ U.map (\(_,q,_) -> qFZ q) gs
     (ws, qs, _) = U.unzip3 as
@@ -489,8 +490,8 @@ plotGroupSO3 = do
     func (gid, mids) = do
       (ws, qs) <- getGroupGrainsOrientations mids
       let
-        (g1, err1, _) = getWGammaOR       realOR  ws qs
-        (g2, err2)    = getWGammaTess     realORs $ U.zip3 ws qs (U.replicate (U.length ws) (-1))
+        (g1, err1, _) = getWGammaOR     realOR  ws qs
+        (g2, err2)    = getWGammaTess 1 realORs $ U.zip3 ws qs (U.replicate (U.length ws) (-1))
         (g3, err3, t) = hotStartTesseract realORs qs
       liftIO $ putStrLn "---" >> print err1 >> print err2 >> print err3 >> print (g1,g2,g3) >> putStrLn "---"
       liftIO $ (fii (plotTesseract t) "-TESS" gid)

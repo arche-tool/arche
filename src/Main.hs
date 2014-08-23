@@ -247,6 +247,7 @@ parseGomesGraph = let
      <*> parseStepCluster
      <*> parseBadAngle
      <*> parseOR
+     <*> parseGammaID
 
 parseRefinementSteps :: Parser Word8
 parseRefinementSteps = option
@@ -282,6 +283,14 @@ parseBadAngle = ((Deg . abs) <$> option
    <> metavar "[Deg]"
    <> value 15
    <> help "The default error is 15 deg."))
+
+parseGammaID :: Parser Int
+parseGammaID = fromIntegral <$> option
+   (  long "gammaID"
+   <> short 'g'
+   <> metavar "Int"
+   <> value (1 :: Word8)
+   <> help "Gamma ID number from ANG file. Default 1")
 
 -- ======================================= Gomes =========================================
 
