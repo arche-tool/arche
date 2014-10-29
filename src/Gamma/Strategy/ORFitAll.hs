@@ -151,7 +151,7 @@ renderFaceVoxelOR ror vbq micro = let
   ms  = V.concat $ map (avgVector . getM) gs
   ts  = genTS ror
   vtk = renderVoxElemListVTK vbq (V.toList fs)
-  getM = V.map (faceVoxelMisoOR ts vbq)
+  getM = V.map (((180/pi) *) . faceVoxelMisoOR ts vbq)
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoORAvg" func)
 
