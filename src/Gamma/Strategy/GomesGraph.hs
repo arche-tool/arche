@@ -369,10 +369,12 @@ readGroups :: IO (V.Vector [Int])
 readGroups = readFile "test.out" >>= return . V.fromList . map (map read . words) . lines
 
 findClusters :: Graph Int Double -> Double -> IO (V.Vector [Int])
-findClusters g i = do
-  saveGraph g
-  runMCLIO i
-  readGroups
+findClusters g i
+  | null (graphToList g) = putStrLn "Warning: attempting to cluster the void" >> return (V.empty)
+  | otherwise = do
+    saveGraph g
+    runMCLIO i
+    readGroups
 
 -- ====================================== Plotting =======================================
 
