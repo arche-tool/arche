@@ -23,7 +23,7 @@ Executable gamma
   hs-source-dirs:    src
   Main-Is:           Main.hs
   Build-depends:     base                 == 4.*
-                   , optparse-applicative >= 0.5
+                   , optparse-applicative >= 0.10
                    , filepath             >= 1.3
                    , directory            >= 1.0
 

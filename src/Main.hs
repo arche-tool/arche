@@ -14,7 +14,6 @@ import qualified Gamma.Strategy.GomesGraph  as GomesGraph
 import           System.Directory            (doesFileExist)
 import           Control.Monad               (when)
 import           Data.Word                   (Word8)
-import           Text.Read                   (readMaybe)
 
 import           Options.Applicative
 import           System.FilePath
@@ -87,7 +86,7 @@ parseVTKOutputFile = (optional . strOption)
    <> help "VTK visualization.")
 
 parseMisoAngle :: Parser Deg
-parseMisoAngle = ((Deg . abs) <$> option
+parseMisoAngle = ((Deg . abs) <$> option auto
    (  long "grain-miso"
    <> short 'm'
    <> metavar "[Deg]"
@@ -99,7 +98,7 @@ parseOR = let
   func :: (Int, Int, Int, Double) -> AxisPair
   func (v1, v2, v3, w) = mkAxisPair v (Deg w)
       where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
-  in (func <$> option
+  in (func <$> option auto
    (  long "or"
    <> short 'r'
    <> metavar "[Double Double Double Double]"
@@ -180,9 +179,11 @@ parseORs = let
   func :: (Int, Int, Int, Double) -> AxisPair
   func (v1, v2, v3, w) = mkAxisPair v (Deg w)
       where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
-  in (map func <$> arguments readMaybe
-   (  metavar "[Double Double Double Double]"
-   <> help "The default OR is KS <1,1,2> (Deg 90)."))
+  reader :: Parser (Int, Int, Int, Double)
+  reader = argument auto
+           (  metavar "[Int Int Int Double]" <>
+              help "The default OR is KS <1,1,2> (Deg 90).")
+  in (map func <$> many reader)
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch
@@ -223,7 +224,7 @@ parseMiyamoto = let
      <*> parseInOut
 
 parseBoxSize :: Parser Int
-parseBoxSize = abs <$> option
+parseBoxSize = abs <$> option auto
    (  long "box-size"
    <> short 'b'
    <> metavar "Int"
@@ -250,7 +251,7 @@ parseGomesGraph = let
      <*> parseGammaID
 
 parseRefinementSteps :: Parser Word8
-parseRefinementSteps = option
+parseRefinementSteps = option auto
    (  long "refinement-steps"
    <> short 'n'
    <> metavar "Int"
@@ -258,7 +259,7 @@ parseRefinementSteps = option
    <> help "Number of refinement steps. Default 1")
 
 parseInitCluster :: Parser Double
-parseInitCluster = (min 1.2 . abs) <$> option
+parseInitCluster = (min 1.2 . abs) <$> option auto
    (  long "mcl-init-factor"
    <> short 's'
    <> metavar "Double"
@@ -269,7 +270,7 @@ parseStepCluster :: Parser Double
 parseStepCluster = let
   func :: Int -> Double
   func = (+ 1) . (/ 100) . fromIntegral . abs
-  in func <$> option
+  in func <$> option auto
    (  long "mcl-increase-factor"
    <> short 'x'
    <> metavar "Int[%]"
@@ -277,7 +278,7 @@ parseStepCluster = let
    <> help "Increase ratio of MCL factor. Default 5%")
 
 parseBadAngle :: Parser Deg
-parseBadAngle = ((Deg . abs) <$> option
+parseBadAngle = ((Deg . abs) <$> option auto
    (  long "bad-fit"
    <> short 'b'
    <> metavar "[Deg]"
@@ -285,7 +286,7 @@ parseBadAngle = ((Deg . abs) <$> option
    <> help "The default error is 15 deg."))
 
 parseGammaID :: Parser Int
-parseGammaID = fromIntegral <$> option
+parseGammaID = fromIntegral <$> option auto
    (  long "gammaID"
    <> short 'g'
    <> metavar "Int"
@@ -309,21 +310,21 @@ parseGomes = let
      <*> parseInOut
 
 parseGGAngle :: Parser Deg
-parseGGAngle = ((Deg . abs) <$> option
+parseGGAngle = ((Deg . abs) <$> option auto
    (  long "gg-angle"
    <> metavar "[Deg]"
    <> value 4
    <> help "The default error is 4 deg."))
 
 parseMGAngle :: Parser Deg
-parseMGAngle = ((Deg . abs) <$> option
+parseMGAngle = ((Deg . abs) <$> option auto
    (  long "mg-angle"
    <> metavar "[Deg]"
    <> value 4
    <> help "The default error is 4 deg."))
 
 parseMMAngle :: Parser Deg
-parseMMAngle = ((Deg . abs) <$> option
+parseMMAngle = ((Deg . abs) <$> option auto
    (  long "mm-angle"
    <> metavar "[Deg]"
    <> value 4
