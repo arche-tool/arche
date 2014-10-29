@@ -37,8 +37,6 @@ Executable gamma
                    , hmatrix              < 0.16
                    , monad-par            >= 0.3
                    , parallel             >= 3.1
-                   , deepseq              >= 1.1
-                   , primitive
                    , tf-random            >= 0.4
                    , mtl                  >= 2.1
                    , process              >= 1.2
