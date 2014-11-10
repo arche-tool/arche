@@ -38,6 +38,7 @@ import           Texture.Symmetry            (Symm (..), toFZ)
 import           Texture.IPF
 import           Texture.Orientation
 import           Texture.TesseractGrid
+import           Texture.ODF
 import           File.ANGReader
 
 import           Gamma.Grains
@@ -87,6 +88,7 @@ data GomesConfig
   , structureGraph    :: MicroVoxel
   , productGrains     :: HashMap Int ProductGrain
   , productGraph      :: Graph Int Double
+  , orientationGrid   :: ODF
   }
 
 data GomesState
@@ -114,6 +116,7 @@ getGomesConfig cfg ror qpBox = let
      , productGrains  = getProductGrainData qpBox voxMap
      , structureGraph = micro
      , productGraph   = graphWeight qpBox micro ror
+     , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
      }
   in fmap func (getGrainID' (misoAngle cfg) Cubic qpBox)
 
@@ -129,10 +132,10 @@ grainClustering = do
   cfg@GomesConfig{..} <- ask
   st@GomesState{..}   <- get
   -- run MCL
-  --gg <- liftIO $ findClusters productGraph mclFactor
+  gg <- liftIO $ findClusters productGraph mclFactor
   let
-    cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
-    gg = V.fromList $ runMCL cfgMCL productGraph
+    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
+    --gg = V.fromList $ runMCL cfgMCL productGraph
     ps = V.map (getParentGrainData cfg) gg
   put $ st { parentGrains = ps
            , mclFactor    = mclFactor * stepClusterFactor inputCfg
@@ -265,7 +268,8 @@ getParentGrainData GomesConfig{..} mids = let
   -- Calculate parent's properties
   info = U.fromList $ mapMaybe getInfo mids
   wt   = U.foldl' (\acc (w,_,_) -> acc + w) 0 info
-  (gamma, err) = getWGammaTess (gammaPhaseID inputCfg) realORs info
+  --(gamma, err) = getWGammaTess (gammaPhaseID inputCfg) realORs info
+  (gamma, err) = getWGammaKernel orientationGrid (gammaPhaseID inputCfg) realORs info
   foo :: (Double, QuaternionFZ, Int) -> (Double, Deg)
   foo (wi, qi, pi) = let
     gerr = singleerrorfunc qi gamma realORs
@@ -276,6 +280,18 @@ getParentGrainData GomesConfig{..} mids = let
      , parentAvgErrorFit     = err
      , parentErrorPerProduct = map foo (U.toList info)
      }
+
+-- | Find the parent orientation from an set of products and remained parents. It takes
+-- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
+-- parent orientation and a list of product orientations.
+getWGammaKernel :: ODF -> Int -> Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
+getWGammaKernel odf phaseID ors xs = (gamma, err1)
+  where
+    (was, wms) = U.partition (\(_,_,p) -> p == phaseID) xs
+    (gamma, err0) = gammaFinderKernel odf ors as ms
+    (wa, as, _) = U.unzip3 was
+    (wm, ms, _) = U.unzip3 wms
+    err1 = weightederrorfunc wm ms gamma ors
 
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
@@ -342,12 +358,12 @@ refineParentGrain p@ParentGrain{..} = do
     graingraph   = getSubGraph productGraph productMembers
     badboys      = getBadGrains badFitAngle p
     graingraph2  = reinforceCluster badboys graingraph
-    cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
-    gg = V.fromList $ runMCL cfgMCL graingraph2
+    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
+    --gg = V.fromList $ runMCL cfgMCL graingraph2
   if goodParent badFitAngle p
     then return (V.singleton p)
     else do
-    --gg <- liftIO $ findClusters graingraph2 mclFactor
+    gg <- liftIO $ findClusters graingraph2 mclFactor
     liftIO $ print (gg, productMembers)
     return $ V.map (getParentGrainData cfg) gg
 

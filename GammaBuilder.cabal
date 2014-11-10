@@ -28,7 +28,7 @@ Executable gamma
                    , directory            >= 1.0
 
                    , hammer               >= 0.4
-                   , sledge               >= 0.3.2
+                   , sledge               >= 0.4
                    , vector               >= 0.10
                    , bytestring           >= 0.10
                    , containers           >= 0.5

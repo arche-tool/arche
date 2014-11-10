@@ -22,6 +22,7 @@ module Gamma.OR
        , weightederrorfunc
        , uniformerrorfunc
        , faceerrorfunc
+       , gammaFinderKernel
          -- * Orientation Relationship
        , OR (..)
        , mkOR
@@ -63,6 +64,7 @@ import           Hammer.Math.Optimum
 import           Hammer.VTK
 import           Texture.HyperSphere
 import           Texture.TesseractGrid
+import           Texture.ODF
 
 import           Debug.Trace
 dbg a = trace (show a) a
@@ -274,7 +276,7 @@ singleerrorfunc productQ parentQ ors = let
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
-uniformerrorfunc :: Vector QuaternionFZ -> Quaternion-> Vector OR -> FitError
+uniformerrorfunc :: Vector QuaternionFZ -> Quaternion -> Vector OR -> FitError
 uniformerrorfunc ms gamma ors
   | G.null ms = FitError 0 0 0
   | otherwise = let
@@ -318,6 +320,18 @@ shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)
       i  = U.minIndex ms
       vi = quaterVec (qs U.! i)
       in mkQuaternion $ vi &+ (quaterVec avg)
+
+-- ================================= Gamma finder width kernel ===========================
+
+gammaFinderKernel :: ODF -> Vector OR -> Vector QuaternionFZ
+                  -> Vector QuaternionFZ -> (Quaternion, FitError)
+gammaFinderKernel odf ors rgs ms = (q, err)
+  where
+    func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
+    gs     = U.concatMap (func . qFZ) ms
+    odf1   = addPoints ((U.map qFZ rgs) U.++ gs) (resetODF odf)
+    (q, _) = getMaxOrientation odf1
+    err    = uniformerrorfunc ms q ors
 
 -- ===================================== Teseeract binning ===============================
 
