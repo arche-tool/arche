@@ -34,20 +34,18 @@ import           Hammer.VTK
 import           Hammer.Graph
 import           Hammer.MicroGraph
 
-import           Texture.Symmetry            (Symm (..), toFZ)
+import           Texture.Symmetry    (Symm (..))
 import           Texture.IPF
 import           Texture.Orientation
-import           Texture.TesseractGrid
 import           Texture.ODF
 import           File.ANGReader
 
 import           Gamma.Grains
 import           Gamma.OR
-import           Gamma.OMRender
 
-import Debug.Trace
-dbg a = trace (show a) a
-dbgs s a = trace (show s ++ " <=> " ++ show a) a
+--import Debug.Trace
+--dbg a = trace (show a) a
+--dbgs s a = trace (show s ++ " <=> " ++ show a) a
 
 data Cfg =
   Cfg
@@ -104,7 +102,6 @@ type Gomes = RWST GomesConfig () GomesState IO
 --getGomesConfig :: FilePath -> Deg -> Word8 -> Double -> Double -> Deg
 getGomesConfig :: Cfg -> OR -> VoxBox (Quaternion, Int) -> Maybe GomesConfig
 getGomesConfig cfg ror qpBox = let
-  qBox = qpBox { grainID = U.map fst (grainID qpBox)}
   func (gidBox, voxMap) = let
     micro = fst $ getMicroVoxel (gidBox, voxMap)
     in GomesConfig
@@ -163,12 +160,6 @@ plotResults name = do
             , attrAvgAIPF, attrVoxAIPF, attrVoxPhase ]
   liftIO $ plotVTK_D inputCfg (vtkD,  name)
 
-plotGraph :: Gomes ()
-plotGraph = do
-  GomesConfig{..} <- ask
-  vtkGGraph <- plotGrainGraph
-  liftIO $ plotVTK_V inputCfg (vtkGGraph,  "GrainGraph")
-
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ang <- parseANG ang_input
@@ -180,8 +171,6 @@ run cfg@Cfg{..} = do
     nref = fromIntegral refinementSteps
     doit = do
       grainClustering
-      --plotGraph
-      --plotGroupSO3
       plotResults "1st-step"
       replicateM_ nref clusteringRefinement
       plotResults "final-step"
@@ -210,7 +199,7 @@ getFaceIDmisOR vbq micro ors fid = let
   func fs = let
     t = V.sum $ V.map (getFaceVoxelmisOR vbq ors) fs
     n = fromIntegral $ V.length fs
-    in dbgs fid $ (t / n) :: Double
+    in (t / n) :: Double
   in func <$> facelist
 
 getFaceVoxelmisOR :: VoxBox (Quaternion, Int) -> Vector OR -> FaceVoxelPos -> Double
@@ -271,7 +260,7 @@ getParentGrainData GomesConfig{..} mids = let
   --(gamma, err) = getWGammaTess (gammaPhaseID inputCfg) realORs info
   (gamma, err) = getWGammaKernel orientationGrid (gammaPhaseID inputCfg) realORs info
   foo :: (Double, QuaternionFZ, Int) -> (Double, Deg)
-  foo (wi, qi, pi) = let
+  foo (wi, qi, _) = let
     gerr = singleerrorfunc qi gamma realORs
     in (wi / wt, gerr)
   in ParentGrain
@@ -285,13 +274,12 @@ getParentGrainData GomesConfig{..} mids = let
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
 getWGammaKernel :: ODF -> Int -> Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
-getWGammaKernel odf phaseID ors xs = (gamma, err1)
+getWGammaKernel odf phaseID ors xs = (gamma, err)
   where
     (was, wms) = U.partition (\(_,_,p) -> p == phaseID) xs
-    (gamma, err0) = gammaFinderKernel odf ors as ms
-    (wa, as, _) = U.unzip3 was
-    (wm, ms, _) = U.unzip3 wms
-    err1 = weightederrorfunc wm ms gamma ors
+    (gamma, err) = gammaFinderKernel odf ors as ms
+    (_, as, _) = U.unzip3 was
+    (_, ms, _) = U.unzip3 wms
 
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
@@ -395,10 +383,7 @@ findClusters g i
 -- ====================================== Plotting =======================================
 
 plotVTK_D :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
-plotVTK_D Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") False vtk
-
-plotVTK_V :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
-plotVTK_V Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtu") False vtk
+plotVTK_D Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
                  String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
@@ -454,87 +439,7 @@ genParentVTKAttr nullvalue func name = do
       return m
   return $ mkPointAttr name (vattr U.!)
 
-plotGrainGraph :: Gomes (VTK Vec3)
-plotGrainGraph = do
-  GomesConfig{..} <- ask
-  GomesState{..}  <- get
-  let
-    maxi = maximum $ HM.keys productGrains
-    ps   = map (\(k, v) -> (k, productAvgPos v)) (HM.toList productGrains)
-    ns   = U.replicate (maxi+1) zero U.// ps
-    (es, vs) = unzip $ graphToList productGraph
-    vtk = mkUGVTK "graph" ns es [] [attr]
-    vv  = V.fromList vs
-    attr = mkCellAttr "misoOR" (\i _ _ -> vv V.! i)
-  return vtk
-
-plotFitSO3 :: Quaternion -> [Int] -> Vector Quaternion -> Gomes (VTK Vec3, VTK Vec3, VTK Vec3)
-plotFitSO3 gamma mids ms = do
-  GomesConfig{..} <- ask
-  GomesState{..}  <- get
-  let
-    ggid = U.singleton (mkGrainID $ -5)
-    as   = U.map (toFZ Cubic . (gamma #<=) . qOR) realORs
-    agid = U.replicate (U.length as) (mkGrainID $ -10)
-    mgid = U.map mkGrainID $ U.fromList mids
-    vtkSO3_m = renderSO3Points Cubic ND mgid ms
-    vtkSO3_g = renderSO3Points Cubic ND ggid (U.singleton gamma)
-    vtkSO3_a = renderSO3Points Cubic ND agid as
-  return (vtkSO3_m, vtkSO3_g, vtkSO3_a)
-
-plotHotSpotSO3 :: Quaternion -> [Int] -> Vector Quaternion -> Gomes (VTK Vec3, VTK Vec3, Vector Quaternion)
-plotHotSpotSO3 gamma mids ms = do
-  GomesConfig{..} <- ask
-  GomesState{..}  <- get
-  let
-    func m = U.map (toFZ Cubic . (m #<=) . qOR) realORs
-    ggid = U.singleton (mkGrainID $ -5)
-    as   = U.concatMap func ms
-    agid = U.replicate (U.length as) (mkGrainID $ -1)
-    vtkSO3_a = renderSO3Points Cubic ND agid as
-    vtkSO3_g = renderSO3Points Cubic ND ggid (U.singleton gamma)
-  return (vtkSO3_g, vtkSO3_a, as)
-
-plotGroupSO3 :: Gomes ()
-plotGroupSO3 = do
-  GomesConfig{..} <- ask
-  GomesState{..}  <- get
-  let
-    outputDir = base_output inputCfg
-    foo vtk name gid = writeUniVTKfile ( outputDir ++ "gid_" ++
-                                         show gid  ++ name <.> "vtu" ) True vtk
-    fii vtk name gid = writeUniVTKfile ( outputDir ++ "gid_" ++
-                                         show gid  ++ name <.> "vti" ) True vtk
-    func (gid, mids) = do
-      (ws, qs) <- getGroupGrainsOrientations mids
-      let
-        (g1, err1, _) = getWGammaOR     realOR  ws qs
-        (g2, err2)    = getWGammaTess 1 realORs $ U.zip3 ws qs (U.replicate (U.length ws) (-1))
-        (g3, err3, t) = hotStartTesseract realORs qs
-      liftIO $ putStrLn "---" >> print err1 >> print err2 >> print err3 >> print (g1,g2,g3) >> putStrLn "---"
-      liftIO $ (fii (plotTesseract t) "-TESS" gid)
-      --(vtk_m, vtk_g, vtk_a) <- plotFitSO3 gamma mids qs
-      --(vtk_g, vtk_a, as) <- plotHotSpotSO3 gamma mids qs
-      --liftIO $ saveText as gid
-      --liftIO (foo vtk_m "-SO3-alpha"      gid)
-      --liftIO (foo vtk_g "-SO3-gamma"      gid)
-      --liftIO (foo vtk_a "-SO3-simu_alpha" gid)
-  --V.mapM_ func $ V.imap (,) parentGrains
-  return()
-
 getCubicIPFColor :: (Rot q)=> q -> (Word8, Word8, Word8)
 getCubicIPFColor = let
   unColor (RGBColor rgb) = rgb
   in unColor . getRGBColor . snd . getIPFColor Cubic ND . convert
-
-getGroupGrainsOrientations :: [Int] -> Gomes (Vector Double, Vector QuaternionFZ)
-getGroupGrainsOrientations mids = do
-  GomesConfig{..} <- ask
-  GomesState{..}  <- get
-  let
-    getIS gid = maybe (V.empty) productVoxelPos (HM.lookup gid productGrains)
-    getQ  gid = maybe zerorot productAvgOrientation (HM.lookup gid productGrains)
-    is  = map (V.convert . getIS) mids
-    ws  = U.fromList (map (fromIntegral . U.length) is)
-    qs  = U.map getQ (U.fromList mids)
-  return (ws, qs)
