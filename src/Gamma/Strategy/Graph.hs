@@ -8,6 +8,8 @@ module Gamma.Strategy.Graph
 
 import qualified Data.Vector.Unboxed as U
 
+import           Data.Word
+
 import           Hammer.VoxBox
 import           Hammer.VoxConn
 import           Hammer.VTK.VoxBox
@@ -17,8 +19,10 @@ import           Hammer.MicroGraph
 import           File.ANGReader
 import           Texture.Symmetry
 import           Texture.Orientation
+import           Texture.IPF
 
 import           Gamma.Grains
+import           Gamma.OMRender
 
 data Cfg =
   Cfg
@@ -27,17 +31,33 @@ data Cfg =
   , base_output :: FilePath
   } deriving (Show)
 
+
+genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
+                 String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
+genVoxBoxAttr name func qBox = mkPointAttr name (func . ((grainID qBox) U.!))
+
+getCubicIPFColor :: (Rot q)=> q -> (Word8, Word8, Word8)
+getCubicIPFColor = let
+  unColor (RGBColor rgb) = rgb
+  in unColor . getRGBColor . snd . getIPFColor Cubic ND . toQuaternion
+
 run :: Cfg -> IO ()
 run Cfg{..} = do
   ang <- parseANG ang_input
+  vbp <- case ebsdToVoxBox ang phaseNum of
+    Right x -> return x
+    Left s  -> error s
   vbq <- case ebsdToVoxBox ang rotation of
     Right x -> return x
     Left s  -> error s
-  case getGrainID misoAngle Cubic vbq of
+  case getGrainID misoAngle Cubic (vbq) of
     Nothing -> print "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg
-      attrs = [mkPointAttr "GrainID" (unGrainID . ((grainID gids) U.!))]
+      attrGID   = genVoxBoxAttr "GrainID" unGrainID gids
+      attrIPF   = genVoxBoxAttr "IPF"   getCubicIPFColor vbq
+      attrPhase = genVoxBoxAttr "Phase" id vbp
+      attrs = [attrGID, attrIPF, attrPhase]
       in do
         writeUniVTKfile (base_output ++ ".vtr")        True $ renderVoxBoxVTK      gids attrs
         writeUniVTKfile (base_output ++ "_faces.vtu")  True $ renderMicroFacesVTK  gids micro
