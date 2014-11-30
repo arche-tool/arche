@@ -145,7 +145,7 @@ seeResults = do
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ang <- parseANG ang_input
-  vbq <- case ebsdToVoxBox ang rotation of
+  vbq <- case angToVoxBox ang rotation of
     Right x -> return x
     Left s  -> error s
   let plot (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk

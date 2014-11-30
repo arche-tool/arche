@@ -47,7 +47,7 @@ data Cfg =
 run :: Cfg -> IO ()
 run Cfg{..} = do
   ang <- parseANG ang_input
-  vbq <- case ebsdToVoxBox ang rotation of
+  vbq <- case angToVoxBox ang rotation of
     Right x -> return x
     Left s  -> error s
   case getGrainID misoAngle Cubic vbq of

@@ -31,11 +31,11 @@ import           Texture.HyperSphere
 
 -- =======================================================================================
 
-data RenderOM = forall a . RenderElemVTK a => RenderOM String (EBSDpoint -> a)
+data RenderOM = forall a . RenderElemVTK a => RenderOM String (ANGpoint -> a)
               | forall a . RenderElemVTK a => RenderAlterMap String (Int -> a)
 
 showOMQI :: RenderOM
-showOMQI = RenderOM "QI" qi
+showOMQI = RenderOM "IQ" iq
 
 showOMCI :: RenderOM
 showOMCI = RenderOM "CI" ci
@@ -56,15 +56,16 @@ showGrainIDs gids = let
 
 -- =======================================================================================
 
-renderOM :: [RenderOM] -> EBSDdata -> VTK Double
-renderOM fs EBSDdata{..}
+renderOM :: [RenderOM] -> ANGdata -> VTK Double
+renderOM fs ANGdata{..}
   | not hexGrid = vtk
   | otherwise   = error "[ImageRender] Improper square grid ANG file."
   where
-    EBSDinfo{..}    = ebsdInfo
-    Gridinfo{..}    = grid
+    ANGinfo{..} = ebsdInfo
+    ANGgrid{..} = grid
     (row, cEven, _) = rowCols
     (stepX, stepY)  = xystep
+    (xstart, ystart, zstart) = origin
     vtk = mkSPVTK "OM map"
           (cEven , row   , 1     )
           (xstart, ystart, zstart)
@@ -73,8 +74,8 @@ renderOM fs EBSDdata{..}
     getAttr (RenderOM       name func) = mkPointAttr name (func . (nodes V.!))
     getAttr (RenderAlterMap name func) = mkPointAttr name func
 
-getOriGID :: EBSDdata -> VoxBox GrainID -> (Vector Quaternion, Vector GrainID)
-getOriGID EBSDdata{..} vboxgid = let
+getOriGID :: ANGdata -> VoxBox GrainID -> (Vector Quaternion, Vector GrainID)
+getOriGID ANGdata{..} vboxgid = let
   is   = V.convert $ V.findIndices ((> 0.1) . ci) nodes
   gids = U.map ((grainID vboxgid) U.!)  is
   qs   = U.map (rotation . (nodes V.!)) is

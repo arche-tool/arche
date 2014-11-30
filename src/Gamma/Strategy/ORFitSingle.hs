@@ -34,7 +34,7 @@ data Cfg =
 run :: Cfg -> IO ()
 run Cfg{..} = do
   ang <- parseANG ang_input
-  vbq <- case ebsdToVoxBox ang rotation of
+  vbq <- case angToVoxBox ang rotation of
     Right x -> return x
     Left s  -> error s
   case getGrainID misoAngle Cubic vbq of
@@ -70,8 +70,8 @@ run Cfg{..} = do
         writeUniVTKfile (base_output <.> "SO3-gamma" <.> "vtu") True vtkSO3_g
         writeUniVTKfile (base_output <.> "SO3-alpha" <.> "vtu") True vtkSO3_a
 
-getGammaOR2 :: EBSDdata -> (Quaternion, OR)
-getGammaOR2 EBSDdata{..} = (gf, tf)
+getGammaOR2 :: ANGdata -> (Quaternion, OR)
+getGammaOR2 ANGdata{..} = (gf, tf)
   where
     is = U.convert $ V.findIndices ((> 0.1) . ci) nodes
     qs = U.map (rotation . (nodes V.!)) is
@@ -79,8 +79,8 @@ getGammaOR2 EBSDdata{..} = (gf, tf)
     g0 = hotStartGamma ef
     (gf, tf) = findGammaOR ef g0 ksOR
 
-getGammaOR :: Int -> EBSDdata -> (Quaternion, OR)
-getGammaOR n EBSDdata{..} = go n t0
+getGammaOR :: Int -> ANGdata -> (Quaternion, OR)
+getGammaOR n ANGdata{..} = go n t0
   where
     t0 = mkOR (Vec3 1 1 2) (Deg 90)
     is = V.convert $ V.findIndices ((> 0.1) . ci) nodes
@@ -94,8 +94,8 @@ getGammaOR n EBSDdata{..} = go n t0
       | k <= 0    = (findGamma ef g0 (genTS t), convert t)
       | otherwise = go (k-1) (func t)
 
-getGamma :: EBSDdata -> Quaternion
-getGamma EBSDdata{..} = let
+getGamma :: ANGdata -> Quaternion
+getGamma ANGdata{..} = let
   is = V.convert $ V.findIndices ((> 0.1) . ci) nodes
   qs = U.map (rotation . (nodes V.!)) is
   ef = uniformerrorfunc (U.map getQinFZ qs)

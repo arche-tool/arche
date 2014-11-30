@@ -46,7 +46,7 @@ data Cfg =
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ang <- parseANG ang_input
-  vbq <- case ebsdToVoxBox ang (\p -> (rotation p, phaseNum p)) of
+  vbq <- case angToVoxBox ang (\p -> (rotation p, phaseNum p)) of
     Right x -> return x
     Left s  -> error s
   gen <- initTFGen
