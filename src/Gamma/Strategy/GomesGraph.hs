@@ -73,8 +73,16 @@ data ParentGrain =
   { productMembers        :: [Int]
   , parentOrientation     :: Quaternion
   , parentAvgErrorFit     :: FitError
-  , parentErrorPerProduct :: [(Double, Deg)]
+  , parentErrorPerProduct :: [ParentProductFit]
   } deriving (Show)
+
+data ParentProductFit
+  = ParentProductFit
+  { areaFraction  :: {-# UNPACK #-} !Double
+  , misfitAngle   :: Deg
+  , variantNumber :: {-# UNPACK #-} !Int
+  } deriving (Show)
+
 
 data GomesConfig
   = GomesConfig
@@ -147,8 +155,9 @@ plotResults name = do
   attrDevErr <- genParentVTKAttr (-1) (unDeg . devError . parentAvgErrorFit . snd) "DevError"
   attrMaxErr <- genParentVTKAttr (-1) (unDeg . maxError . parentAvgErrorFit . snd) "MaxError"
 
-  attrMID    <- genLocalErrorVTKAttr (-1) fst           "ProductGrainAreaFraction"
-  attrLocErr <- genLocalErrorVTKAttr (-1) (unDeg . snd) "ErrorPerProduct"
+  attrMID    <- genLocalErrorVTKAttr (-1) areaFraction          "ProductGrainAreaFraction"
+  attrORVar  <- genLocalErrorVTKAttr (-1) variantNumber         "VariantNumber"
+  attrLocErr <- genLocalErrorVTKAttr (-1) (unDeg . misfitAngle) "ErrorPerProduct"
 
   attrAvgAIPF <- genProductVTKAttr (255,255,255) (getCubicIPFColor . productAvgOrientation . snd) "AlphaIPF"
   let
@@ -157,7 +166,8 @@ plotResults name = do
     vtkD  = renderVoxBoxVTK grainIDBox attrs
     attrs = [ attrIPF, attrGID, attrMID, attrAvgErr
             , attrDevErr, attrMaxErr, attrLocErr
-            , attrAvgAIPF, attrVoxAIPF, attrVoxPhase ]
+            , attrAvgAIPF, attrVoxAIPF, attrVoxPhase
+            , attrORVar ]
   liftIO $ plotVTK_D inputCfg (vtkD,  name)
 
 run :: Cfg -> IO ()
@@ -259,10 +269,10 @@ getParentGrainData GomesConfig{..} mids = let
   wt   = U.foldl' (\acc (w,_,_) -> acc + w) 0 info
   --(gamma, err) = getWGammaTess (gammaPhaseID inputCfg) realORs info
   (gamma, err) = getWGammaKernel orientationGrid (gammaPhaseID inputCfg) realORs info
-  foo :: (Double, QuaternionFZ, Int) -> (Double, Deg)
+  foo :: (Double, QuaternionFZ, Int) -> ParentProductFit
   foo (wi, qi, _) = let
-    gerr = singleerrorfunc qi gamma realORs
-    in (wi / wt, gerr)
+    (gerr, nvar) = singleerrorfunc qi gamma realORs
+    in ParentProductFit (wi / wt) gerr nvar
   in ParentGrain
      { productMembers        = mids
      , parentOrientation     = gamma
@@ -317,14 +327,14 @@ clusteringRefinement = do
 goodParent :: Deg -> ParentGrain -> Bool
 goodParent badW ParentGrain{..} = badarea < 0.1
   where
-    offlimit = filter ((> badW) . snd) parentErrorPerProduct
-    badarea  = sum $ map fst offlimit
+    offlimit = filter ((> badW) . misfitAngle) parentErrorPerProduct
+    badarea  = sum $ map areaFraction offlimit
 
 getBadGrains :: Deg -> ParentGrain -> [Int]
 getBadGrains badW ParentGrain{..} = map fst bads
   where
     errs = zip productMembers parentErrorPerProduct
-    bads = filter ((> badW) . snd . snd) errs
+    bads = filter ((> badW) . misfitAngle . snd) errs
 
 reinforceCluster :: [Int] -> Graph Int Double -> Graph Int Double
 reinforceCluster ns Graph{..} = let
@@ -405,7 +415,7 @@ genProductVTKAttr nullvalue func name = do
   return $ mkPointAttr name (vec U.!)
 
 genLocalErrorVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=>
-                        a -> ((Double, Deg) -> a) -> String -> Gomes (VTKAttrPoint b)
+                        a -> (ParentProductFit -> a) -> String -> Gomes (VTKAttrPoint b)
 genLocalErrorVTKAttr nullvalue func name = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get

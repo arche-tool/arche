@@ -266,12 +266,14 @@ hotStartOR errf q = let
   i = V.minIndex $ V.map foo ts
   in ts V.! i
 
-singleerrorfunc :: QuaternionFZ -> Quaternion-> Vector OR -> Deg
+singleerrorfunc :: QuaternionFZ -> Quaternion-> Vector OR -> (Deg, Int)
 singleerrorfunc productQ parentQ ors = let
-  toAng = toAngle . (2 *) . acosSafe
   func gm1 gm2 = abs $ composeQ0 (invert gm2) (qFZ gm1)
-  qps = G.map (toFZ Cubic . (parentQ #<=) . qOR) ors
-  in toAng $ G.maximum $ G.map (func productQ) qps
+  toAng = toAngle . (2 *) . acosSafe
+  qps   = G.map (toFZ Cubic . (parentQ #<=) . qOR) ors
+  ps    = G.map (func productQ) qps
+  imax  = G.maxIndex ps
+  in (toAng (ps G.! imax), imax)
 
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
@@ -281,7 +283,7 @@ uniformerrorfunc ms gamma ors
   | G.null ms = FitError 0 0 0
   | otherwise = let
     n     = fromIntegral (G.length ms)
-    errs  = G.map (\m -> unDeg $ singleerrorfunc m gamma ors) ms
+    errs  = G.map (\m -> unDeg $ fst $ singleerrorfunc m gamma ors) ms
     avg   = G.sum errs / n
     diff  = G.map ((\x->x*x) . ((-) avg)) errs
     dev   = sqrt (G.sum diff / n)
@@ -298,7 +300,7 @@ weightederrorfunc :: Vector Double -> Vector QuaternionFZ -> Quaternion-> Vector
 weightederrorfunc ws ms gamma ors
   | G.null ws || G.null ms = FitError 0 0 0
   | otherwise = let
-    errs = G.map (\m -> unDeg $ singleerrorfunc m gamma ors) ms
+    errs = G.map (\m -> unDeg $ fst $ singleerrorfunc m gamma ors) ms
     wt   = G.sum ws
     wq   = G.zipWith (*) ws errs
     diff = G.map ((\x->x*x) . ((-) avg)) errs

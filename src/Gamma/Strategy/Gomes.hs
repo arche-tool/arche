@@ -20,8 +20,7 @@ import           Data.Maybe          (mapMaybe)
 
 import           System.FilePath
 import           Control.Parallel.Strategies
-import           Control.Monad.RWS   (RWS(..), ask, get, put, runRWS, evalRWS)
-import           Control.Monad.Trans
+import           Control.Monad.RWS   (RWS, ask, get, put, evalRWS)
 import           Control.Monad (liftM)
 
 import           Hammer.Math.Algebra         (Vec3(..), Vec4(..))
@@ -303,10 +302,10 @@ tryMergeSingle ang fs = do
   let
     func (g1, g2) = case (groupOrientation V.! g1, groupOrientation V.! g2) of
       (Product q1, Parent  q2) -> let
-        err = singleerrorfunc (getQinFZ q1) q2 realORs
+        err = fst $ singleerrorfunc (getQinFZ q1) q2 realORs
         in dbgs "MG: " $ ang > err
       (Parent  q1, Product q2) -> let
-        err = singleerrorfunc (getQinFZ q2) q1 realORs
+        err = fst $ singleerrorfunc (getQinFZ q2) q1 realORs
         in dbgs "GM: " $ ang > err
       _                        -> False
   return $ filter func fs
