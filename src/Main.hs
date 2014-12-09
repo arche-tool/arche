@@ -4,11 +4,7 @@
 module Main where
 
 import qualified Gamma.Strategy.Graph       as Graph
-import qualified Gamma.Strategy.ORFitSingle as ORFitSingle
 import qualified Gamma.Strategy.ORFitAll    as ORFitAll
-import qualified Gamma.Strategy.Cayron      as Cayron
-import qualified Gamma.Strategy.Miyamoto    as Miyamoto
-import qualified Gamma.Strategy.Gomes       as Gomes
 import qualified Gamma.Strategy.GomesGraph  as GomesGraph
 
 import           System.Directory            (doesFileExist)
@@ -36,24 +32,12 @@ parseMode = subparser
  ( command "graph"
    (info (RunMode <$> parseShowGraph)
    (progDesc "Render grain's ID, vertexes, edges and faces."))
- <> command "orfit-single"
-   (info (RunMode <$> parseORFitSingle)
-   (progDesc "Fit OR on all points where ci > 0.1"))
  <> command "orfit-all"
    (info (RunMode <$> parseORFitAll)
    (progDesc "Fit OR on all grain boundaries."))
- <> command "myiamoto"
-   (info (RunMode <$> parseMiyamoto)
-   (progDesc "Reconstruction based on Myiamoto's method."))
- <> command "cayron"
-   (info (RunMode <$> parseCayron)
-   (progDesc "Reconstruction based on Cayron's method."))
- <> command "gomes"
-   (info (RunMode <$> parseGomes)
-   (progDesc "Reconstruction based on Gomes's method."))
  <> command "gomes-graph"
    (info (RunMode <$> parseGomesGraph)
-   (progDesc "Reconstruction based on Gomes's method(graph clustering)."))
+   (progDesc "Reconstruction based on Gomes's method (graph clustering)."))
  )
 
 main :: IO ()
@@ -145,19 +129,6 @@ parseShowGraph = let
      <$> parseMisoAngle
      <*> parseInOut
 
--- ===================================== OR Fit Single ===================================
-
-instance ParserCmdLine ORFitSingle.Cfg where
-  runAlgo  = ORFitSingle.run
-  validate = testInputFile ORFitSingle.ang_input
-
-parseORFitSingle :: Parser ORFitSingle.Cfg
-parseORFitSingle = let
-  func m (fin, fout) = ORFitSingle.Cfg m fin fout
-  in func
-     <$> parseMisoAngle
-     <*> parseInOut
-
 -- ======================================= OR Fit All ====================================
 
 instance ParserCmdLine ORFitAll.Cfg where
@@ -196,40 +167,6 @@ parseRenderORMap = switch
    (  long "vtk"
    <> short 'v'
    <> help "Renders grain boundaries map with OR misorientation values.")
-
--- ========================================= Cayron ======================================
-
-instance ParserCmdLine Cayron.Cfg where
-  runAlgo  = Cayron.run
-  validate = testInputFile Cayron.ang_input
-
-parseCayron :: Parser Cayron.Cfg
-parseCayron = let
-  func m (fin, fout) = Cayron.Cfg m fin fout
-  in func
-     <$> parseMisoAngle
-     <*> parseInOut
-
--- ======================================= Miyamoto ======================================
-
-instance ParserCmdLine Miyamoto.Cfg where
-  runAlgo  = Miyamoto.run
-  validate = testInputFile Miyamoto.ang_input
-
-parseMiyamoto :: Parser Miyamoto.Cfg
-parseMiyamoto = let
-  func b (fin, fout) = Miyamoto.Cfg b fin fout
-  in func
-     <$> parseBoxSize
-     <*> parseInOut
-
-parseBoxSize :: Parser Int
-parseBoxSize = abs <$> option auto
-   (  long "box-size"
-   <> short 'b'
-   <> metavar "Int"
-   <> value 1
-   <> help "Length in voxels of the scanning box. Default 1")
 
 -- ================================== GomesGraph =========================================
 
@@ -292,40 +229,3 @@ parseGammaID = fromIntegral <$> option auto
    <> metavar "Int"
    <> value (1 :: Word8)
    <> help "Gamma ID number from ANG file. Default 1")
-
--- ======================================= Gomes =========================================
-
-instance ParserCmdLine Gomes.Cfg where
-  runAlgo  = Gomes.run
-  validate = testInputFile Gomes.ang_input
-
-parseGomes :: Parser Gomes.Cfg
-parseGomes = let
-  func m gg mg mm (fin, fout) = Gomes.Cfg m gg mg mm fin fout
-  in func
-     <$> parseMisoAngle
-     <*> parseGGAngle
-     <*> parseMGAngle
-     <*> parseMMAngle
-     <*> parseInOut
-
-parseGGAngle :: Parser Deg
-parseGGAngle = ((Deg . abs) <$> option auto
-   (  long "gg-angle"
-   <> metavar "[Deg]"
-   <> value 4
-   <> help "The default error is 4 deg."))
-
-parseMGAngle :: Parser Deg
-parseMGAngle = ((Deg . abs) <$> option auto
-   (  long "mg-angle"
-   <> metavar "[Deg]"
-   <> value 4
-   <> help "The default error is 4 deg."))
-
-parseMMAngle :: Parser Deg
-parseMMAngle = ((Deg . abs) <$> option auto
-   (  long "mm-angle"
-   <> metavar "[Deg]"
-   <> value 4
-   <> help "The default error is 4 deg."))
