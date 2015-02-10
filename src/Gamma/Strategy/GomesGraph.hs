@@ -434,7 +434,11 @@ genLocalErrorVTKAttr nullvalue func name = do
 
 genParentVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=>
                     a -> ((Int, ParentGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
-genParentVTKAttr nullvalue func name = do
+genParentVTKAttr nul f name = func <$> genParentMatrixAttr nul f
+  where func = mkPointAttr name . (U.!)
+
+genParentMatrixAttr :: (U.Unbox a)=> a -> ((Int, ParentGrain) -> a) -> Gomes (U.Vector a)
+genParentMatrixAttr nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
@@ -447,7 +451,7 @@ genParentVTKAttr nullvalue func name = do
       m <- MU.replicate nvox nullvalue
       V.mapM_ (fill m) (V.imap (,) parentGrains)
       return m
-  return $ mkPointAttr name (vattr U.!)
+  return vattr
 
 getCubicIPFColor :: (Rot q)=> q -> (Word8, Word8, Word8)
 getCubicIPFColor = let
