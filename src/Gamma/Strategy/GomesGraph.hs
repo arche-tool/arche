@@ -305,14 +305,6 @@ getWGammaTess phaseID ors xs = (gamma, err)
     err     = errfunc gamma ors
     gamma   = findGamma errfunc g0 ors
 
-getWGammaOR :: OR -> Vector Double -> Vector QuaternionFZ -> (Quaternion, FitError, OR)
-getWGammaOR or0 ws qs = (gamma, err, rOR2)
-  where
-    errfunc = weightederrorfunc ws qs
-    g0      = hotStartGamma errfunc
-    err     = errfunc gamma (genTS or0)
-    (gamma, rOR2) = findGammaOR errfunc g0 or0
-
 -- ================================ Clustering Refinement ================================
 
 clusteringRefinement :: Gomes ()

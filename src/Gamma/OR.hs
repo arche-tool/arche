@@ -7,7 +7,6 @@
 module Gamma.OR
        ( -- * Product-Parent mismatch evaluation
          findGamma
-       , findGammaOR
        , findOR
        , findORFace
        , hotStartGamma
@@ -40,7 +39,6 @@ module Gamma.OR
        , testMisoKS
        ) where
 
-import qualified Data.Packed                 as HV
 import qualified Data.Vector                 as V
 import qualified Data.Vector.Unboxed         as U
 import qualified Data.Vector.Generic         as G
@@ -48,12 +46,9 @@ import qualified Data.Vector.Generic.Base    as GB
 import qualified Data.Vector.Generic.Mutable as GM
 
 import           Data.Vector.Unboxed (Vector)
-import           Numeric.Container   (add, sub)
 import           Control.Monad       (liftM)
 
 import           System.Random
-
-import           Numeric.GSL.Minimization
 
 import           Texture.Orientation
 import           Texture.Symmetry
@@ -202,43 +197,6 @@ findGamma errf q0 ors = let
   guess = rodriVec $ fromQuaternion q0
   cfg   = BFGScfg { epsi = 1e-4, tol = 1e-4, niter = 200 }
   in toQuaternion $ mkUnsafeRodrigues $ bfgs cfg foo guess
-
-findGammaOR :: ErrorFunc -> Quaternion -> OR -> (Quaternion, OR)
-findGammaOR errf q0 or0 = let
-  func v = let
-    [x1,x2,x3, k1, k2, k3] = HV.toList v
-    g = toQuaternion $ mkUnsafeRodrigues (Vec3 x1 x2 x3)
-    t = OR $ toQuaternion $ mkUnsafeRodrigues (Vec3 k1 k2 k3)
-    in fromAngle $ avgError $ errf g (genTS t)
-  foo v = let
-    d1 = HV.fromList [k, 0, 0, 0, 0, 0]
-    d2 = HV.fromList [0, k, 0, 0, 0, 0]
-    d3 = HV.fromList [0, 0, k, 0, 0, 0]
-    d4 = HV.fromList [0, 0, 0, k, 0, 0]
-    d5 = HV.fromList [0, 0, 0, 0, k, 0]
-    d6 = HV.fromList [0, 0, 0, 0, 0, k]
-    k  = 0.001
-    dr1 = (func (v `add` d1) - func (v `sub` d1)) / (2*k)
-    dr2 = (func (v `add` d2) - func (v `sub` d2)) / (2*k)
-    dr3 = (func (v `add` d3) - func (v `sub` d3)) / (2*k)
-
-    dt1 = (func (v `add` d4) - func (v `sub` d4)) / (2*k)
-    dt2 = (func (v `add` d5) - func (v `sub` d5)) / (2*k)
-    dt3 = (func (v `add` d6) - func (v `sub` d6)) / (2*k)
-    in (HV.fromList [dr1, dr2, dr3, dt1, dt2, dt3])
-  Vec3 ra rb rc = rodriVec $ convert q0
-  Vec3 ta tb tc = rodriVec $ convert or0
-  guess = HV.fromList [ra, rb, rc, ta, tb, tc]
-  (r,_) = minimizeVD VectorBFGS2 0.00001 200 0.01 0.1 func foo guess
-  --box = HV.fromList [5,5,5,5,5,5]
-  --(r,_) = minimizeV NMSimplex2 0.00001 200 box func guess
-  [r1, r2, r3, t1, t2, t3] = HV.toList r
-  gf = convert $ mkUnsafeRodrigues (Vec3 r1 r2 r3)
-  tf = convert $ mkUnsafeRodrigues (Vec3 t1 t2 t3)
-  in (gf, tf)
-
--- $ hotStart fzqs
--- $ qOR $ mkOR (Vec3 1 1 2) (Deg 90)
 
 hotStartGamma :: ErrorFunc -> Quaternion
 hotStartGamma errf = let
@@ -486,10 +444,9 @@ plotErrFunc a = let
   in do
     let
       a'   = findGamma errf zerorot ksORs
-      (a'', t'') = findGammaOR errf zerorot ksOR
+      t''  = findOR errf zerorot ksOR
       fa   = toFZ Cubic a
       fa'  = toFZ Cubic a'
-      fa'' = toFZ Cubic a''
       fgi  = toFZ Cubic gi
       test g1 g2 = (fromAngle $ Deg 3) > (abs $ getOmega (g1 -#- g2))
     print "=================="
@@ -497,9 +454,6 @@ plotErrFunc a = let
     print (test fa fa')
     print $ testGammaFit a' gms ksOR
     print $ "from " ++ show fgi ++ " got: " ++ show fa'
-    print (test fa fa'')
-    print $ testGammaFit a'' gms t''
-    print $ "from " ++ show fgi ++ " got: " ++ show fa''
 
     writeUniVTKfile ("/home/edgar/Desktop/SO3ErrFunc.vtu") False vtk'
 
