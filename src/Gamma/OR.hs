@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -61,8 +59,8 @@ import           Texture.HyperSphere
 import           Texture.TesseractGrid
 import           Texture.ODF
 
-import           Debug.Trace
-dbg a = trace (show a) a
+--import           Debug.Trace
+--dbg a = trace (show a) a
 
 -- ======================================================================================= 
 
@@ -104,7 +102,7 @@ genTS :: OR -> Vector OR
 genTS (OR t) = let
   (w, v) = splitQuaternion t
   vs = V.convert $ getAllSymmVec (getSymmOps Cubic) v
-  in G.map (OR . mergeQuaternion . ((,) w)) vs
+  in G.map (OR . mergeQuaternion . (,) w) vs
 
 misoDoubleKS :: Symm -> Quaternion -> Quaternion -> Double
 misoDoubleKS = misoDoubleOR ksORs
@@ -145,7 +143,7 @@ faceerrorfunc ms ors = let
   n     = fromIntegral (G.length ms)
   errs  = G.map (\(q1,q2) -> evalMisoOR ors q1 q2) ms
   avg   = G.sum errs / n
-  diff  = G.map ((\x->x*x) . ((-) avg)) errs
+  diff  = G.map ((\x->x*x) . (-) avg) errs
   dev   = sqrt (G.sum diff / n)
   in FitError
      { avgError = toAngle avg
@@ -153,58 +151,46 @@ faceerrorfunc ms ors = let
      , maxError = toAngle (G.maximum errs)
      }
 
+deltaVec3 :: (Vec3 -> Double) -> Vec3 -> (Double, Vec3)
+deltaVec3 func v = let
+  k  = 0.001
+  x  = func v
+  d1 = (func (v &+ Vec3 k 0 0) - func (v &- Vec3 k 0 0)) / (2*k)
+  d2 = (func (v &+ Vec3 0 k 0) - func (v &- Vec3 0 k 0)) / (2*k)
+  d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
+  in (x, Vec3 d1 d2 d3)
+
 findORFace :: Vector ((Quaternion, Int), (Quaternion, Int)) -> OR -> OR
 findORFace qs t0 = let
   func = fromAngle . avgError . faceerrorfunc qs .
          genTS . OR . toQuaternion . mkUnsafeRodrigues
-  foo v = let
-    k  = 0.001
-    x  = func v
-    d1 = (func (v &+ Vec3 k 0 0) - func (v &- Vec3 k 0 0)) / (2*k)
-    d2 = (func (v &+ Vec3 0 k 0) - func (v &- Vec3 0 k 0)) / (2*k)
-    d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
-    in (x, Vec3 d1 d2 d3)
   guess = rodriVec $ fromQuaternion $ qOR t0
-  in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS foo guess
+  in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS (deltaVec3 func) guess
 
 findOR :: ErrorFunc -> Quaternion -> OR -> OR
 findOR errf ga t0 = let
   func v = let
     t = OR . toQuaternion $ mkUnsafeRodrigues v
     in fromAngle $ avgError $ errf ga (genTS t)
-  foo v = let
-    k  = 0.001
-    x  = func v
-    d1 = (func (v &+ Vec3 k 0 0) - func (v &- Vec3 k 0 0)) / (2*k)
-    d2 = (func (v &+ Vec3 0 k 0) - func (v &- Vec3 0 k 0)) / (2*k)
-    d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
-    in (x, Vec3 d1 d2 d3)
   guess = rodriVec $ fromQuaternion $ qOR t0
-  in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS foo guess
+  in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS (deltaVec3 func) guess
 
 findGamma :: ErrorFunc -> Quaternion -> Vector OR -> Quaternion
 findGamma errf q0 ors = let
   func v = let
     gamma = toQuaternion $ mkUnsafeRodrigues v
     in fromAngle $ avgError $ errf gamma ors
-  foo v = let
-    k  = 0.001
-    x  = func v
-    d1 = (func (v &+ Vec3 k 0 0) - func (v &- Vec3 k 0 0)) / (2*k)
-    d2 = (func (v &+ Vec3 0 k 0) - func (v &- Vec3 0 k 0)) / (2*k)
-    d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
-    in (x, Vec3 d1 d2 d3)
   guess = rodriVec $ fromQuaternion q0
   cfg   = BFGScfg { epsi = 1e-4, tol = 1e-4, niter = 200 }
-  in toQuaternion $ mkUnsafeRodrigues $ bfgs cfg foo guess
+  in toQuaternion $ mkUnsafeRodrigues $ bfgs cfg (deltaVec3 func) guess
 
 hotStartGamma :: ErrorFunc -> Quaternion
 hotStartGamma errf = let
-  qs = V.fromList $
-       [ toQuaternion (mkEuler (Deg phi1) (Deg phi) (Deg phi2))
-       | phi1 <- [0.0, 3 .. 90]
-       , phi  <- [0.0, 3 .. 90]
-       , phi2 <- [0.0, 3 .. 90]
+  qs = V.fromList
+       [ toQuaternion (mkEuler (Deg _phi1) (Deg _phi) (Deg _phi2))
+       | _phi1 <- [0.0, 3 .. 90]
+       , _phi  <- [0.0, 3 .. 90]
+       , _phi2 <- [0.0, 3 .. 90]
        ]
   func q = fromAngle $ avgError $ errf q ksORs
   i = V.minIndex $ V.map func qs
@@ -214,7 +200,7 @@ hotStartOR :: ErrorFunc -> Quaternion -> OR
 hotStartOR errf q = let
   ks   = rodriVec $ fromQuaternion $ toQuaternion $ mkAxisPair (Vec3 1 1 2) (Deg 90)
   func = OR . toQuaternion . mkUnsafeRodrigues . (ks &+)
-  ts = V.fromList $
+  ts = V.fromList
        [ func (Vec3 r1 r2 r3)
        | r1 <- [-0.2, 0.02 .. 0.2]
        , r2 <- [-0.2, 0.02 .. 0.2]
@@ -243,7 +229,7 @@ uniformerrorfunc ms gamma ors
     n     = fromIntegral (G.length ms)
     errs  = G.map (\m -> unDeg $ fst $ singleerrorfunc m gamma ors) ms
     avg   = G.sum errs / n
-    diff  = G.map ((\x->x*x) . ((-) avg)) errs
+    diff  = G.map ((\x->x*x) . (-) avg) errs
     dev   = sqrt (G.sum diff / n)
     in FitError
        { avgError = Deg avg
@@ -261,7 +247,7 @@ weightederrorfunc ws ms gamma ors
     errs = G.map (\m -> unDeg $ fst $ singleerrorfunc m gamma ors) ms
     wt   = G.sum ws
     wq   = G.zipWith (*) ws errs
-    diff = G.map ((\x->x*x) . ((-) avg)) errs
+    diff = G.map ((\x->x*x) . (-) avg) errs
     dev  = sqrt (G.sum (G.zipWith (*) ws diff) / wt)
     avg  = G.sum wq / wt
     in FitError
@@ -289,7 +275,7 @@ gammaFinderKernel odf ors rgs ms = (q, err)
   where
     func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
     gs     = U.concatMap (func . qFZ) ms
-    odf1   = addPoints ((U.map qFZ rgs) U.++ gs) (resetODF odf)
+    odf1   = addPoints (U.map qFZ rgs U.++ gs) (resetODF odf)
     (q, _) = getMaxOrientation odf1
     err    = uniformerrorfunc ms q ors
 
@@ -302,7 +288,7 @@ hotStartTesseract ors ms
   where
     func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
     grid  = 30
-    range = 4 / (fromIntegral grid)
+    range = 4 / fromIntegral grid
     gs    = U.concatMap (func . qFZ) ms
     t0    = emptyTesseract grid 0
     tess  = binningTesseract (U.convert gs) t0
@@ -336,7 +322,7 @@ instance GM.MVector U.MVector QuaternionFZ where
   basicOverlaps (MV_FZ v1) (MV_FZ v2)           = GM.basicOverlaps v1 v2
   basicUnsafeNew n                              = MV_FZ `liftM` GM.basicUnsafeNew n
   basicUnsafeReplicate n (QuaternionFZ x)       = MV_FZ `liftM` GM.basicUnsafeReplicate n x
-  basicUnsafeRead (MV_FZ v) i                   = GM.basicUnsafeRead v i >>= (return . QuaternionFZ)
+  basicUnsafeRead (MV_FZ v) i                   = liftM QuaternionFZ (GM.basicUnsafeRead v i)
   basicUnsafeWrite (MV_FZ v) i (QuaternionFZ x) = GM.basicUnsafeWrite v i x
   basicClear (MV_FZ v)                          = GM.basicClear v
   basicSet (MV_FZ v) (QuaternionFZ x)           = GM.basicSet v x
@@ -354,9 +340,9 @@ instance GB.Vector U.Vector QuaternionFZ where
   basicUnsafeThaw (V_FZ v)            = MV_FZ `liftM` GB.basicUnsafeThaw v
   basicLength (V_FZ v)                = GB.basicLength v
   basicUnsafeSlice i n (V_FZ v)       = V_FZ $ GB.basicUnsafeSlice i n v
-  basicUnsafeIndexM (V_FZ v) i        = GB.basicUnsafeIndexM v i >>= (return . QuaternionFZ)
+  basicUnsafeIndexM (V_FZ v) i        = liftM QuaternionFZ (GB.basicUnsafeIndexM v i)
   basicUnsafeCopy (MV_FZ mv) (V_FZ v) = GB.basicUnsafeCopy mv v
-  elemseq _ (QuaternionFZ x) t        = GB.elemseq (undefined :: Vector a) x t
+  elemseq _ (QuaternionFZ x)          = GB.elemseq (undefined :: Vector a) x
 
 -- =========================================== Unbox OR =================================
 
@@ -382,7 +368,7 @@ instance GM.MVector U.MVector OR where
   basicOverlaps (MV_OR v1) (MV_OR v2)   = GM.basicOverlaps v1 v2
   basicUnsafeNew n                      = MV_OR `liftM` GM.basicUnsafeNew n
   basicUnsafeReplicate n (OR x)         = MV_OR `liftM` GM.basicUnsafeReplicate n x
-  basicUnsafeRead (MV_OR v) i           = GM.basicUnsafeRead v i >>= (return . OR)
+  basicUnsafeRead (MV_OR v) i           = liftM OR (GM.basicUnsafeRead v i)
   basicUnsafeWrite (MV_OR v) i (OR x)   = GM.basicUnsafeWrite v i x
   basicClear (MV_OR v)                  = GM.basicClear v
   basicSet (MV_OR v) (OR x)             = GM.basicSet v x
@@ -400,9 +386,9 @@ instance GB.Vector U.Vector OR where
   basicUnsafeThaw (V_OR v)            = MV_OR `liftM` GB.basicUnsafeThaw v
   basicLength (V_OR v)                = GB.basicLength v
   basicUnsafeSlice i n (V_OR v)       = V_OR $ GB.basicUnsafeSlice i n v
-  basicUnsafeIndexM (V_OR v) i        = GB.basicUnsafeIndexM v i >>= (return . OR)
+  basicUnsafeIndexM (V_OR v) i        = liftM OR (GB.basicUnsafeIndexM v i)
   basicUnsafeCopy (MV_OR mv) (V_OR v) = GB.basicUnsafeCopy mv v
-  elemseq _ (OR x) t                  = GB.elemseq (undefined :: Vector a) x t
+  elemseq _ (OR x)                    = GB.elemseq (undefined :: Vector a) x
 
 -- ================================= Test Function =======================================
 
@@ -444,21 +430,20 @@ plotErrFunc a = let
   in do
     let
       a'   = findGamma errf zerorot ksORs
-      t''  = findOR errf zerorot ksOR
       fa   = toFZ Cubic a
       fa'  = toFZ Cubic a'
       fgi  = toFZ Cubic gi
-      test g1 g2 = (fromAngle $ Deg 3) > (abs $ getOmega (g1 -#- g2))
+      test g1 g2 = fromAngle (Deg 3) > abs (getOmega (g1 -#- g2))
     print "=================="
     print $ "Expect: " ++ show fa
     print (test fa fa')
     print $ testGammaFit a' gms ksOR
     print $ "from " ++ show fgi ++ " got: " ++ show fa'
 
-    writeUniVTKfile ("/home/edgar/Desktop/SO3ErrFunc.vtu") False vtk'
+    writeUniVTKfile "/home/edgar/Desktop/SO3ErrFunc.vtu" False vtk'
 
     let vtk2 = renderSO3PointsVTK (U.map quaternionToSO3 $ U.fromList [gi, toFZ Cubic gi, a, a'])
-    writeUniVTKfile ("/home/edgar/Desktop/SO3ErrFuncP.vtu") False vtk2
+    writeUniVTKfile "/home/edgar/Desktop/SO3ErrFuncP.vtu" False vtk2
 
 errorfuncSlowButSure :: Quaternion -> Vector Quaternion -> Quaternion -> FitError
 errorfuncSlowButSure ga gms t = let
@@ -470,7 +455,7 @@ errorfuncSlowButSure ga gms t = let
   toAng = toAngle . (2 *) . acosSafe
   q0s   = G.map getMaxQ0 gms
   n     = fromIntegral (G.length gms)
-  dev   = let s = G.map ((\x->x*x) . ((-) avg)) q0s in sqrt (abs $ 1 - G.sum s/n)
+  dev   = let s = G.map ((\x->x*x) . (-) avg) q0s in sqrt (abs $ 1 - G.sum s/n)
   avg   = G.sum q0s / n
   in FitError
      { avgError = toAng avg
@@ -520,7 +505,7 @@ testTesseractFitting = do
     ps = U.fromList [gamma, gt]
   print $ uniformerrorfunc ms gamma ksORs
   print gamma
-  print $ (gt, et)
+  print (gt, et)
   --print $ (gf, ef)
-  writeUniVTKfile ( "/home/edgar/Desktop/tess-fittest.vti" ) True (plotTesseract tt)
-  writeUniVTKfile ( "/home/edgar/Desktop/tess-fittest.vtu" ) True (plotTesseractPoints ps)
+  writeUniVTKfile "/home/edgar/Desktop/tess-fittest.vti"  True (plotTesseract tt)
+  writeUniVTKfile "/home/edgar/Desktop/tess-fittest.vtu"  True (plotTesseractPoints ps)
