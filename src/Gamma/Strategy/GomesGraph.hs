@@ -137,10 +137,10 @@ grainClustering = do
   cfg@GomesConfig{..} <- ask
   st@GomesState{..}   <- get
   -- run MCL
-  gg <- liftIO $ findClusters productGraph mclFactor
+  --gg <- liftIO $ findClusters productGraph mclFactor
   let
-    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
-    --gg = V.fromList $ runMCL cfgMCL productGraph
+    cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
+    gg = V.fromList $ runMCL cfgMCL productGraph
     ps = V.map (getParentGrainData cfg) gg
   put $ st { parentGrains = ps
            , mclFactor    = mclFactor * stepClusterFactor inputCfg
@@ -348,12 +348,12 @@ refineParentGrain p@ParentGrain{..} = do
     graingraph   = getSubGraph productGraph productMembers
     badboys      = getBadGrains badFitAngle p
     graingraph2  = reinforceCluster badboys graingraph
-    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
-    --gg = V.fromList $ runMCL cfgMCL graingraph2
+    cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
+    gg = V.fromList $ runMCL cfgMCL graingraph2
   if goodParent badFitAngle p
     then return (V.singleton p)
     else do
-    gg <- liftIO $ findClusters graingraph2 mclFactor
+    --gg <- liftIO $ findClusters graingraph2 mclFactor
     liftIO $ print (gg, productMembers)
     return $ V.map (getParentGrainData cfg) gg
 
