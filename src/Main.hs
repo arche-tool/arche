@@ -29,13 +29,13 @@ data RunMode = forall a . ParserCmdLine a => RunMode {config :: a}
 
 parseMode :: Parser RunMode
 parseMode = subparser
- ( command "graph"
+ ( command "micro-features"
    (info (RunMode <$> parseShowGraph)
-   (progDesc "Render grain's ID, vertexes, edges and faces."))
- <> command "orfit-all"
+   (progDesc "Identify grain's ID, vertexes, edges and faces."))
+ <> command "optimum-OR"
    (info (RunMode <$> parseORFitAll)
-   (progDesc "Fit OR on all grain boundaries."))
- <> command "gomes-graph"
+   (progDesc "Finds the best Orientation Relationship."))
+ <> command "reconstruction"
    (info (RunMode <$> parseGomesGraph)
    (progDesc "Reconstruction based on Gomes's method (graph clustering)."))
  )
@@ -85,7 +85,7 @@ parseOR = let
   in (func <$> option auto
    (  long "or"
    <> short 'r'
-   <> metavar "[Double Double Double Double]"
+   <> metavar "(Double,Double,Double,Double)"
    <> value (1,1,2,90)
    <> help "The default OR is KS <1,1,2> (Deg 90)."))
 
@@ -152,7 +152,7 @@ parseORs = let
       where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
   reader :: Parser (Int, Int, Int, Double)
   reader = argument auto
-           (  metavar "[Int Int Int Double]" <>
+           (  metavar "(Int,Int,Int,Double)" <>
               help "The default OR is KS <1,1,2> (Deg 90).")
   in (map func <$> many reader)
 
@@ -223,9 +223,8 @@ parseBadAngle = ((Deg . abs) <$> option auto
    <> help "The default error is 15 deg."))
 
 parseGammaID :: Parser Int
-parseGammaID = fromIntegral <$> option auto
+parseGammaID = option auto
    (  long "gammaID"
    <> short 'g'
    <> metavar "Int"
-   <> value (1 :: Word8)
-   <> help "Gamma ID number from ANG file. Default 1")
+   <> help "Gamma ID number from ANG file.")
