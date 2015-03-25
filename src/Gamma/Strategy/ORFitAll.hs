@@ -26,9 +26,11 @@ import           Hammer.VTK.VoxBox
 import           Hammer.VTK
 import           Hammer.MicroGraph
 
+import qualified File.ANGReader as A
+import qualified File.CTFReader as C
+import           File.EBSD
 import           Texture.Symmetry
 import           Texture.Orientation
-import           File.ANGReader
 
 import           Gamma.Grains
 import           Gamma.OR
@@ -45,10 +47,10 @@ data Cfg =
 
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
-  ang <- parseANG ang_input
-  vbq <- case angToVoxBox ang (\p -> (rotation p, phaseNum p)) of
-    Right x -> return x
-    Left s  -> error s
+  vbq <- readEBSDToVoxBox
+         (\p -> (C.rotation p, C.phase p   ))
+         (\p -> (A.rotation p, A.phaseNum p))
+         ang_input
   gen <- initTFGen
   (gidBox, voxMap) <- maybe (error "No grain detected!") return
                       (getGrainID' misoAngle Cubic vbq)

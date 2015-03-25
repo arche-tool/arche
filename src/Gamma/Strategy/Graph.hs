@@ -16,13 +16,14 @@ import           Hammer.VTK.VoxBox
 import           Hammer.VTK
 import           Hammer.MicroGraph
 
-import           File.ANGReader
+import qualified File.ANGReader as A
+import qualified File.CTFReader as C
+import           File.EBSD
 import           Texture.Symmetry
 import           Texture.Orientation
 import           Texture.IPF
 
 import           Gamma.Grains
-import           Gamma.OMRender
 
 data Cfg =
   Cfg
@@ -30,7 +31,6 @@ data Cfg =
   , ang_input   :: FilePath
   , base_output :: FilePath
   } deriving (Show)
-
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
                  String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
@@ -43,13 +43,8 @@ getCubicIPFColor = let
 
 run :: Cfg -> IO ()
 run Cfg{..} = do
-  ang <- parseANG ang_input
-  vbp <- case angToVoxBox ang phaseNum of
-    Right x -> return x
-    Left s  -> error s
-  vbq <- case angToVoxBox ang rotation of
-    Right x -> return x
-    Left s  -> error s
+  vbp <- readEBSDToVoxBox C.phase    A.phaseNum ang_input
+  vbq <- readEBSDToVoxBox C.rotation A.rotation ang_input
   case getGrainID misoAngle Cubic (vbq) of
     Nothing -> print "No grain detected!"
     Just vg -> let
