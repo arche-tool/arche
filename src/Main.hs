@@ -85,7 +85,7 @@ parseOR = let
   in (func <$> option auto
    (  long "or"
    <> short 'r'
-   <> metavar "(Double,Double,Double,Double)"
+   <> metavar "\"(Int,Int,Int,Double)\""
    <> value (1,1,2,90)
    <> help "The default OR is KS <1,1,2> (Deg 90)."))
 
@@ -176,10 +176,11 @@ instance ParserCmdLine GomesGraph.Cfg where
 
 parseGomesGraph :: Parser GomesGraph.Cfg
 parseGomesGraph = let
-  func m (fin, fout) r f0 fk bw = GomesGraph.Cfg m fin fout r f0 fk bw
+  func m (fin, fout) mcl r f0 fk bw = GomesGraph.Cfg m fin fout mcl r f0 fk bw
   in func
      <$> parseMisoAngle
      <*> parseInOut
+     <*> parseExtMCL
      <*> parseRefinementSteps
      <*> parseInitCluster
      <*> parseStepCluster
@@ -228,3 +229,8 @@ parseGammaID = option auto
    <> short 'g'
    <> metavar "Int"
    <> help "Gamma ID number from ANG file.")
+
+parseExtMCL :: Parser Bool
+parseExtMCL = switch
+   (  long "extMCL"
+   <> help "Uses external software for clustering. Requires MCL installed")

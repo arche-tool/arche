@@ -54,6 +54,7 @@ data Cfg =
   { misoAngle         :: Deg
   , ang_input         :: FilePath
   , base_output       :: FilePath
+  , useExternalMCL    :: Bool
   , refinementSteps   :: Word8
   , initClusterFactor :: Double
   , stepClusterFactor :: Double
@@ -138,12 +139,8 @@ grainClustering :: Gomes ()
 grainClustering = do
   cfg@GomesConfig{..} <- ask
   st@GomesState{..}   <- get
-  -- run MCL
-  gg <- liftIO $ findClusters productGraph mclFactor
-  let
-    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
-    --gg = V.fromList $ runMCL cfgMCL productGraph
-    ps = V.map (getParentGrainData cfg) gg
+  gg <- liftIO $ findClusters productGraph mclFactor (useExternalMCL inputCfg)
+  let ps = V.map (getParentGrainData cfg) gg
   put $ st { parentGrains = ps
            , mclFactor    = mclFactor * stepClusterFactor inputCfg
            }
@@ -350,12 +347,10 @@ refineParentGrain p@ParentGrain{..} = do
     graingraph   = getSubGraph productGraph productMembers
     badboys      = getBadGrains badFitAngle p
     graingraph2  = reinforceCluster badboys graingraph
-    --cfgMCL = defaultMCL {inflation = mclFactor, selfLoop = 0.5}
-    --gg = V.fromList $ runMCL cfgMCL graingraph2
   if goodParent badFitAngle p
     then return (V.singleton p)
     else do
-    gg <- liftIO $ findClusters graingraph2 mclFactor
+    gg <- liftIO $ findClusters graingraph2 mclFactor (useExternalMCL inputCfg)
     liftIO $ print (gg, productMembers)
     return $ V.map (getParentGrainData cfg) gg
 
@@ -376,13 +371,13 @@ runMCLIO i = callCommand $ "mcl test.txt --abc -o test.out -I " ++ show i
 readGroups :: IO (V.Vector [Int])
 readGroups = readFile "test.out" >>= return . V.fromList . map (map read . words) . lines
 
-findClusters :: Graph Int Double -> Double -> IO (V.Vector [Int])
-findClusters g i
-  | null (graphToList g) = putStrLn "Warning: attempting to cluster the void" >> return (V.empty)
-  | otherwise = do
-    saveGraph g
-    runMCLIO i
-    readGroups
+findClusters :: Graph Int Double -> Double -> Bool -> IO (V.Vector [Int])
+findClusters graph0 i extMCL
+  | null (graphToList graph0) = putStrLn "Warning: attempting to cluster the void" >> return (V.empty)
+  | extMCL                    = saveGraph graph0 >> runMCLIO i >> readGroups
+  | otherwise = let
+    cfgMCL = defaultMCL {inflation = i, selfLoop = 0.5}
+    in return (V.fromList $ runMCL cfgMCL graph0)
 
 -- ====================================== Plotting =======================================
 
