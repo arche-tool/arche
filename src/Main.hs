@@ -181,6 +181,7 @@ parseGomesGraph = let
      <$> parseMisoAngle
      <*> parseInOut
      <*> parseExtMCL
+     <*> parseNoFloatingGrains
      <*> parseRefinementSteps
      <*> parseInitCluster
      <*> parseStepCluster
@@ -234,3 +235,8 @@ parseExtMCL :: Parser Bool
 parseExtMCL = switch
    (  long "extMCL"
    <> help "Uses external software for clustering. Requires MCL installed")
+
+parseNoFloatingGrains :: Parser Bool
+parseNoFloatingGrains = switch
+   (  long "excludeFloatingGrains"
+   <> help "Exclude floating grains (grains without junctions) from the reconstruction.")

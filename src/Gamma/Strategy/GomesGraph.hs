@@ -51,16 +51,17 @@ import           Gamma.OR
 
 data Cfg =
   Cfg
-  { misoAngle         :: Deg
-  , ang_input         :: FilePath
-  , base_output       :: FilePath
-  , useExternalMCL    :: Bool
-  , refinementSteps   :: Word8
-  , initClusterFactor :: Double
-  , stepClusterFactor :: Double
-  , badAngle          :: Deg
-  , withOR            :: AxisPair
-  , gammaPhaseID      :: Int
+  { misoAngle              :: Deg
+  , ang_input              :: FilePath
+  , base_output            :: FilePath
+  , useExternalMCL         :: Bool
+  , excluedeFloatingGrains :: Bool
+  , refinementSteps        :: Word8
+  , initClusterFactor      :: Double
+  , stepClusterFactor      :: Double
+  , badAngle               :: Deg
+  , withOR                 :: AxisPair
+  , gammaPhaseID           :: Int
   } deriving (Show)
 
 data ProductGrain =
@@ -113,6 +114,7 @@ type Gomes = RWST GomesConfig () GomesState IO
 --getGomesConfig :: FilePath -> Deg -> Word8 -> Double -> Double -> Deg
 getGomesConfig :: Cfg -> OR -> VoxBox (Quaternion, Int) -> Maybe GomesConfig
 getGomesConfig cfg ror qpBox = let
+  noIsleGrains = excluedeFloatingGrains cfg
   func (gidBox, voxMap) = let
     micro = fst $ getMicroVoxel (gidBox, voxMap)
     in GomesConfig
@@ -123,7 +125,7 @@ getGomesConfig cfg ror qpBox = let
      , grainIDBox     = gidBox
      , productGrains  = getProductGrainData qpBox voxMap
      , structureGraph = micro
-     , productGraph   = graphWeight qpBox micro ror
+     , productGraph   = graphWeight noIsleGrains qpBox micro ror
      , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
      }
   in fmap func (getGrainID' (misoAngle cfg) Cubic qpBox)
@@ -225,8 +227,8 @@ getFaceVoxels (Fx pos) = (pos, pos #+# (VoxelPos (-1) 0 0))
 getFaceVoxels (Fy pos) = (pos, pos #+# (VoxelPos 0 (-1) 0))
 getFaceVoxels (Fz pos) = (pos, pos #+# (VoxelPos 0 0 (-1)))
 
-graphWeight :: VoxBox (Quaternion, Int) -> MicroVoxel -> OR -> Graph Int Double
-graphWeight vbq micro withOR = let
+graphWeight :: Bool -> VoxBox (Quaternion, Int) -> MicroVoxel -> OR -> Graph Int Double
+graphWeight noIsleGrains vbq micro withOR = let
   fs    = HM.keys $ microFaces micro
   ors   = genTS withOR
   ms    = map (getFaceIDmisOR vbq micro ors) fs
@@ -234,9 +236,8 @@ graphWeight vbq micro withOR = let
     k = -300
     in exp (k * x * x)
   mspar = ms `using` parListChunk 100 rpar
-  in filterIsleGrains      $
-     mkUniGraph []         $
-     filter ((>= 0) . snd) $
+  func  = if noIsleGrains then filterIsleGrains else id
+  in func . mkUniGraph [] . filter ((>= 0) . snd) $
      zipWith (\fid x -> (unFaceID fid, maybe 0 weight x)) fs mspar
 
 -- ================================== Grain Data ===================================
