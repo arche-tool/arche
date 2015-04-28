@@ -47,10 +47,11 @@ data Cfg =
 
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
-  vbq <- readEBSDToVoxBox
-         (\p -> (C.rotation p, C.phase p   ))
-         (\p -> (A.rotation p, A.phaseNum p))
-         ang_input
+  ebsd <- readEBSD ang_input
+  let vbq = readEBSDToVoxBox
+            (\p -> (C.rotation p, C.phase p   ))
+            (\p -> (A.rotation p, A.phaseNum p))
+            ebsd
   gen <- initTFGen
   (gidBox, voxMap) <- maybe (error "No grain detected!") return
                       (getGrainID' misoAngle Cubic vbq)

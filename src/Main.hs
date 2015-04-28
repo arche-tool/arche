@@ -188,6 +188,8 @@ parseGomesGraph = let
      <*> parseBadAngle
      <*> parseOR
      <*> parseGammaID
+     <*> parseOutputToANG
+     <*> parseOutputToCTF
 
 parseRefinementSteps :: Parser Word8
 parseRefinementSteps = option auto
@@ -240,3 +242,13 @@ parseNoFloatingGrains :: Parser Bool
 parseNoFloatingGrains = switch
    (  long "excludeFloatingGrains"
    <> help "Exclude floating grains (grains without junctions) from the reconstruction.")
+
+parseOutputToANG :: Parser Bool
+parseOutputToANG = switch
+   (  long "ang"
+   <> help "Generate output OIM in ANG format.")
+
+parseOutputToCTF :: Parser Bool
+parseOutputToCTF = switch
+   (  long "ctf"
+   <> help "Generate output OIM in CTF format.")

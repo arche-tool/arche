@@ -43,8 +43,9 @@ getCubicIPFColor = let
 
 run :: Cfg -> IO ()
 run Cfg{..} = do
-  vbp <- readEBSDToVoxBox C.phase    A.phaseNum ang_input
-  vbq <- readEBSDToVoxBox C.rotation A.rotation ang_input
+  ebsd <- readEBSD ang_input
+  let vbp = readEBSDToVoxBox C.phase    A.phaseNum ebsd
+  let vbq = readEBSDToVoxBox C.rotation A.rotation ebsd
   case getGrainID misoAngle Cubic (vbq) of
     Nothing -> print "No grain detected!"
     Just vg -> let

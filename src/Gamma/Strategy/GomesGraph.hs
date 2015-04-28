@@ -14,7 +14,7 @@ import qualified Data.HashSet                 as HS
 import qualified Data.List                    as L
 
 import           Control.Applicative ((<$>))
-import           Control.Monad       (replicateM_, zipWithM_)
+import           Control.Monad       (when, replicateM_, zipWithM_)
 import           Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
 import           Data.Vector.Unboxed (Vector)
 import           Data.HashMap.Strict (HashMap)
@@ -36,6 +36,10 @@ import           Hammer.MicroGraph
 
 import qualified File.ANGReader as A
 import qualified File.CTFReader as C
+import           File.ANGReader (ANGdata)
+import           File.CTFReader (CTFdata)
+import           File.ANGWriter
+import           File.CTFWriter
 import           File.EBSD
 import           Texture.Symmetry    (Symm (..))
 import           Texture.IPF
@@ -62,6 +66,8 @@ data Cfg =
   , badAngle               :: Deg
   , withOR                 :: AxisPair
   , gammaPhaseID           :: Int
+  , outputANGMap           :: Bool
+  , outputCTFMap           :: Bool
   } deriving (Show)
 
 data ProductGrain =
@@ -93,6 +99,7 @@ data GomesConfig
   { inputCfg          :: Cfg
   , realOR            :: OR
   , realORs           :: Vector OR
+  , inputEBSD         :: Either ANGdata CTFdata
   , orientationBox    :: VoxBox (Quaternion, Int)
   , grainIDBox        :: VoxBox GrainID
   , structureGraph    :: MicroVoxel
@@ -111,16 +118,20 @@ type Gomes = RWST GomesConfig () GomesState IO
 
 -- =======================================================================================
 
---getGomesConfig :: FilePath -> Deg -> Word8 -> Double -> Double -> Deg
-getGomesConfig :: Cfg -> OR -> VoxBox (Quaternion, Int) -> Maybe GomesConfig
-getGomesConfig cfg ror qpBox = let
+getGomesConfig :: Cfg -> OR -> Either ANGdata CTFdata -> Maybe GomesConfig
+getGomesConfig cfg ror ebsd = let
   noIsleGrains = excluedeFloatingGrains cfg
+  qpBox = readEBSDToVoxBox
+          (\p -> (C.rotation p, C.phase p   ))
+          (\p -> (A.rotation p, A.phaseNum p))
+          ebsd
   func (gidBox, voxMap) = let
     micro = fst $ getMicroVoxel (gidBox, voxMap)
     in GomesConfig
      { inputCfg       = cfg
      , realOR         = ror
      , realORs        = genTS ror
+     , inputEBSD      = ebsd
      , orientationBox = qpBox
      , grainIDBox     = gidBox
      , productGrains  = getProductGrainData qpBox voxMap
@@ -149,6 +160,11 @@ grainClustering = do
 
 plotResults :: String -> Gomes ()
 plotResults name = do
+  plotVTK  name
+  plotEBSD name
+
+plotVTK :: String -> Gomes ()
+plotVTK name = do
   GomesConfig{..} <- ask
   attrGID    <- genParentVTKAttr (-1) fst "ParentGrainID"
   attrIPF    <- genParentVTKAttr (255,255,255) (getCubicIPFColor . parentOrientation . snd) "GammaIPF"
@@ -171,12 +187,18 @@ plotResults name = do
             , attrORVar ]
   liftIO $ plotVTK_D inputCfg (vtkD,  name)
 
+plotEBSD :: String -> Gomes ()
+plotEBSD name = do
+  Cfg{..} <- fmap inputCfg ask
+  let file = base_output ++ name
+  ebsd <- genParentEBSD
+  liftIO $ do
+    when outputANGMap $ renderANGFile (file  <.> "ang") $ either id toANG ebsd
+    when outputCTFMap $ renderCTFFile (file  <.> "ctf") $ either toCTF id ebsd
+
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
-  vbq <- readEBSDToVoxBox
-         (\p -> (C.rotation p, C.phase p   ))
-         (\p -> (A.rotation p, A.phaseNum p))
-         ang_input
+  ebsd <- readEBSD ang_input
   let
     ror  = convert withOR
     nref = fromIntegral refinementSteps
@@ -185,7 +207,7 @@ run cfg@Cfg{..} = do
       plotResults "1st-step"
       replicateM_ nref clusteringRefinement
       plotResults "final-step"
-  gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror vbq)
+  gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror ebsd)
   putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
   runRWST doit gomescfg (getInitState gomescfg) >> return ()
 
@@ -426,6 +448,19 @@ genParentVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=>
                     a -> ((Int, ParentGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
 genParentVTKAttr nul f name = func <$> genParentMatrixAttr nul f
   where func = mkPointAttr name . (U.!)
+
+genParentEBSD :: Gomes (Either ANGdata CTFdata)
+genParentEBSD = ask >>= either (fmap Left . genParentANG) (fmap Right . genParentCTF) . inputEBSD
+
+genParentANG :: ANGdata -> Gomes ANGdata
+genParentANG ang = func . U.convert <$> genParentMatrixAttr zerorot (parentOrientation . snd)
+  where func qs = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
+        insRotation q p = p {A.rotation = q}
+
+genParentCTF :: CTFdata -> Gomes CTFdata
+genParentCTF ang = func . U.convert <$> genParentMatrixAttr zerorot (parentOrientation . snd)
+  where func qs = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
+        insRotation q p = p {C.rotation = q}
 
 genParentMatrixAttr :: (U.Unbox a)=> a -> ((Int, ParentGrain) -> a) -> Gomes (U.Vector a)
 genParentMatrixAttr nullvalue func = do
