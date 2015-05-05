@@ -57,6 +57,7 @@ import           Hammer.Math.Optimum
 import           Hammer.VTK
 import           Texture.HyperSphere
 import           Texture.TesseractGrid
+import           Texture.IsoSphere
 import           Texture.ODF
 
 --import           Debug.Trace
@@ -269,15 +270,31 @@ shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)
 
 -- ================================= Gamma finder width kernel ===========================
 
+-- | Generate a PPODF (Possible Parent Orientation Function) using another ODF grid structure
+-- for effeciecy sake. It also takes in consideranting both remaining paraents and products
+-- orientation.
+genPPODF :: ODF -> Vector OR -> Vector QuaternionFZ -> Vector QuaternionFZ -> ODF
+genPPODF odf ors rgs ms = addPoints (U.map qFZ rgs U.++ gs) (resetODF odf)
+  where
+    func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
+    gs     = U.concatMap (func . qFZ) ms
+
 gammaFinderKernel :: ODF -> Vector OR -> Vector QuaternionFZ
                   -> Vector QuaternionFZ -> (Quaternion, FitError)
 gammaFinderKernel odf ors rgs ms = (q, err)
   where
-    func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
-    gs     = U.concatMap (func . qFZ) ms
-    odf1   = addPoints (U.map qFZ rgs U.++ gs) (resetODF odf)
+    odf1   = genPPODF odf ors rgs ms
     (q, _) = getMaxOrientation odf1
     err    = uniformerrorfunc ms q ors
+
+-- | Decompose an ODF in isotropic Gaussians
+oneStepDeconvulition :: ODF -> (Quaternion, Double, Rad, ODF)
+oneStepDeconvulition odf = (q, i, w, odf1)
+  where
+    -- TODO fit w
+    w = Rad (fromAngle $ Deg 10)
+    (q, i) = getMaxOrientation odf
+    odf1   = addPointsWithConst (U.singleton q) (-i) (Just w) odf
 
 -- ===================================== Teseeract binning ===============================
 
@@ -493,8 +510,34 @@ applyDeviation w q = do
   let d = toQuaternion $ mkAxisPair v w
   return (q #<= d)
 
-testTesseractFitting :: IO ()
-testTesseractFitting = do
+testPPODF :: FilePath -> IO ()
+testPPODF dir = do
+  qg1 <- randomIO
+  qg2 <- applyDeviation (Deg 15) qg1
+  ors <- U.mapM (fmap OR . applyDeviation (Deg 4) . qOR) ksORs
+  let
+    gamma1 = qFZ $ getQinFZ qg1
+    gamma2 = qFZ $ getQinFZ qg2
+    ms1    = G.map (getQinFZ . (gamma1 #<=) . toQuaternion) ors
+    ms2    = G.map (getQinFZ . (gamma2 #<=) . toQuaternion) ors
+    odf0   = buildEmptyODF 3 Cubic (Deg 5)
+    ppodf0 = genPPODF odf0 ors U.empty (ms1 G.++ ms2)
+    (g1, i1, _, ppodf1) = oneStepDeconvulition ppodf0
+    (g2, i2, _, ppodf2) = oneStepDeconvulition ppodf1
+    (g3, i3, _, ppodf3) = oneStepDeconvulition ppodf2
+    ps = U.fromList [gamma1, gamma2, g1, g2, g3]
+  print $ uniformerrorfunc ms1 gamma1 ksORs
+  print $ uniformerrorfunc ms2 gamma2 ksORs
+  print (gamma1, gamma2, g1, g2, g3)
+  print (i1, i2, i3)
+  writeUniVTKfile (dir ++ "/tess-fittest-ODF0.vtu"  ) True (renderODFVTK ppodf0)
+  writeUniVTKfile (dir ++ "/tess-fittest-ODF1.vtu"  ) True (renderODFVTK ppodf1)
+  writeUniVTKfile (dir ++ "/tess-fittest-ODF2.vtu"  ) True (renderODFVTK ppodf2)
+  writeUniVTKfile (dir ++ "/tess-fittest-ODF3.vtu"  ) True (renderODFVTK ppodf3)
+  writeUniVTKfile (dir ++ "/tess-fittest-Points.vtu") True (renderQuaternions ps [])
+
+testTesseractFitting :: FilePath -> IO ()
+testTesseractFitting dir = do
   qg  <- randomIO
   ors <- U.mapM (applyDeviation (Deg 5) . qOR) ksORs
   let
@@ -507,5 +550,5 @@ testTesseractFitting = do
   print gamma
   print (gt, et)
   --print $ (gf, ef)
-  writeUniVTKfile "/home/edgar/Desktop/tess-fittest.vti"  True (plotTesseract tt)
-  writeUniVTKfile "/home/edgar/Desktop/tess-fittest.vtu"  True (plotTesseractPoints ps)
+  writeUniVTKfile (dir ++ "/tess-fittest.vti") True (plotTesseract tt)
+  writeUniVTKfile (dir ++ "/tess-fittest.vtu") True (plotTesseractPoints ps)
