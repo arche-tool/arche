@@ -20,6 +20,8 @@ module Gamma.OR
        , uniformerrorfunc
        , faceerrorfunc
        , gammaFinderKernel
+       -- * Deconvolution
+       , oneStepDeconvulition
          -- * Orientation Relationship
        , OR (..)
        , mkOR
@@ -58,6 +60,7 @@ import           Hammer.VTK
 import           Texture.HyperSphere
 import           Texture.TesseractGrid
 import           Texture.IsoSphere
+import           Texture.Kernel (gaussianKernel)
 import           Texture.ODF
 
 --import           Debug.Trace
@@ -292,11 +295,24 @@ oneStepDeconvulition :: ODF -> (Quaternion, Double, Rad, ODF)
 oneStepDeconvulition odf = (q, i, w, odf1)
   where
     -- TODO fit w
-    w = Rad (fromAngle $ Deg 10)
+    w = findBestGaussianFit odf q i
     (q, i) = getMaxOrientation odf
     odf1   = addPointsWithConst (U.singleton q) (-i) (Just w) odf
 
--- ===================================== Teseeract binning ===============================
+fitGaussianWidth :: ODF -> Quaternion -> Double -> Rad -> Double
+fitGaussianWidth odf q0 scale w = integrateODFwith (\q k -> sq (k - scale * gauss q)) odf
+  where
+    gauss = gaussianKernel w . composeQ0 q0
+    sq x = x * x
+
+findBestGaussianFit :: ODF -> Quaternion -> Double -> Rad
+findBestGaussianFit odf q0 k0 = toAngle $ ds U.! i
+ where
+   i = U.minIndex $ U.map func ds
+   ds = U.fromList [1, 2, 3, 4, 5]
+   func = fitGaussianWidth odf q0 k0 . Rad . fromAngle . Deg
+
+-- ===================================== Teseeract binning ========================================
 
 hotStartTesseract :: Vector OR -> Vector QuaternionFZ -> (Quaternion, FitError, TesseractGrid Double)
 hotStartTesseract ors ms
