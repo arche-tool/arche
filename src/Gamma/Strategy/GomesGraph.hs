@@ -402,68 +402,39 @@ findClusters graph0 i extMCL
     cfgMCL = defaultMCL {inflation = i, selfLoop = 0.5}
     in return (V.fromList $ runMCL cfgMCL graph0)
 
--- ====================================== Plotting =======================================
+-- ====================================== Pixalization functions =======================================
 
-plotVTK_D :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
-plotVTK_D Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
-
-genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
-                 String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
-genVoxBoxAttr name func qBox = mkPointAttr name (func . ((grainID qBox) U.!))
-
-genProductVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=>
-                     a -> ((Int, ProductGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
-genProductVTKAttr nullvalue func name = do
+genProductGrainBitmap :: (U.Unbox a)=> a -> ((Int, ProductGrain) -> a) -> Gomes (U.Vector a)
+genProductGrainBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
+    nvox      = U.length $ grainID grainIDBox
+    getIS gid = maybe V.empty productVoxelPos (HM.lookup gid productGrains)
     fill v x@(gid, _) = V.mapM_ (\i -> MU.write v i (func x)) (getIS gid)
-    nvox      = U.length $ grainID grainIDBox
-    getIS gid = maybe (V.empty) productVoxelPos (HM.lookup gid productGrains)
-    vec = U.create $ do
-      v <- MU.replicate nvox nullvalue
-      mapM_ (fill v) (HM.toList productGrains)
-      return v
-  return $ mkPointAttr name (vec U.!)
+  return $ U.create $ do
+    v <- MU.replicate nvox nullvalue
+    mapM_ (fill v) (HM.toList productGrains)
+    return v
 
-genLocalErrorVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=>
-                        a -> (ParentProductFit -> a) -> String -> Gomes (VTKAttrPoint b)
-genLocalErrorVTKAttr nullvalue func name = do
+genParentProductFitBitmap :: (U.Unbox a)=> a -> (ParentProductFit -> a) -> Gomes (U.Vector a)
+genParentProductFitBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
     nvox      = U.length $ grainID grainIDBox
-    getIS gid = maybe (V.empty) productVoxelPos (HM.lookup gid productGrains)
+    getIS gid = maybe V.empty productVoxelPos (HM.lookup gid productGrains)
     fill m p = let
       is = map (V.convert . getIS) (productMembers p)
       foo v iv  = U.mapM_ (\i -> MU.write m i (func v)) iv
       in zipWithM_ foo (parentErrorPerProduct p) is
-    vattr = U.create $ do
-      m <- MU.replicate nvox nullvalue
-      V.mapM_ (fill m) parentGrains
-      return m
-  return $ mkPointAttr name (vattr U.!)
+  return $ U.create $ do
+    m <- MU.replicate nvox nullvalue
+    V.mapM_ (fill m) parentGrains
+    return m
 
-genParentVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=>
-                    a -> ((Int, ParentGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
-genParentVTKAttr nul f name = func <$> genParentMatrixAttr nul f
-  where func = mkPointAttr name . (U.!)
-
-genParentEBSD :: Gomes (Either ANGdata CTFdata)
-genParentEBSD = ask >>= either (fmap Left . genParentANG) (fmap Right . genParentCTF) . inputEBSD
-
-genParentANG :: ANGdata -> Gomes ANGdata
-genParentANG ang = func . U.convert <$> genParentMatrixAttr zerorot (parentOrientation . snd)
-  where func qs = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
-        insRotation q p = p {A.rotation = q}
-
-genParentCTF :: CTFdata -> Gomes CTFdata
-genParentCTF ang = func . U.convert <$> genParentMatrixAttr zerorot (parentOrientation . snd)
-  where func qs = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
-        insRotation q p = p {C.rotation = q}
-
-genParentMatrixAttr :: (U.Unbox a)=> a -> ((Int, ParentGrain) -> a) -> Gomes (U.Vector a)
-genParentMatrixAttr nullvalue func = do
+genParentGrainBitmap :: (U.Unbox a)=> a -> ((Int, ParentGrain) -> a) -> Gomes (U.Vector a)
+genParentGrainBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
@@ -472,13 +443,45 @@ genParentMatrixAttr nullvalue func = do
     fill m x@(_, p) = let
       is = U.concat $ map (V.convert . getIS) (productMembers p)
       in U.mapM_ (\i -> MU.write m i (func x)) is
-    vattr = U.create $ do
-      m <- MU.replicate nvox nullvalue
-      V.mapM_ (fill m) (V.imap (,) parentGrains)
-      return m
-  return vattr
+  return $ U.create $ do
+    m <- MU.replicate nvox nullvalue
+    V.mapM_ (fill m) (V.imap (,) parentGrains)
+    return m
+
+-- ====================================== Plotting VTK ===================================================
+
+plotVTK_D :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
+plotVTK_D Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
+
+genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=> String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
+genVoxBoxAttr name func qBox = mkPointAttr name (func . ((grainID qBox) U.!))
+
+genProductVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ProductGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
+genProductVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genProductGrainBitmap nul func
+
+genLocalErrorVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> (ParentProductFit -> a) -> String -> Gomes (VTKAttrPoint b)
+genLocalErrorVTKAttr nul func name = (mkPointAttr name . (U.!))<$> genParentProductFitBitmap nul func
+
+genParentVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ParentGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
+genParentVTKAttr nul f name = func <$> genParentGrainBitmap nul f
+  where func = mkPointAttr name . (U.!)
 
 getCubicIPFColor :: (Rot q)=> q -> (Word8, Word8, Word8)
 getCubicIPFColor = let
   unColor (RGBColor rgb) = rgb
   in unColor . getRGBColor . snd . getIPFColor Cubic ND . convert
+
+-- ====================================== Plotting EBSD/CTF =============================================
+
+genParentEBSD :: Gomes (Either ANGdata CTFdata)
+genParentEBSD = ask >>= either (fmap Left . genParentANG) (fmap Right . genParentCTF) . inputEBSD
+
+genParentANG :: ANGdata -> Gomes ANGdata
+genParentANG ang = func . U.convert <$> genParentGrainBitmap zerorot (parentOrientation . snd)
+  where func qs = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
+        insRotation q p = p {A.rotation = q}
+
+genParentCTF :: CTFdata -> Gomes CTFdata
+genParentCTF ang = func . U.convert <$> genParentGrainBitmap zerorot (parentOrientation . snd)
+  where func qs = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
+        insRotation q p = p {C.rotation = q}
