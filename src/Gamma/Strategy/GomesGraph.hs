@@ -477,9 +477,11 @@ genParentEBSD :: Gomes (Either ANGdata CTFdata)
 genParentEBSD = ask >>= either (fmap Left . genParentANG) (fmap Right . genParentCTF) . inputEBSD
 
 genParentANG :: ANGdata -> Gomes ANGdata
-genParentANG ang = func . U.convert <$> genParentGrainBitmap zerorot (parentOrientation . snd)
-  where func qs = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
-        insRotation q p = p {A.rotation = q}
+genParentANG ang = do
+  qs <- U.convert <$> genParentGrainBitmap zerorot (parentOrientation . snd)
+  vs <- U.convert <$> genParentProductFitBitmap 0 variantNumber
+  return $ ang {A.nodes = V.zipWith3 ins qs vs (A.nodes ang)}
+  where ins q v p = p {A.rotation = q, A.ci = fromIntegral v / 24}
 
 genParentCTF :: CTFdata -> Gomes CTFdata
 genParentCTF ang = func . U.convert <$> genParentGrainBitmap zerorot (parentOrientation . snd)
