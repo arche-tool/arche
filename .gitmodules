@@ -1,9 +1,9 @@
 [submodule "packages/sledge"]
 	path = packages/sledge
-	url = git@bitbucket.org:lostbean/sledge.git
+	url = git@github.org:lostbean/sledge.git
 [submodule "packages/queryforest"]
 	path = packages/queryforest
-	url = git@bitbucket.org:lostbean/queryforest.git
+	url = git@github.org:lostbean/queryforest.git
 [submodule "packages/hammer"]
 	path = packages/hammer
-	url = git@bitbucket.org:lostbean/hammer.git
+	url = git@github.org:lostbean/hammer.git
