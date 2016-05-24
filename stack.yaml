@@ -19,8 +19,6 @@ extra-deps: []
 flags:
   hammer:
     test: false
-  sledge:
-    test: false
   queryforest:
     test: false
 
