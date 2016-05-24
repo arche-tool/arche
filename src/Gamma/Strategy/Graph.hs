@@ -12,7 +12,6 @@ import           Data.Word
 
 import           Hammer.VoxBox
 import           Hammer.VoxConn
-import           Hammer.VTK.VoxBox
 import           Hammer.VTK
 import           Hammer.MicroGraph
 

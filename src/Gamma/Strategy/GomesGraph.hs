@@ -29,7 +29,6 @@ import           Control.Monad.Trans
 
 import           Hammer.Math.Algebra
 import           Hammer.VoxBox
-import           Hammer.VTK.VoxBox
 import           Hammer.VTK
 import           Hammer.Graph
 import           Hammer.MicroGraph

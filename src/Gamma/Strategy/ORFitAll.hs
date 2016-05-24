@@ -22,7 +22,6 @@ import           System.Random.TF
 
 import           Hammer.Math.Algebra
 import           Hammer.VoxBox
-import           Hammer.VTK.VoxBox
 import           Hammer.VTK
 import           Hammer.MicroGraph
 
