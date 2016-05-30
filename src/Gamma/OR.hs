@@ -1,72 +1,65 @@
-{-# LANGUAGE ExistentialQuantification  #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE TypeFamilies               #-}
-
+{-# LANGUAGE
+    ExistentialQuantification
+  , MultiParamTypeClasses
+  , TemplateHaskell
+  , TypeFamilies
+  #-}
 module Gamma.OR
-       ( -- * Product-Parent mismatch evaluation
-         findGamma
-       , findOR
-       , findORFace
-       , hotStartGamma
-       , hotStartOR
-       , hotStartTesseract
-       , FitError (avgError, devError, maxError)
-       , evalMisoOR
-       , misoSingleOR
-       , misoDoubleOR
-       , misoDoubleKS
-       , singleerrorfunc
-       , weightederrorfunc
-       , uniformerrorfunc
-       , faceerrorfunc
-       , gammaFinderKernel
-       -- * Deconvolution
-       , oneStepDeconvulition
-         -- * Orientation Relationship
-       , OR (..)
-       , mkOR
-       , ksORs
-       , ksOR
-       , genTS
-       , QuaternionFZ (qFZ)
-       , getQinFZ
-       , convert
-       , shitQAvg
-         -- * Test functions
-       , testGammaFit
-       , testFindGamma
-       , testTesseractFitting
-       , testMisoKS
-       ) where
+  ( -- * Product-Parent mismatch evaluation
+    findGamma
+  , findOR
+  , findORFace
+  , hotStartGamma
+  , hotStartOR
+  , hotStartTesseract
+  , FitError (avgError, devError, maxError)
+  , evalMisoOR
+  , misoSingleOR
+  , misoDoubleOR
+  , misoDoubleKS
+  , singleerrorfunc
+  , weightederrorfunc
+  , uniformerrorfunc
+  , faceerrorfunc
+  , gammaFinderKernel
+  -- * Deconvolution
+  , oneStepDeconvulition
+    -- * Orientation Relationship
+  , OR (..)
+  , mkOR
+  , ksORs
+  , ksOR
+  , genTS
+  , QuaternionFZ (qFZ)
+  , getQinFZ
+  , convert
+  , shitQAvg
+    -- * Test functions
+  , testGammaFit
+  , testFindGamma
+  , testTesseractFitting
+  , testMisoKS
+  ) where
 
+import Data.Vector.Unboxed (Vector)
+import Data.Vector.Unboxed.Deriving
+import System.Random
 import qualified Data.Vector                 as V
 import qualified Data.Vector.Unboxed         as U
 import qualified Data.Vector.Generic         as G
-import qualified Data.Vector.Generic.Base    as GB
-import qualified Data.Vector.Generic.Mutable as GM
 
-import           Data.Vector.Unboxed (Vector)
-import           Control.Monad       (liftM)
+import Linear.Vect
+import Hammer.Math.Optimum
+import Hammer.VTK
+import Texture.HyperSphere
+import Texture.IsoSphere
+import Texture.Kernel (gaussianKernel)
+import Texture.Orientation
+import Texture.ODF
+import Texture.Symmetry
+import Texture.TesseractGrid
 
-import           System.Random
-
-import           Texture.Orientation
-import           Texture.Symmetry
-
-import           Hammer.Math.Algebra
-import           Hammer.Math.Optimum
-
-import           Hammer.VTK
-import           Texture.HyperSphere
-import           Texture.TesseractGrid
-import           Texture.IsoSphere
-import           Texture.Kernel (gaussianKernel)
-import           Texture.ODF
-
---import           Debug.Trace
---dbg a = trace (show a) a
-
--- ======================================================================================= 
+-- =======================================================================================
 
 newtype QuaternionFZ = QuaternionFZ {qFZ :: Quaternion} deriving (Show)
 newtype OR = OR {qOR :: Quaternion} deriving (Show)
@@ -87,7 +80,7 @@ instance Rot OR where
   zerorot        = OR zerorot
   getOmega       = getOmega . qOR
 
-mkOR :: Vec3 -> Deg -> OR
+mkOR :: Vec3D -> Deg -> OR
 mkOR v = OR . toQuaternion . mkAxisPair v
 
 convert :: (Rot a, Rot b) => a -> b
@@ -145,7 +138,7 @@ evalMisoOR ors (qa, pa) (qb, pb)
 faceerrorfunc :: Vector ((Quaternion, Int), (Quaternion, Int)) -> Vector OR -> FitError
 faceerrorfunc ms ors = let
   n     = fromIntegral (G.length ms)
-  errs  = G.map (\(q1,q2) -> evalMisoOR ors q1 q2) ms
+  errs  = G.map (uncurry (evalMisoOR ors)) ms
   avg   = G.sum errs / n
   diff  = G.map ((\x->x*x) . (-) avg) errs
   dev   = sqrt (G.sum diff / n)
@@ -155,7 +148,7 @@ faceerrorfunc ms ors = let
      , maxError = toAngle (G.maximum errs)
      }
 
-deltaVec3 :: (Vec3 -> Double) -> Vec3 -> (Double, Vec3)
+deltaVec3 :: (Vec3D -> Double) -> Vec3D -> (Double, Vec3D)
 deltaVec3 func v = let
   k  = 0.001
   x  = func v
@@ -269,7 +262,7 @@ shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)
       ms = U.map (composeQ0 avg) qs
       i  = U.minIndex ms
       vi = quaterVec (qs U.! i)
-      in mkQuaternion $ vi &+ (quaterVec avg)
+      in mkQuaternion $ vi &+ quaterVec avg
 
 -- ================================= Gamma finder width kernel ===========================
 
@@ -331,97 +324,17 @@ hotStartTesseract ors ms
     eravg = uniformerrorfunc ms gavg ors
     ermax = uniformerrorfunc ms gmax ors
 
--- =========================================== Unbox QuaternionFZ  =================================
+-- ======================================= Unbox ==========================================
 
-newtype instance U.MVector s QuaternionFZ = MV_FZ (U.MVector s Quaternion)
-newtype instance U.Vector    QuaternionFZ = V_FZ  (U.Vector    Quaternion)
+derivingUnbox "QuaternionFZ"
+    [t| QuaternionFZ -> Quaternion |]
+    [| \(QuaternionFZ q) -> q |]
+    [| QuaternionFZ |]
 
-instance U.Unbox QuaternionFZ
-
-instance GM.MVector U.MVector QuaternionFZ where
-  {-# INLINE basicLength #-}
-  {-# INLINE basicUnsafeSlice #-}
-  {-# INLINE basicOverlaps #-}
-  {-# INLINE basicUnsafeNew #-}
-  {-# INLINE basicUnsafeReplicate #-}
-  {-# INLINE basicUnsafeRead #-}
-  {-# INLINE basicUnsafeWrite #-}
-  {-# INLINE basicClear #-}
-  {-# INLINE basicSet #-}
-  {-# INLINE basicUnsafeCopy #-}
-  {-# INLINE basicUnsafeGrow #-}
-  basicLength (MV_FZ v)                         = GM.basicLength v
-  basicUnsafeSlice i n (MV_FZ v)                = MV_FZ $ GM.basicUnsafeSlice i n v
-  basicOverlaps (MV_FZ v1) (MV_FZ v2)           = GM.basicOverlaps v1 v2
-  basicUnsafeNew n                              = MV_FZ `liftM` GM.basicUnsafeNew n
-  basicUnsafeReplicate n (QuaternionFZ x)       = MV_FZ `liftM` GM.basicUnsafeReplicate n x
-  basicUnsafeRead (MV_FZ v) i                   = liftM QuaternionFZ (GM.basicUnsafeRead v i)
-  basicUnsafeWrite (MV_FZ v) i (QuaternionFZ x) = GM.basicUnsafeWrite v i x
-  basicClear (MV_FZ v)                          = GM.basicClear v
-  basicSet (MV_FZ v) (QuaternionFZ x)           = GM.basicSet v x
-  basicUnsafeCopy (MV_FZ v1) (MV_FZ v2)         = GM.basicUnsafeCopy v1 v2
-  basicUnsafeGrow (MV_FZ v) n                   = MV_FZ `liftM` GM.basicUnsafeGrow v n
-
-instance GB.Vector U.Vector QuaternionFZ where
-  {-# INLINE basicUnsafeFreeze #-}
-  {-# INLINE basicUnsafeThaw #-}
-  {-# INLINE basicLength #-}
-  {-# INLINE basicUnsafeSlice #-}
-  {-# INLINE basicUnsafeIndexM #-}
-  {-# INLINE elemseq #-}
-  basicUnsafeFreeze (MV_FZ v)         = V_FZ `liftM` GB.basicUnsafeFreeze v
-  basicUnsafeThaw (V_FZ v)            = MV_FZ `liftM` GB.basicUnsafeThaw v
-  basicLength (V_FZ v)                = GB.basicLength v
-  basicUnsafeSlice i n (V_FZ v)       = V_FZ $ GB.basicUnsafeSlice i n v
-  basicUnsafeIndexM (V_FZ v) i        = liftM QuaternionFZ (GB.basicUnsafeIndexM v i)
-  basicUnsafeCopy (MV_FZ mv) (V_FZ v) = GB.basicUnsafeCopy mv v
-  elemseq _ (QuaternionFZ x)          = GB.elemseq (undefined :: Vector a) x
-
--- =========================================== Unbox OR =================================
-
-newtype instance U.MVector s OR = MV_OR (U.MVector s Quaternion)
-newtype instance U.Vector    OR = V_OR  (U.Vector    Quaternion)
-
-instance U.Unbox OR
-
-instance GM.MVector U.MVector OR where
-  {-# INLINE basicLength #-}
-  {-# INLINE basicUnsafeSlice #-}
-  {-# INLINE basicOverlaps #-}
-  {-# INLINE basicUnsafeNew #-}
-  {-# INLINE basicUnsafeReplicate #-}
-  {-# INLINE basicUnsafeRead #-}
-  {-# INLINE basicUnsafeWrite #-}
-  {-# INLINE basicClear #-}
-  {-# INLINE basicSet #-}
-  {-# INLINE basicUnsafeCopy #-}
-  {-# INLINE basicUnsafeGrow #-}
-  basicLength (MV_OR v)                 = GM.basicLength v
-  basicUnsafeSlice i n (MV_OR v)        = MV_OR $ GM.basicUnsafeSlice i n v
-  basicOverlaps (MV_OR v1) (MV_OR v2)   = GM.basicOverlaps v1 v2
-  basicUnsafeNew n                      = MV_OR `liftM` GM.basicUnsafeNew n
-  basicUnsafeReplicate n (OR x)         = MV_OR `liftM` GM.basicUnsafeReplicate n x
-  basicUnsafeRead (MV_OR v) i           = liftM OR (GM.basicUnsafeRead v i)
-  basicUnsafeWrite (MV_OR v) i (OR x)   = GM.basicUnsafeWrite v i x
-  basicClear (MV_OR v)                  = GM.basicClear v
-  basicSet (MV_OR v) (OR x)             = GM.basicSet v x
-  basicUnsafeCopy (MV_OR v1) (MV_OR v2) = GM.basicUnsafeCopy v1 v2
-  basicUnsafeGrow (MV_OR v) n           = MV_OR `liftM` GM.basicUnsafeGrow v n
-
-instance GB.Vector U.Vector OR where
-  {-# INLINE basicUnsafeFreeze #-}
-  {-# INLINE basicUnsafeThaw #-}
-  {-# INLINE basicLength #-}
-  {-# INLINE basicUnsafeSlice #-}
-  {-# INLINE basicUnsafeIndexM #-}
-  {-# INLINE elemseq #-}
-  basicUnsafeFreeze (MV_OR v)         = V_OR `liftM` GB.basicUnsafeFreeze v
-  basicUnsafeThaw (V_OR v)            = MV_OR `liftM` GB.basicUnsafeThaw v
-  basicLength (V_OR v)                = GB.basicLength v
-  basicUnsafeSlice i n (V_OR v)       = V_OR $ GB.basicUnsafeSlice i n v
-  basicUnsafeIndexM (V_OR v) i        = liftM OR (GB.basicUnsafeIndexM v i)
-  basicUnsafeCopy (MV_OR mv) (V_OR v) = GB.basicUnsafeCopy mv v
-  elemseq _ (OR x)                    = GB.elemseq (undefined :: Vector a) x
+derivingUnbox "OR"
+    [t| OR -> Quaternion |]
+    [| \(OR q) -> q |]
+    [| OR |]
 
 -- ================================= Test Function =======================================
 
@@ -513,7 +426,7 @@ testAvg :: Int -> IO ()
 testAvg n = do
   gen <- newStdGen
   let
-    vs = take n $ randoms gen :: [Vec3]
+    vs = take n $ randoms gen :: [Vec3D]
     q  = toQuaternion $ mkEuler (Deg 10) (Deg 15) (Deg 2)
     rs = map (\v -> toQuaternion $ mkAxisPair v (Deg 1)) vs
     qs = U.fromList $ map (q #<=) rs

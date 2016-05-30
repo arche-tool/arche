@@ -12,7 +12,7 @@ module Gamma.GBRender
 import qualified Data.List           as L
 import qualified Data.Vector.Unboxed as U
 
-import           Hammer.Math.Algebra
+import           Linear.Vect
 import           Hammer.VoxBox
 import           Hammer.VTK
 import           Hammer.VTK.VoxBox ()

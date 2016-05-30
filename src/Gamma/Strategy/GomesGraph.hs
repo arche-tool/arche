@@ -1,11 +1,25 @@
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE
+    RecordWildCards
+  , FlexibleInstances
+  #-}
 
 module Gamma.Strategy.GomesGraph
-       ( run
-       , Cfg(..)
-       ) where
+  ( run
+  , Cfg(..)
+  ) where
 
+import Control.Arrow       ((&&&))
+import Control.Monad       (when, replicateM_, zipWithM_, void)
+import Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
+import Control.Monad.Trans
+import Control.Parallel.Strategies
+import Data.HashMap.Strict (HashMap)
+import Data.Maybe          (mapMaybe, fromMaybe)
+import Data.Vector.Unboxed (Vector)
+import Data.Word           (Word8)
+import System.FilePath
+import System.IO
+import System.Process
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
 import qualified Data.Vector.Unboxed.Mutable  as MU
@@ -13,44 +27,25 @@ import qualified Data.HashMap.Strict          as HM
 import qualified Data.HashSet                 as HS
 import qualified Data.List                    as L
 
-import           Control.Applicative ((<$>))
-import           Control.Monad       (when, replicateM_, zipWithM_)
-import           Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
-import           Data.Vector.Unboxed (Vector)
-import           Data.HashMap.Strict (HashMap)
-import           Data.Word           (Word8)
-import           Data.Maybe          (mapMaybe)
-
-import           System.FilePath
-import           System.IO
-import           System.Process
-import           Control.Parallel.Strategies
-import           Control.Monad.Trans
-
-import           Hammer.Math.Algebra
-import           Hammer.VoxBox
-import           Hammer.VTK
-import           Hammer.Graph
-import           Hammer.MicroGraph
-
+import File.ANGReader (ANGdata)
+import File.CTFReader (CTFdata)
+import File.ANGWriter
+import File.CTFWriter
+import File.EBSD
+import Hammer.VoxBox
+import Hammer.VTK
+import Hammer.Graph
+import Hammer.MicroGraph
+import Linear.Vect
+import Texture.Symmetry    (Symm (..))
+import Texture.IPF
+import Texture.Orientation
+import Texture.ODF
 import qualified File.ANGReader as A
 import qualified File.CTFReader as C
-import           File.ANGReader (ANGdata)
-import           File.CTFReader (CTFdata)
-import           File.ANGWriter
-import           File.CTFWriter
-import           File.EBSD
-import           Texture.Symmetry    (Symm (..))
-import           Texture.IPF
-import           Texture.Orientation
-import           Texture.ODF
 
-import           Gamma.Grains
-import           Gamma.OR
-
---import Debug.Trace
---dbg a = trace (show a) a
---dbgs s a = trace (show s ++ " <=> " ++ show a) a
+import Gamma.Grains
+import Gamma.OR
 
 data Cfg =
   Cfg
@@ -73,7 +68,7 @@ data ProductGrain =
   ProductGrain
   { productVoxelPos       :: V.Vector Int
   , productAvgOrientation :: QuaternionFZ
-  , productAvgPos         :: Vec3
+  , productAvgPos         :: Vec3D
   , productPhase          :: Int
   } deriving (Show)
 
@@ -121,8 +116,8 @@ getGomesConfig :: Cfg -> OR -> Either ANGdata CTFdata -> Maybe GomesConfig
 getGomesConfig cfg ror ebsd = let
   noIsleGrains = excluedeFloatingGrains cfg
   qpBox = readEBSDToVoxBox
-          (\p -> (C.rotation p, C.phase p   ))
-          (\p -> (A.rotation p, A.phaseNum p))
+          (C.rotation &&& C.phase)
+          (A.rotation &&& A.phaseNum)
           ebsd
   func (gidBox, voxMap) = let
     micro = fst $ getMicroVoxel (gidBox, voxMap)
@@ -180,11 +175,19 @@ plotVTK name = do
     attrVoxAIPF  = genVoxBoxAttr "VoxelAlpha" (getCubicIPFColor . fst) orientationBox
     attrVoxPhase = genVoxBoxAttr "Phases" snd orientationBox
     vtkD  = renderVoxBoxVTK grainIDBox attrs
-    attrs = [ attrIPF, attrGID, attrMID, attrAvgErr
-            , attrDevErr, attrMaxErr, attrLocErr
-            , attrAvgAIPF, attrVoxAIPF, attrVoxPhase
-            , attrORVar ]
-  liftIO $ plotVTK_D inputCfg (vtkD,  name)
+    attrs = [ attrIPF
+            , attrGID
+            , attrMID
+            , attrAvgErr
+            , attrDevErr
+            , attrMaxErr
+            , attrLocErr
+            , attrORVar
+            , attrVoxPhase
+            , attrVoxAIPF
+            , attrAvgAIPF
+            ]
+  liftIO $ plotVTKD inputCfg (vtkD,  name)
 
 plotEBSD :: String -> Gomes ()
 plotEBSD name = do
@@ -208,7 +211,7 @@ run cfg@Cfg{..} = do
       plotResults "final-step"
   gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror ebsd)
   putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
-  runRWST doit gomescfg (getInitState gomescfg) >> return ()
+  void $ runRWST doit gomescfg (getInitState gomescfg)
 
 -- ==================================== Initial Graph ====================================
 
@@ -244,9 +247,9 @@ getFaceVoxelmisOR vbq ors face = let
 -- TODO move to Hammer
 -- | Get both voxels that forms a given face.
 getFaceVoxels :: FaceVoxelPos -> (VoxelPos, VoxelPos)
-getFaceVoxels (Fx pos) = (pos, pos #+# (VoxelPos (-1) 0 0))
-getFaceVoxels (Fy pos) = (pos, pos #+# (VoxelPos 0 (-1) 0))
-getFaceVoxels (Fz pos) = (pos, pos #+# (VoxelPos 0 0 (-1)))
+getFaceVoxels (Fx pos) = (pos, pos #+# VoxelPos (-1) 0 0)
+getFaceVoxels (Fy pos) = (pos, pos #+# VoxelPos 0 (-1) 0)
+getFaceVoxels (Fz pos) = (pos, pos #+# VoxelPos 0 0 (-1))
 
 graphWeight :: Bool -> VoxBox (Quaternion, Int) -> MicroVoxel -> OR -> Graph Int Double
 graphWeight noIsleGrains vbq micro withOR = let
@@ -277,7 +280,7 @@ getProductGrainData vbq gmap = let
            { productVoxelPos       = V.map (boxdim %@) x
            , productAvgOrientation = getAvgQ x
            , productAvgPos         = getAvgPos x
-           , productPhase          = maybe (-1) id (getGrainPhase vbq gmap gid)
+           , productPhase          = fromMaybe (-1) (getGrainPhase vbq gmap gid)
            }
   in HM.mapWithKey func gmap
 
@@ -381,7 +384,7 @@ refineParentGrain p@ParentGrain{..} = do
 saveGraph :: (Show a, Show b)=> Graph a b -> IO ()
 saveGraph g = let
   xs = graphToList g
-  func f ((n1,n2), x) = hPutStrLn f (unwords $ [show n1, show n2, show x])
+  func f ((n1,n2), x) = hPutStrLn f $ unwords [show n1, show n2, show x]
   in do
     f <- openFile "test.txt" WriteMode
     mapM_ (func f) xs
@@ -395,7 +398,7 @@ readGroups = readFile "test.out" >>= return . V.fromList . map (map read . words
 
 findClusters :: Graph Int Double -> Double -> Bool -> IO (V.Vector [Int])
 findClusters graph0 i extMCL
-  | null (graphToList graph0) = putStrLn "Warning: attempting to cluster the void" >> return (V.empty)
+  | null (graphToList graph0) = putStrLn "Warning: attempting to cluster the void" >> return V.empty
   | extMCL                    = saveGraph graph0 >> runMCLIO i >> readGroups
   | otherwise = let
     cfgMCL = defaultMCL {inflation = i, selfLoop = 0.5}
@@ -424,8 +427,8 @@ genParentProductFitBitmap nullvalue func = do
     nvox      = U.length $ grainID grainIDBox
     getIS gid = maybe V.empty productVoxelPos (HM.lookup gid productGrains)
     fill m p = let
-      is = map (V.convert . getIS) (productMembers p)
-      foo v iv  = U.mapM_ (\i -> MU.write m i (func v)) iv
+      is    = map (V.convert . getIS) (productMembers p)
+      foo v = U.mapM_ (\i -> MU.write m i (func v))
       in zipWithM_ foo (parentErrorPerProduct p) is
   return $ U.create $ do
     m <- MU.replicate nvox nullvalue
@@ -438,7 +441,7 @@ genParentGrainBitmap nullvalue func = do
   GomesState{..}  <- get
   let
     nvox      = U.length $ grainID grainIDBox
-    getIS gid = maybe (V.empty) productVoxelPos (HM.lookup gid productGrains)
+    getIS gid = maybe V.empty productVoxelPos (HM.lookup gid productGrains)
     fill m x@(_, p) = let
       is = U.concat $ map (V.convert . getIS) (productMembers p)
       in U.mapM_ (\i -> MU.write m i (func x)) is
@@ -449,11 +452,11 @@ genParentGrainBitmap nullvalue func = do
 
 -- ====================================== Plotting VTK ===================================================
 
-plotVTK_D :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
-plotVTK_D Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
+plotVTKD :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
+plotVTKD Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=> String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
-genVoxBoxAttr name func qBox = mkPointAttr name (func . ((grainID qBox) U.!))
+genVoxBoxAttr name func qBox = mkPointAttr name (func . (grainID qBox U.!))
 
 genProductVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ProductGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
 genProductVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genProductGrainBitmap nul func

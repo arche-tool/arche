@@ -2,37 +2,35 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Gamma.Strategy.ORFitAll
-       ( run
-       , Cfg(..)
-       ) where
+  ( run
+  , Cfg(..)
+  ) where
 
-import qualified Data.Vector                  as V
-import qualified Data.Vector.Unboxed          as U
-import qualified Data.HashMap.Strict          as HM
+import Control.Arrow       ((&&&))
+import Control.Monad       (when)
+import Data.Maybe          (mapMaybe)
+import Data.HashMap.Strict (HashMap)
+import Data.Vector.Unboxed (Vector)
+import System.FilePath
+import System.Random.TF
+import System.Random.TF.Init
+import System.Random.TF.Instances
+import qualified Data.Vector         as V
+import qualified Data.Vector.Unboxed as U
+import qualified Data.HashMap.Strict as HM
 
-import           Data.Maybe          (mapMaybe)
-import           Data.Vector.Unboxed (Vector)
-import           Data.HashMap.Strict (HashMap)
-import           Control.Monad       (when)
-
-import           System.FilePath
-import           System.Random.TF.Instances
-import           System.Random.TF.Init
-import           System.Random.TF
-
-import           Hammer.Math.Algebra
-import           Hammer.VoxBox
-import           Hammer.VTK
-import           Hammer.MicroGraph
-
+import File.EBSD
+import Linear.Vect
+import Hammer.VoxBox
+import Hammer.VTK
+import Hammer.MicroGraph
+import Texture.Symmetry
+import Texture.Orientation
 import qualified File.ANGReader as A
 import qualified File.CTFReader as C
-import           File.EBSD
-import           Texture.Symmetry
-import           Texture.Orientation
 
-import           Gamma.Grains
-import           Gamma.OR
+import Gamma.Grains
+import Gamma.OR
 
 data Cfg =
   Cfg
@@ -48,8 +46,8 @@ run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
   ebsd <- readEBSD ang_input
   let vbq = readEBSDToVoxBox
-            (\p -> (C.rotation p, C.phase p   ))
-            (\p -> (A.rotation p, A.phaseNum p))
+            (C.rotation &&& C.phase   )
+            (A.rotation &&& A.phaseNum)
             ebsd
   gen <- initTFGen
   (gidBox, voxMap) <- maybe (error "No grain detected!") return
@@ -146,7 +144,7 @@ avgVector x
   where
     n = fromIntegral $ V.length x
 
-renderFaceVoxelOR :: OR -> VoxBox (Quaternion, Int) -> MicroVoxel -> VTK Vec3
+renderFaceVoxelOR :: OR -> VoxBox (Quaternion, Int) -> MicroVoxel -> VTK Vec3D
 renderFaceVoxelOR ror vbq micro = let
   gs  = mapMaybe (getPropValue) $ HM.elems $ microFaces micro
   fs  = V.concat gs
@@ -158,7 +156,7 @@ renderFaceVoxelOR ror vbq micro = let
   in addCellAttr vtk (mkCellAttr "misoORAvg" func)
 
 renderGBOR :: OR -> VoxBox (Quaternion, Int) -> HashMap Int (Quaternion, Int)
-           -> MicroVoxel -> VTK Vec3
+           -> MicroVoxel -> VTK Vec3D
 renderGBOR ror vbq qmap micro = let
   fids = HM.keys  $ microFaces micro
   vs   = HM.elems $ microFaces micro

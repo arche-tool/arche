@@ -21,7 +21,7 @@ import           Data.Vector.Unboxed (Vector)
 import           Hammer.MicroGraph   (GrainID, unGrainID)
 
 import           File.ANGReader
-import           Hammer.Math.Algebra
+import           Linear.Vect
 import           Hammer.VoxBox
 import           Hammer.VTK
 import           Texture.IPF

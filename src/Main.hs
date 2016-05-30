@@ -15,7 +15,7 @@ import           Options.Applicative
 import           System.FilePath
 
 import           Texture.Orientation         (Deg(..), mkAxisPair, AxisPair)
-import           Hammer.Math.Algebra
+import           Linear.Vect
 
 -- ===================================== Data & class ====================================
 

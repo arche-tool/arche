@@ -7,3 +7,6 @@
 [submodule "packages/hammer"]
 	path = packages/hammer
 	url = git@github.org:lostbean/hammer.git
+[submodule "packages/linear-vect"]
+	path = packages/linear-vect
+	url = git@github.com:lostbean/linear-vect.git
