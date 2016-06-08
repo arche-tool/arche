@@ -33,7 +33,6 @@ module Gamma.OR
   , QuaternionFZ (qFZ)
   , getQinFZ
   , convert
-  , shitQAvg
     -- * Test functions
   , testGammaFit
   , testFindGamma
@@ -44,9 +43,9 @@ module Gamma.OR
 import Data.Vector.Unboxed (Vector)
 import Data.Vector.Unboxed.Deriving
 import System.Random
-import qualified Data.Vector                 as V
-import qualified Data.Vector.Unboxed         as U
-import qualified Data.Vector.Generic         as G
+import qualified Data.Vector         as V
+import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Generic as G
 
 import Linear.Vect
 import Hammer.Math.Optimum
@@ -253,17 +252,6 @@ weightederrorfunc ws ms gamma ors
        , maxError = Deg (G.maximum wq / wt)
        }
 
-shitQAvg :: Vector Quaternion -> Quaternion
-shitQAvg vq = U.foldl func (U.head vq) (U.tail vq)
-  where
-    os = getSymmOps Cubic
-    func avg q = let
-      qs = U.map ((q #<=) . symmOp) os
-      ms = U.map (composeQ0 avg) qs
-      i  = U.minIndex ms
-      vi = quaterVec (qs U.! i)
-      in mkQuaternion $ vi &+ quaterVec avg
-
 -- ================================= Gamma finder width kernel ===========================
 
 -- | Generate a PPODF (Possible Parent Orientation Function) using another ODF grid structure
@@ -320,7 +308,7 @@ hotStartTesseract ors ms
     tess  = binningTesseract (U.convert gs) t0
     gmax  = tesseractToQuaternion $ maxTesseractPoint tess
     gc    = U.filter ((> range) . getMisoAngle Cubic gmax) gs
-    gavg  = shitQAvg gc
+    gavg  = averageQuaternionWithSymm Cubic (V.convert gc :: V.Vector Quaternion)
     eravg = uniformerrorfunc ms gavg ors
     ermax = uniformerrorfunc ms gmax ors
 
@@ -429,7 +417,7 @@ testAvg n = do
     vs = take n $ randoms gen :: [Vec3D]
     q  = toQuaternion $ mkEuler (Deg 10) (Deg 15) (Deg 2)
     rs = map (\v -> toQuaternion $ mkAxisPair v (Deg 1)) vs
-    qs = U.fromList $ map (q #<=) rs
+    qs = map (q #<=) rs
   print q
   print $ averageQuaternion qs
 

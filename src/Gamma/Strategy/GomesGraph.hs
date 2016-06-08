@@ -37,10 +37,10 @@ import Hammer.VTK
 import Hammer.Graph
 import Hammer.MicroGraph
 import Linear.Vect
-import Texture.Symmetry    (Symm (..))
 import Texture.IPF
 import Texture.Orientation
 import Texture.ODF
+import Texture.Symmetry
 import qualified File.ANGReader as A
 import qualified File.CTFReader as C
 
@@ -171,6 +171,7 @@ plotVTK name = do
   attrLocErr <- genLocalErrorVTKAttr (-1) (unDeg . misfitAngle) "ErrorPerProduct"
 
   attrAvgAIPF <- genProductVTKAttr (255,255,255) (getCubicIPFColor . productAvgOrientation . snd) "AlphaIPF"
+  attrAvgAID  <- genProductVTKAttr (-1) fst "Alpha Id"
   let
     attrVoxAIPF  = genVoxBoxAttr "VoxelAlpha" (getCubicIPFColor . fst) orientationBox
     attrVoxPhase = genVoxBoxAttr "Phases" snd orientationBox
@@ -186,6 +187,7 @@ plotVTK name = do
             , attrVoxPhase
             , attrVoxAIPF
             , attrAvgAIPF
+            , attrAvgAID
             ]
   liftIO $ plotVTKD inputCfg (vtkD,  name)
 
@@ -270,7 +272,7 @@ getProductGrainData :: VoxBox (Quaternion, Int) ->
                        HashMap Int (V.Vector VoxelPos) ->
                        HashMap Int ProductGrain
 getProductGrainData vbq gmap = let
-  getAvgQ = getQinFZ . shitQAvg . V.convert . V.map (fst . (vbq #!))
+  getAvgQ = getQinFZ . averageQuaternionWithSymm Cubic . V.map (fst . (vbq #!))
   getAvgPos v = let
     t = V.foldl' (&+) zero $ V.map (evalCentralVoxelPos vbq) v
     n = V.length v
@@ -323,7 +325,7 @@ getWGammaTess phaseID ors xs = (gamma, err)
   where
     (gs, as) = U.partition (\(_,_,p) -> p == phaseID) xs
     g0 | U.null gs = let (g, _, _) = hotStartTesseract ors qs in g
-       | otherwise = shitQAvg $ U.map (\(_,q,_) -> qFZ q) gs
+       | otherwise = averageQuaternion (V.convert $ U.map (\(_,q,_) -> qFZ q) gs :: V.Vector Quaternion)
     (ws, qs, _) = U.unzip3 as
     errfunc = weightederrorfunc ws qs
     err     = errfunc gamma ors

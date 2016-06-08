@@ -123,7 +123,7 @@ getGrainAverageQ :: VoxBox (Quaternion, Int)->
                     HashMap Int (Quaternion, Int)
 getGrainAverageQ vbq gmap = let
   getAvgQ gid vs = let
-    q = shitQAvg $ V.convert $ V.map (fst . (vbq #!)) vs
+    q = averageQuaternion $ V.map (fst . (vbq #!)) vs
     p = maybe (-1) id (getGrainPhase vbq gmap gid)
     in (q, p)
   in HM.mapWithKey getAvgQ gmap
