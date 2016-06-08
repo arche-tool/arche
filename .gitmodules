@@ -10,3 +10,9 @@
 [submodule "packages/linear-vect"]
 	path = packages/linear-vect
 	url = git@github.com:lostbean/linear-vect.git
+[submodule "packages/vtk"]
+	path = packages/vtk
+	url = git@github.com:lostbean/vtk.git
+[submodule "packages/mcl"]
+	path = packages/mcl
+	url = git@github.com:lostbean/mcl.git
