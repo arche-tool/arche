@@ -1,5 +1,6 @@
 {-# LANGUAGE
     ExistentialQuantification
+  , GeneralizedNewtypeDeriving
   , MultiParamTypeClasses
   , TemplateHaskell
   , TypeFamilies
@@ -61,23 +62,20 @@ import Texture.TesseractGrid
 -- =======================================================================================
 
 newtype QuaternionFZ = QuaternionFZ {qFZ :: Quaternion} deriving (Show)
-newtype OR = OR {qOR :: Quaternion} deriving (Show)
+
+instance Monoid QuaternionFZ where
+  mempty      = QuaternionFZ mempty
+  mappend p q = fromQuaternion (qFZ p `mappend` qFZ q)
+
+instance Group QuaternionFZ where
+  invert = fromQuaternion . invert . qFZ
 
 instance Rot QuaternionFZ where
-  p #<= q        = QuaternionFZ $ (qFZ p) #<= (qFZ q)
-  invert         = QuaternionFZ . invert . qFZ
   toQuaternion   = qFZ
   fromQuaternion = getQinFZ
-  zerorot        = QuaternionFZ zerorot
   getOmega       = getOmega . qFZ
 
-instance Rot OR where
-  (OR p) #<= (OR q) = OR $ p #<= q
-  invert         = OR . invert . qOR
-  toQuaternion   = qOR
-  fromQuaternion = OR
-  zerorot        = OR zerorot
-  getOmega       = getOmega . qOR
+newtype OR = OR {qOR :: Quaternion} deriving (Show, Monoid, Group, Rot)
 
 mkOR :: Vec3D -> Deg -> OR
 mkOR v = OR . toQuaternion . mkAxisPair v
@@ -363,7 +361,7 @@ plotErrFunc a = let
   gi   = so3ToQuaternion $ grid U.! (U.minIndex es)
   in do
     let
-      a'   = findGamma errf zerorot ksORs
+      a'   = findGamma errf mempty ksORs
       fa   = toFZ Cubic a
       fa'  = toFZ Cubic a'
       fgi  = toFZ Cubic gi

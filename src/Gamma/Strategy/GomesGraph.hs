@@ -481,11 +481,11 @@ genParentEBSD :: Gomes (Either ANGdata CTFdata)
 genParentEBSD = ask >>= either (fmap Left . genParentANG) (fmap Right . genParentCTF) . inputEBSD
 
 genParentANG :: ANGdata -> Gomes ANGdata
-genParentANG ang = func . U.convert <$> genParentGrainBitmap zerorot (parentOrientation . snd)
+genParentANG ang = func . U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
   where func qs = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
         insRotation q p = p {A.rotation = q}
 
 genParentCTF :: CTFdata -> Gomes CTFdata
-genParentCTF ang = func . U.convert <$> genParentGrainBitmap zerorot (parentOrientation . snd)
+genParentCTF ang = func . U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
   where func qs = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
         insRotation q p = p {C.rotation = q}
