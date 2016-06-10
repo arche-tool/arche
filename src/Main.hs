@@ -223,8 +223,8 @@ parseBadAngle = ((Deg . abs) <$> option auto
    (  long "bad-fit"
    <> short 'b'
    <> metavar "[Deg]"
-   <> value 15
-   <> help "The default error is 15 deg."))
+   <> value 5
+   <> help "The default error is 5 deg."))
 
 parseGammaID :: Parser Int
 parseGammaID = option auto
