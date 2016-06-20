@@ -9,7 +9,7 @@ module Gamma.Strategy.GomesGraph
   ) where
 
 import Control.Arrow       ((&&&))
-import Control.Monad       (when, replicateM_, zipWithM_, void)
+import Control.Monad       (forM_, when, replicateM_, zipWithM_, void)
 import Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
 import Control.Monad.Trans
 import Control.Parallel.Strategies
@@ -41,6 +41,7 @@ import Texture.IPF
 import Texture.Orientation
 import Texture.ODF
 import Texture.Symmetry
+import Texture.HyperSphere
 import qualified File.ANGReader as A
 import qualified File.CTFReader as C
 
@@ -84,7 +85,7 @@ data ParentProductFit
   = ParentProductFit
   { areaFraction  :: !Double
   , misfitAngle   :: !Deg
-  , variantNumber :: !(Int, Quaternion)
+  , variantNumber :: !(Int, OR)
   } deriving (Show)
 
 
@@ -159,26 +160,25 @@ plotResults name = do
 
 plotVTK :: String -> Gomes ()
 plotVTK name = do
-  GomesConfig{..} <- ask
+  cfg@GomesConfig{..} <- ask
   attrAvgAID <- genProductVTKAttr    (-1) fst "Alpha Id"
   attrGID    <- genParentVTKAttr     (-1) fst "ParentGrainID"
   attrAvgErr <- genParentVTKAttr     (-1) (unDeg . avgError . parentAvgErrorFit . snd) "AvgError"
   attrDevErr <- genParentVTKAttr     (-1) (unDeg . devError . parentAvgErrorFit . snd) "DevError"
   attrMaxErr <- genParentVTKAttr     (-1) (unDeg . maxError . parentAvgErrorFit . snd) "MaxError"
-  attrMID    <- genProductFitVTKAttr (-1) (const areaFraction)          "ProductGrainAreaFraction"
-  attrORVar  <- genProductFitVTKAttr (-1) (const $ fst . variantNumber) "VariantNumber"
-  attrLocErr <- genProductFitVTKAttr (-1) (const (unDeg . misfitAngle)) "ErrorPerProduct"
+  attrMID    <- genProductFitVTKAttr (-1) (const $ const areaFraction)          "ProductGrainAreaFraction"
+  attrORVar  <- genProductFitVTKAttr (-1) (const $ const (fst . variantNumber)) "VariantNumber"
+  attrLocErr <- genProductFitVTKAttr (-1) (const $ const (unDeg . misfitAngle)) "ErrorPerProduct"
 
-  attrIPF     <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)     "GammaIPF"
-  attrIPF2    <- genProductFitVTKAttr (255,255,255) (const (getCubicIPFColor . snd . variantNumber)) "Gamma IPF by pixel"
-  attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . productAvgOrientation . snd) "AlphaIPF"
-
+  attrAvgGIPF <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)                 "Gamma Avg Orientation [IPF]"
+  attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Gamma Orientation [IPF]"
+  attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . productAvgOrientation . snd)             "Alpha Orientation [IPF]"
   let
     attrVoxAIPF  = genVoxBoxAttr "VoxelAlpha" (getCubicIPFColor . fst) orientationBox
     attrVoxPhase = genVoxBoxAttr "Phases" snd orientationBox
     vtkD  = renderVoxBoxVTK grainIDBox attrs
-    attrs = [ attrIPF
-            , attrIPF2
+    attrs = [ attrAvgGIPF
+            , attrGIPF
             , attrGID
             , attrMID
             , attrAvgErr
@@ -192,6 +192,21 @@ plotVTK name = do
             , attrAvgAID
             ]
   liftIO $ plotVTKD inputCfg (vtkD,  name)
+
+getTransformedProduct :: GomesConfig -> (Quaternion, Int) -> ParentGrain -> Quaternion
+getTransformedProduct cfg (q, ph) p
+  | ph == phref = q
+  | otherwise   = findBestTransformation ors (parentOrientation p) q
+  where
+    ors   = realORs cfg
+    phref = gammaPhaseID . inputCfg $ cfg
+
+findBestTransformation ::  Vector OR -> Quaternion -> Quaternion -> Quaternion
+findBestTransformation ors ref q = let
+  qs  = U.map ((qFZ (getQinFZ q) #<=) . qOR) ors
+  ms  = U.map (fst . splitQuaternion . qFZ . getQinFZ . (-#- ref)) qs
+  i   = U.maxIndex ms
+  in qFZ . getQinFZ $ qs U.! i
 
 plotEBSD :: String -> Gomes ()
 plotEBSD name = do
@@ -302,7 +317,7 @@ getParentGrainData GomesConfig{..} mids = let
 
   getFitInfo :: (Double, QuaternionFZ, Int) -> ParentProductFit
   getFitInfo (wi, qi, ph)
-    | ph == gammaPhaseID inputCfg = ParentProductFit (wi / wt) 0 (-1, qFZ qi)
+    | ph == gammaPhaseID inputCfg = ParentProductFit (wi / wt) 0 (-1, mempty)
     | otherwise                   = ParentProductFit (wi / wt) gerr nvar
     where
       (gerr, nvar) = singleerrorfunc qi gamma realORs
@@ -328,8 +343,9 @@ getWGammaKernel odf phaseID ors xs = (gamma, err)
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
-getWGammaTess :: Int -> Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
-getWGammaTess phaseID ors xs = (gamma, err)
+-- TODO: Remove
+_getWGammaTess :: Int -> Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
+_getWGammaTess phaseID ors xs = (gamma, err)
   where
     (gs, as) = U.partition (\(_,_,p) -> p == phaseID) xs
     g0 | U.null gs = let (g, _, _) = hotStartTesseract ors qs in g
@@ -429,22 +445,21 @@ genProductGrainBitmap nullvalue func = do
     mapM_ (fill v) (HM.toList productGrains)
     return v
 
-genParentProductFitBitmap :: (U.Unbox a)=> a -> (Quaternion -> ParentProductFit -> a) -> Gomes (U.Vector a)
+genParentProductFitBitmap :: (U.Unbox a)=> a -> ((Quaternion, Int) -> ParentGrain -> ParentProductFit -> a) -> Gomes (U.Vector a)
 genParentProductFitBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let
-    nvox  = U.length . grainID $ grainIDBox
-    getIS = maybe V.empty productVoxelPos . flip HM.lookup productGrains
-    fill m p = let
-      is = map (V.convert . getIS) (productMembers p)
-      foo v ps = let
-        getQ = fst . (grainID orientationBox U.!)
-        in U.mapM_ (\i -> MU.write m i (func (getQ i) v)) ps
-      in zipWithM_ foo (parentErrorPerProduct p) is
+    nvox    = U.length . grainID $ grainIDBox
+    getProd = fmap (V.convert . productVoxelPos &&& productPhase) . flip HM.lookup productGrains
+    fillAllGrains m p = zipWithM_ fillSingleGrain (parentErrorPerProduct p) vis
+      where
+      vis  = mapMaybe getProd (productMembers p)
+      getQ = fst . (grainID orientationBox U.!)
+      fillSingleGrain v (is, ph) = U.mapM_ (\i -> MU.write m i (func (getQ i, ph) p v)) is
   return $ U.create $ do
     m <- MU.replicate nvox nullvalue
-    V.mapM_ (fill m) parentGrains
+    V.mapM_ (fillAllGrains m) parentGrains
     return m
 
 genParentGrainBitmap :: (U.Unbox a)=> a -> ((Int, ParentGrain) -> a) -> Gomes (U.Vector a)
@@ -473,8 +488,8 @@ genVoxBoxAttr name func qBox = mkPointAttr name (func . (grainID qBox U.!))
 genProductVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ProductGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
 genProductVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genProductGrainBitmap nul func
 
-genProductFitVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> (Quaternion -> ParentProductFit -> a) -> String -> Gomes (VTKAttrPoint b)
-genProductFitVTKAttr nul func name = (mkPointAttr name . (U.!))<$> genParentProductFitBitmap nul func
+genProductFitVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Quaternion, Int) -> ParentGrain -> ParentProductFit -> a) -> String -> Gomes (VTKAttrPoint b)
+genProductFitVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genParentProductFitBitmap nul func
 
 genParentVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ParentGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
 genParentVTKAttr nul f name = func <$> genParentGrainBitmap nul f
@@ -484,6 +499,12 @@ getCubicIPFColor :: (Rot q)=> q -> (Word8, Word8, Word8)
 getCubicIPFColor = let
   unColor (RGBColor rgb) = rgb
   in unColor . getRGBColor . snd . getIPFColor Cubic ND . convert
+
+renderQuaternions ::Cfg -> String -> Vector Quaternion -> IO ()
+renderQuaternions Cfg{..} name qs = let
+  vtk  = renderSO3PointsVTK . U.map quaternionToSO3 $ qs
+  attr = mkPointValueAttr "IPF" (\i _ -> getCubicIPFColor $ qs U.! i)
+  in writeUniVTKfile (base_output ++ name  <.> "vtu") True (vtk `addPointValueAttr` attr)
 
 -- ====================================== Plotting EBSD/CTF =============================================
 
@@ -499,3 +520,20 @@ genParentCTF :: CTFdata -> Gomes CTFdata
 genParentCTF ang = func . U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
   where func qs = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
         insRotation q p = p {C.rotation = q}
+
+-- ========================================== Debugging ==========================================
+
+_plotOrientations :: String -> Int -> Gomes ()
+_plotOrientations name gid = do
+  GomesConfig{..} <- ask
+  GomesState{..}  <- get
+  let mProductGrain = HM.lookup gid productGrains
+      mParentGrain  = V.find (elem gid . productMembers) parentGrains
+      mFit          = mParentGrain >>= fmap snd . L.find ((== gid) . fst) . uncurry zip . (productMembers &&& parentErrorPerProduct)
+      getProductOrientations = V.map getQ . productVoxelPos
+      getQ = fst . (grainID orientationBox U.!)
+  forM_ ((,,) <$> mProductGrain <*> mParentGrain <*> mFit)  $ \(productGrain, parentGrain, _fit) -> do
+    let qs = V.convert . V.map (qFZ . getQinFZ) . getProductOrientations $ productGrain
+    liftIO $ do
+      renderQuaternions inputCfg (name ++ "_product") qs
+      renderQuaternions inputCfg (name ++ "_parent" ) $ U.fromList [parentOrientation parentGrain]

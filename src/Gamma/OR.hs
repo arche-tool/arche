@@ -204,12 +204,12 @@ hotStartOR errf q = let
   i = V.minIndex $ V.map foo ts
   in ts V.! i
 
-singleerrorfunc :: QuaternionFZ -> Quaternion -> Vector OR -> (Deg, (Int, Quaternion))
+singleerrorfunc :: QuaternionFZ -> Quaternion -> Vector OR -> (Deg, (Int, OR))
 singleerrorfunc productQ parentQ ors = let
   qps  = G.map (toFZ Cubic . (qFZ productQ #<=) . qOR) ors
   ps   = G.map (getMisoAngle Cubic parentQ) qps
   imax = G.minIndex ps
-  in (toAngle (ps G.! imax), (imax, qps G.! imax))
+  in (toAngle (ps G.! imax), (imax, ors G.! imax))
 
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
