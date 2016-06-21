@@ -3,6 +3,7 @@
 
 module Main where
 
+import qualified Gamma.OR                   as OR
 import qualified Gamma.Strategy.Graph       as Graph
 import qualified Gamma.Strategy.ORFitAll    as ORFitAll
 import qualified Gamma.Strategy.GomesGraph  as GomesGraph
@@ -226,8 +227,8 @@ parseBadAngle = ((Deg . abs) <$> option auto
    <> value 5
    <> help "The default error is 5 deg."))
 
-parseGammaID :: Parser Int
-parseGammaID = option auto
+parseGammaID :: Parser OR.PhaseID
+parseGammaID = OR.PhaseID <$> option auto
    (  long "gammaID"
    <> short 'g'
    <> metavar "Int"

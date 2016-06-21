@@ -34,6 +34,8 @@ module Gamma.OR
   , QuaternionFZ (qFZ)
   , getQinFZ
   , convert
+    -- * Phases
+  , PhaseID (..)
     -- * Test functions
   , testGammaFit
   , testFindGamma
@@ -76,6 +78,8 @@ instance Rot QuaternionFZ where
   getOmega       = getOmega . qFZ
 
 newtype OR = OR {qOR :: Quaternion} deriving (Show, Monoid, Group, Rot)
+
+newtype PhaseID = PhaseID {phaseId :: Int} deriving (Show, Eq, Ord)
 
 mkOR :: Vec3D -> Deg -> OR
 mkOR v = OR . toQuaternion . mkAxisPair v
@@ -319,6 +323,11 @@ derivingUnbox "OR"
     [t| OR -> Quaternion |]
     [| \(OR q) -> q |]
     [| OR |]
+
+derivingUnbox "PhaseID"
+    [t| PhaseID -> Int |]
+    [| phaseId |]
+    [| PhaseID |]
 
 -- ================================= Test Function =======================================
 

@@ -60,7 +60,7 @@ data Cfg =
   , stepClusterFactor      :: Double
   , badAngle               :: Deg
   , withOR                 :: AxisPair
-  , gammaPhaseID           :: Int
+  , gammaPhaseID           :: PhaseID
   , outputANGMap           :: Bool
   , outputCTFMap           :: Bool
   } deriving (Show)
@@ -70,7 +70,7 @@ data ProductGrain =
   { productVoxelPos       :: V.Vector Int
   , productAvgOrientation :: QuaternionFZ
   , productAvgPos         :: Vec3D
-  , productPhase          :: Int
+  , productPhase          :: PhaseID
   } deriving (Show)
 
 data ParentGrain =
@@ -193,7 +193,7 @@ plotVTK name = do
             ]
   liftIO $ plotVTKD inputCfg (vtkD,  name)
 
-getTransformedProduct :: GomesConfig -> (Quaternion, Int) -> ParentGrain -> Quaternion
+getTransformedProduct :: GomesConfig -> (Quaternion, PhaseID) -> ParentGrain -> Quaternion
 getTransformedProduct cfg (q, ph) p
   | ph == phref = q
   | otherwise   = findBestTransformation ors (parentOrientation p) q
@@ -285,9 +285,7 @@ graphWeight noIsleGrains vbq micro withOR = let
 
 -- ================================== Grain Data ===================================
 
-getProductGrainData :: VoxBox (Quaternion, Int) ->
-                       HashMap Int (V.Vector VoxelPos) ->
-                       HashMap Int ProductGrain
+getProductGrainData :: VoxBox (Quaternion, Int) -> HashMap Int (V.Vector VoxelPos) -> HashMap Int ProductGrain
 getProductGrainData vbq gmap = let
   getAvgQ = getQinFZ . averageQuaternionWithSymm Cubic . V.map (fst . (vbq #!))
   getAvgPos v = let
@@ -299,7 +297,7 @@ getProductGrainData vbq gmap = let
            { productVoxelPos       = V.map (boxdim %@) x
            , productAvgOrientation = getAvgQ x
            , productAvgPos         = getAvgPos x
-           , productPhase          = fromMaybe (-1) (getGrainPhase vbq gmap gid)
+           , productPhase          = PhaseID $ fromMaybe (-1) (getGrainPhase vbq gmap gid)
            }
   in HM.mapWithKey func gmap
 
@@ -315,7 +313,7 @@ getParentGrainData GomesConfig{..} mids = let
   --(gamma, err) = getWGammaTess (gammaPhaseID inputCfg) realORs info
   (gamma, err) = getWGammaKernel orientationGrid (gammaPhaseID inputCfg) realORs info
 
-  getFitInfo :: (Double, QuaternionFZ, Int) -> ParentProductFit
+  getFitInfo :: (Double, QuaternionFZ, PhaseID) -> ParentProductFit
   getFitInfo (wi, qi, ph)
     | ph == gammaPhaseID inputCfg = ParentProductFit (wi / wt) 0 (-1, mempty)
     | otherwise                   = ParentProductFit (wi / wt) gerr nvar
@@ -332,7 +330,7 @@ getParentGrainData GomesConfig{..} mids = let
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
-getWGammaKernel :: ODF -> Int -> Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
+getWGammaKernel :: ODF -> PhaseID -> Vector OR -> Vector (Double, QuaternionFZ, PhaseID) -> (Quaternion, FitError)
 getWGammaKernel odf phaseID ors xs = (gamma, err)
   where
     (was, wms) = U.partition (\(_,_,p) -> p == phaseID) xs
@@ -445,7 +443,7 @@ genProductGrainBitmap nullvalue func = do
     mapM_ (fill v) (HM.toList productGrains)
     return v
 
-genParentProductFitBitmap :: (U.Unbox a)=> a -> ((Quaternion, Int) -> ParentGrain -> ParentProductFit -> a) -> Gomes (U.Vector a)
+genParentProductFitBitmap :: (U.Unbox a)=> a -> ((Quaternion, PhaseID) -> ParentGrain -> ParentProductFit -> a) -> Gomes (U.Vector a)
 genParentProductFitBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
@@ -488,7 +486,7 @@ genVoxBoxAttr name func qBox = mkPointAttr name (func . (grainID qBox U.!))
 genProductVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ProductGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
 genProductVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genProductGrainBitmap nul func
 
-genProductFitVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Quaternion, Int) -> ParentGrain -> ParentProductFit -> a) -> String -> Gomes (VTKAttrPoint b)
+genProductFitVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Quaternion, PhaseID) -> ParentGrain -> ParentProductFit -> a) -> String -> Gomes (VTKAttrPoint b)
 genProductFitVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genParentProductFitBitmap nul func
 
 genParentVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ParentGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
