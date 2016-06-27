@@ -508,16 +508,20 @@ renderQuaternions Cfg{..} name qs = let
 
 genParentEBSD :: Gomes (Either ANGdata CTFdata)
 genParentEBSD = ask >>= either (fmap Left . genParentANG) (fmap Right . genParentCTF) . inputEBSD
+  where
+    genMap = do
+      cfg <- ask
+      U.convert <$> genParentProductFitBitmap mempty (\a b _ -> getTransformedProduct cfg a b)
 
-genParentANG :: ANGdata -> Gomes ANGdata
-genParentANG ang = func . U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
-  where func qs = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
-        insRotation q p = p {A.rotation = q}
+    genParentANG :: ANGdata -> Gomes ANGdata
+    genParentANG ang = func <$> genMap
+      where func qs = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
+            insRotation q p = p {A.rotation = q}
 
-genParentCTF :: CTFdata -> Gomes CTFdata
-genParentCTF ang = func . U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
-  where func qs = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
-        insRotation q p = p {C.rotation = q}
+    genParentCTF :: CTFdata -> Gomes CTFdata
+    genParentCTF ang = func <$> genMap
+      where func qs = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
+            insRotation q p = p {C.rotation = q}
 
 -- ========================================== Debugging ==========================================
 
