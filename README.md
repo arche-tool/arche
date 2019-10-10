@@ -32,7 +32,7 @@ In order to update to the latest modifications, go the folder that contains the 
 cd gammabuilder
 
 git pull
-git submodule update --int
+git submodule update --init
 
 stack install
 
