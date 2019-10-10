@@ -18,7 +18,7 @@ git clone git@bitbucket.org:lostbean/gammabuilder.git
 
 cd gammabuilder
 
-git submodule update --int
+git submodule update --init
 
 stack install
 
