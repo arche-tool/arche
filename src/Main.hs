@@ -229,10 +229,10 @@ parseBadAngle = ((Deg . abs) <$> option auto
 
 parseGammaID :: Parser OR.PhaseID
 parseGammaID = OR.PhaseID <$> option auto
-   (  long "gammaID"
+   (  long "gammaPhaseID"
    <> short 'g'
    <> metavar "Int"
-   <> help "Gamma ID number from ANG file.")
+   <> help "ID number of gamma phase in the ANG file.")
 
 parseExtMCL :: Parser Bool
 parseExtMCL = switch
