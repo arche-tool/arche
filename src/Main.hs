@@ -188,7 +188,7 @@ parseGomesGraph = let
      <*> parseStepCluster
      <*> parseBadAngle
      <*> parseOR
-     <*> parseGammaID
+     <*> optional parseParentPhaseID
      <*> parseOutputToANG
      <*> parseOutputToCTF
 
@@ -227,12 +227,12 @@ parseBadAngle = ((Deg . abs) <$> option auto
    <> value 5
    <> help "The default error is 5 deg."))
 
-parseGammaID :: Parser OR.PhaseID
-parseGammaID = OR.PhaseID <$> option auto
-   (  long "gammaPhaseID"
+parseParentPhaseID :: Parser OR.PhaseID
+parseParentPhaseID = OR.PhaseID <$> option auto
+   (  long "parentPhaseID"
    <> short 'g'
    <> metavar "Int"
-   <> help "ID number of gamma phase in the ANG file.")
+   <> help "ID number of parent phase in the ANG file, if present.")
 
 parseExtMCL :: Parser Bool
 parseExtMCL = switch

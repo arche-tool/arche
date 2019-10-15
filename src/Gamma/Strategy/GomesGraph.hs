@@ -60,7 +60,7 @@ data Cfg =
   , stepClusterFactor      :: Double
   , badAngle               :: Deg
   , withOR                 :: AxisPair
-  , gammaPhaseID           :: PhaseID
+  , parentPhaseID          :: Maybe PhaseID
   , outputANGMap           :: Bool
   , outputCTFMap           :: Bool
   } deriving (Show)
@@ -194,12 +194,12 @@ plotVTK name = do
   liftIO $ plotVTKD inputCfg (vtkD,  name)
 
 getTransformedProduct :: GomesConfig -> (Quaternion, PhaseID) -> ParentGrain -> Quaternion
-getTransformedProduct cfg (q, ph) p
-  | ph == phref = q
-  | otherwise   = findBestTransformation ors (parentOrientation p) q
+getTransformedProduct cfg (q, phase) p
+  | Just phase == phaseRef = q
+  | otherwise              = findBestTransformation ors (parentOrientation p) q
   where
     ors   = realORs cfg
-    phref = gammaPhaseID . inputCfg $ cfg
+    phaseRef = parentPhaseID . inputCfg $ cfg
 
 findBestTransformation ::  Vector OR -> Quaternion -> Quaternion -> Quaternion
 findBestTransformation ors ref q = let
@@ -310,13 +310,13 @@ getParentGrainData GomesConfig{..} mids = let
   info = U.fromList $ mapMaybe getInfo mids
   wt   = U.foldl' (\acc (w,_,_) -> acc + w) 0 info
 
-  --(gamma, err) = getWGammaTess (gammaPhaseID inputCfg) realORs info
-  (gamma, err) = getWGammaKernel orientationGrid (gammaPhaseID inputCfg) realORs info
+  --(gamma, err) = getWGammaTess (parentPhaseID inputCfg) realORs info
+  (gamma, err) = getWGammaKernel orientationGrid (parentPhaseID inputCfg) realORs info
 
   getFitInfo :: (Double, QuaternionFZ, PhaseID) -> ParentProductFit
-  getFitInfo (wi, qi, ph)
-    | ph == gammaPhaseID inputCfg = ParentProductFit (wi / wt) 0 (-1, mempty)
-    | otherwise                   = ParentProductFit (wi / wt) gerr nvar
+  getFitInfo (wi, qi, phase)
+    | Just phase == parentPhaseID inputCfg = ParentProductFit (wi / wt) 0 (-1, mempty)
+    | otherwise                            = ParentProductFit (wi / wt) gerr nvar
     where
       (gerr, nvar) = singleerrorfunc qi gamma realORs
 
@@ -330,10 +330,10 @@ getParentGrainData GomesConfig{..} mids = let
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
-getWGammaKernel :: ODF -> PhaseID -> Vector OR -> Vector (Double, QuaternionFZ, PhaseID) -> (Quaternion, FitError)
+getWGammaKernel :: ODF -> Maybe PhaseID -> Vector OR -> Vector (Double, QuaternionFZ, PhaseID) -> (Quaternion, FitError)
 getWGammaKernel odf phaseID ors xs = (gamma, err)
   where
-    (was, wms) = U.partition (\(_,_,p) -> p == phaseID) xs
+    (was, wms) = U.partition (\(_,_,p) -> Just p == phaseID) xs
     (gamma, err) = gammaFinderKernel odf ors as ms
     (_, as, _) = U.unzip3 was
     (_, ms, _) = U.unzip3 wms
