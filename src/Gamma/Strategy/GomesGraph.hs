@@ -509,9 +509,7 @@ renderQuaternions Cfg{..} name qs = let
 genParentEBSD :: Gomes (Either ANGdata CTFdata)
 genParentEBSD = ask >>= either (fmap Left . genParentANG) (fmap Right . genParentCTF) . inputEBSD
   where
-    genMap = do
-      cfg <- ask
-      U.convert <$> genParentProductFitBitmap mempty (\a b _ -> getTransformedProduct cfg a b)
+    genMap = U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
 
     genParentANG :: ANGdata -> Gomes ANGdata
     genParentANG ang = func <$> genMap
