@@ -31,5 +31,6 @@ RUN chmod -R o+w "$HOME/.wine/drive_c/users/"
 
 USER haskell
 ENV HOME /home/haskell
+ENV PATH="${HOME}/.local/bin:${PATH}"
 RUN stack.exe path
 WORKDIR /appdata

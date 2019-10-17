@@ -23,9 +23,9 @@ cache:
   - $HOME/.stack
   - $TRAVIS_BUILD_DIR/.stack-work
 
-before_install: |
-  TAG=$(git describe --abbrev=4 --dirty --always --tags)
-  echo "CIng version $TAG"
+before_install:
+  - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
+  - echo "CIng version $TAG"
 
 install:
   - |
@@ -45,15 +45,16 @@ script:
     set -ex
     case "$BUILD" in
       linux)
-        docker container run  -v $(pwd):/appdata linux_gamma:latest stack install --local-bin-path ".output/$BUILD-$TAG"
+        docker container run  -v $(pwd):/appdata linux_gamma:latest stack install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
         ;;
       windows)
-        docker container run  -v $(pwd):/appdata wine_gamma:latest stack.exe install --local-bin-path ".output/$BUILD-$TAG"
+        docker container run  -v $(pwd):/appdata wine_gamma:latest stack.exe install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
         ;;
     esac
     set +ex
 
-after_success: |
+after_success:
+  - |
     set -ex
     case "$BUILD" in
       linux)
@@ -67,18 +68,19 @@ after_success: |
     esac
     set +ex
 
-after_failure: |
-  df -h
-  case "$BUILD" in
-    linux)
-      echo "linux bin"
-      echo $PATH
-      ;;
-    windows)
-      echo "win bin"
-      echo $PATH
-      ;;
-  esac
+after_failure:
+  - df -h
+  - |
+    case "$BUILD" in
+      linux)
+        echo "linux bin"
+        echo $PATH
+        ;;
+      windows)
+        echo "win bin"
+        echo $PATH
+        ;;
+    esac
 
 # deploy:
 #   provider: releases
