@@ -28,17 +28,27 @@ before_install: |
   echo "CIng version $TAG"
 
 install:
-  - docker build -t winlin/stack .
+  - |
+    set -ex
+    case "$BUILD" in
+      linux)
+        docker build -t linux_gamma -f linux.Dockerfile .
+        ;;
+      windows)
+        docker build -t wine_gamma -f wine.Dockerfile .
+        ;;
+    esac
+    set +ex
 
 script:
   - |
     set -ex
     case "$BUILD" in
       linux)
-        docker container run  -v $(pwd):/appdata winlin/stack:latest stack install --local-bin-path ".output/$BUILD-$TAG"
+        docker container run  -v $(pwd):/appdata linux_gamma:latest stack install --local-bin-path ".output/$BUILD-$TAG"
         ;;
       windows)
-        docker container run  -v $(pwd):/appdata winlin/stack:latest stack.exe install --local-bin-path ".output/$BUILD-$TAG"
+        docker container run  -v $(pwd):/appdata wine_gamma:latest stack.exe install --local-bin-path ".output/$BUILD-$TAG"
         ;;
     esac
     set +ex
@@ -57,6 +67,18 @@ after_success: |
     esac
     set +ex
 
+after_failure: |
+  df -h
+  case "$BUILD" in
+    linux)
+      echo "linux bin"
+      echo $PATH
+      ;;
+    windows)
+      echo "win bin"
+      echo $PATH
+      ;;
+  esac
 
 # deploy:
 #   provider: releases
