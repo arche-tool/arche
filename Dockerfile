@@ -28,7 +28,7 @@ RUN mkdir -p ~/.wine/drive_c/users
 RUN chmod -R o+w "$HOME/.wine/drive_c/users/"
 
 # Setup linux stack
-RUN curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'# Convenience scripts for running commands
+RUN curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
 USER haskell
 ENV HOME /home/haskell
