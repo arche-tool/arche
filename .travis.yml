@@ -1,0 +1,67 @@
+sudo: required
+
+language: generic
+
+services:
+  - docker
+
+matrix:
+  include:
+    - os: linux
+      env: BUILD=linux
+    - os: linux
+      env: BUILD=windows
+    # - os: osx
+    #   env: BUILD=osx
+
+env:
+
+cache:
+  directories:
+  - $HOME/.ghc
+  - $HOME/.cabal
+  - $HOME/.stack
+  - $TRAVIS_BUILD_DIR/.stack-work
+
+before_install: |
+  TAG=$(git describe --abbrev=4 --dirty --always --tags)
+  echo "CIng version $TAG"
+
+install:
+  - docker build -t winlin/stack .
+
+script:
+  - |
+    set -ex
+    case "$BUILD" in
+      linux)
+        docker container run  -v $(pwd):/appdata winlin/stack:latest stack install --local-bin-path ".output/$BUILD-$TAG"
+        ;;
+      windows)
+        docker container run  -v $(pwd):/appdata winlin/stack:latest stack.exe install --local-bin-path ".output/$BUILD-$TAG"
+        ;;
+    esac
+    set +ex
+
+after_success: |
+    set -ex
+    case "$BUILD" in
+      linux)
+        echo "linux bin"
+        ls -lah ".output/$BUILD-$TAG/"
+        ;;
+      windows)
+        echo "win bin"
+        ls -lah ".output/$BUILD-$TAG/"
+        ;;
+    esac
+    set +ex
+
+
+# deploy:
+#   provider: releases
+#   api_key: "GITHUB OAUTH TOKEN"
+#   file: "FILE TO UPLOAD"
+#   skip_cleanup: true
+#   on:
+#     tags: true

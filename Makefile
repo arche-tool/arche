@@ -1,6 +1,7 @@
 GHCFLAGS=-Wall -XNoCPP -fno-warn-name-shadowing -XHaskell98
-GIT_VERSION := "$(shell git describe --abbrev=4 --dirty --always --tags)"
-DIST_DIR := "$(shell stack path --dist-dir)"
+GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
+DIST_DIR := $(shell stack path --dist-dir)
+GIT_OK := $(shell ( [ -n '$(git tag --points-at `git rev-parse HEAD`)' ] && [ -z '$(git status -s)' ] ) && echo 1 || echo 0)
 
 .PHONY: all clean
 
@@ -17,3 +18,5 @@ clean:
 
 $(DIST_DIR)/build/gamma/gamma: stack.yaml.lock gamma-builder.cabal
 	stack build --ghc-options="$(GHCFLAGS)"
+
+$(info $(GIT_OK))
