@@ -21,7 +21,7 @@ cache:
   - $HOME/.ghc
   - $HOME/.cabal
   - $HOME/.stack
-  - $TRAVIS_BUILD_DIR/.stack-work
+  # - $TRAVIS_BUILD_DIR/.stack-work
 
 before_install:
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
