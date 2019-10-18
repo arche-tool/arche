@@ -24,6 +24,10 @@ cache:
   - $HOME/.cabal
   - $HOME/.stack
   - $TRAVIS_BUILD_DIR/.stack-work
+  - docker_images
+
+before_cache:
+- docker save -o docker_images/images.tar $(docker images -a -q)
 
 before_install:
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
@@ -33,6 +37,7 @@ before_install:
   - git submodule foreach --recursive  "mkdir -p .stack-work/ && chmod -R 2777 .stack-work/"
   - mkdir -p "$TRAVIS_BUILD_DIR/.output"
   - chmod -R 2777 "$TRAVIS_BUILD_DIR/.output"
+  - docker load -i docker_images/images.tar || true
 
 install:
   - |
@@ -52,10 +57,10 @@ script:
     set -ex
     case "$BUILD" in
       linux)
-        docker container run  -v $(pwd):/appdata linux_gamma:latest stack install --local-bin-path ".output/$BUILD-$TAG"
+        docker container run  -v $(pwd):/appdata linux_gamma:latest stack install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
         ;;
       windows)
-        docker container run  -v $(pwd):/appdata wine_gamma:latest stack.exe install --local-bin-path ".output/$BUILD-$TAG"
+        docker container run  -v $(pwd):/appdata wine_gamma:latest stack.exe install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
         ;;
     esac
     set +ex
