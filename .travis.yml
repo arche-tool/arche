@@ -35,16 +35,16 @@ before_install:
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
   
   # create permission script 
-  - echo '#!/bin/bash' > $TRAVIS_BUILD/setFolder.sh
-  - echo 'mkdir -p       "$1"' >> $TRAVIS_BUILD/setFolder.sh
-  - echo 'chown -R :6666 "$1"' >> $TRAVIS_BUILD/setFolder.sh
-  - echo 'chmod -R 775   "$1"' >> $TRAVIS_BUILD/setFolder.sh
-  - echo 'chmod -R g+s   "$1"' >> $TRAVIS_BUILD/setFolder.sh
-  - chmod +x $TRAVIS_BUILD/setFolder.sh
+  - echo '#!/bin/bash' > $TRAVIS_BUILD_DIR/setFolder.sh
+  - echo 'mkdir -p       "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
+  - echo 'chown -R :6666 "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
+  - echo 'chmod -R 775   "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
+  - echo 'chmod -R g+s   "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
+  - chmod +x $TRAVIS_BUILD_DIR/setFolder.sh
 
-  - $TRAVIS_BUILD/setFolder.sh .stack-work
-  - $TRAVIS_BUILD/setFolder.sh .output
-  - git submodule foreach --recursive "$TRAVIS_BUILD/setFolder.sh .stack-work"
+  - $TRAVIS_BUILD_DIR/setFolder.sh .stack-work
+  - $TRAVIS_BUILD_DIR/setFolder.sh .output
+  - git submodule foreach --recursive "$TRAVIS_BUILD_DIR/setFolder.sh .stack-work"
 
 install:
   - |
