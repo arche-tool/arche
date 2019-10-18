@@ -46,6 +46,9 @@ before_install:
   - $TRAVIS_BUILD_DIR/setFolder.sh .output
   - git submodule foreach --recursive "$TRAVIS_BUILD_DIR/setFolder.sh .stack-work"
 
+  - ls -lah .
+  - git submodule foreach --recursive "ls -la .stack-work"
+
 install:
   - |
     set -ex
