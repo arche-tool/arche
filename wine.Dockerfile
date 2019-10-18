@@ -34,3 +34,4 @@ USER haskell
 ENV HOME /home/haskell
 ENV PATH="${HOME}/.local/bin:${PATH}"
 WORKDIR /appdata
+ENTRYPOINT [ "stack.exe" ]

@@ -27,7 +27,7 @@ cache:
   - docker_images
 
 before_cache:
-- docker save -o docker_images/images.tar $(docker images -a -q)
+- docker save -o docker_images/images.tar $(docker images gamma_stack:latest -a -q)
 
 before_install:
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
@@ -44,26 +44,16 @@ install:
     set -ex
     case "$BUILD" in
       linux)
-        docker build -t linux_gamma -f linux.Dockerfile .
+        docker build -t gamma_stack -f linux.Dockerfile .
         ;;
       windows)
-        docker build -t wine_gamma -f wine.Dockerfile .
+        docker build -t gamma_stack -f wine.Dockerfile .
         ;;
     esac
     set +ex
 
 script:
-  - |
-    set -ex
-    case "$BUILD" in
-      linux)
-        docker container run  -v $(pwd):/appdata linux_gamma:latest stack install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
-        ;;
-      windows)
-        docker container run  -v $(pwd):/appdata wine_gamma:latest stack.exe install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
-        ;;
-    esac
-    set +ex
+  - docker container run -v $(pwd):/appdata gamma_stack:latest install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
 
 after_script:
   - docker images
