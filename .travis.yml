@@ -89,7 +89,13 @@ after_script:
 
 after_success:
   - ls -lah ".output/$BUILD-$TAG/"
-  - for f in $(find .output/$BUILD-$TAG/* -maxdepth 0); do mv -v "$f" "$(dirname "$f")/$BUILD-$(basename "$f" .${f##*.})-$TAG.${f##*.}"; done
+  - |
+    for f in $(find .output/$BUILD-$TAG/* -maxdepth 0); do
+      filename=$(basename "$f");
+      ext=$([[ "$filename" = *.* ]] && echo ".${filename##*.}" || echo '');
+      mv -v "$f" "$(dirname "$f")/$BUILD-$(basename "$f" $ext)-$TAG$ext";
+    done
+
 after_failure:
   - df -h
   - free -h
