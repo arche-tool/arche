@@ -28,9 +28,11 @@ cache:
 before_install:
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
   - echo "CIng version $TAG"
-  - mkdir -p $TRAVIS_BUILD_DIR/.stack-work
+  - mkdir -p "$TRAVIS_BUILD_DIR/.stack-work"
   - chmod -R 2777 "$TRAVIS_BUILD_DIR/.stack-work"
   - git submodule foreach --recursive  "mkdir -p .stack-work/ && chmod -R 2777 .stack-work/"
+  - mkdir -p "$TRAVIS_BUILD_DIR/.output"
+  - chmod -R 2777 "$TRAVIS_BUILD_DIR/.output"
 
 install:
   - |
@@ -57,6 +59,10 @@ script:
         ;;
     esac
     set +ex
+
+after_script:
+  - docker images
+  - docker ps
 
 after_success:
   - |
