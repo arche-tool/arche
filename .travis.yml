@@ -26,6 +26,8 @@ cache:
 before_install:
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
   - echo "CIng version $TAG"
+  - mkdir -p $TRAVIS_BUILD_DIR/.stack-work
+  - chmod -R 2777 "$TRAVIS_BUILD_DIR/.stack-work"
 
 install:
   - |
