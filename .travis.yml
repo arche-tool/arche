@@ -11,8 +11,8 @@ matrix:
       env: BUILD=linux
     - os: linux
       env: BUILD=windows
-    # - os: osx
-    #   env: BUILD=osx
+    - os: osx
+      env: BUILD=osx
 
 git:
   # whether to recursively clone submodules
@@ -50,11 +50,27 @@ install:
       windows)
         docker build -t gamma_stack -f wine.Dockerfile .
         ;;
+      osx)
+        mkdir -p ~/.local/bin
+        export PATH=$HOME/.local/bin:$PATH
+        travis_retry curl --insecure -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
+        stack --no-terminal --install-ghc --only-dependencies
+        ;;
     esac
     set +ex
 
 script:
-  - docker container run -v $(pwd):/appdata gamma_stack:latest install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
+  - |
+    set -ex
+    case "$BUILD" in
+      osx)
+        stack install --local-bin-path ".output/$BUILD-$TAG"
+        ;;
+      linux|windows)
+        docker container run -v $(pwd):/appdata gamma_stack:latest install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
+        ;;
+    esac
+    set +ex
 
 after_script:
   - docker images
