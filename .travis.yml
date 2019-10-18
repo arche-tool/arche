@@ -23,7 +23,7 @@ cache:
   - $HOME/.ghc
   - $HOME/.cabal
   - $HOME/.stack
-  # - $TRAVIS_BUILD_DIR/.stack-work
+  - $TRAVIS_BUILD_DIR/.stack-work
 
 before_install:
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
@@ -50,10 +50,10 @@ script:
     set -ex
     case "$BUILD" in
       linux)
-        docker container run  -v $(pwd):/appdata linux_gamma:latest stack install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
+        docker container run  -v $(pwd):/appdata linux_gamma:latest stack install --local-bin-path ".output/$BUILD-$TAG"
         ;;
       windows)
-        docker container run  -v $(pwd):/appdata wine_gamma:latest stack.exe install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
+        docker container run  -v $(pwd):/appdata wine_gamma:latest stack.exe install --local-bin-path ".output/$BUILD-$TAG"
         ;;
     esac
     set +ex
