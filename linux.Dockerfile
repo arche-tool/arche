@@ -5,7 +5,8 @@ WORKDIR /root
 RUN apt-get update
 RUN apt-get install -y curl make build-essential libgmp-dev
 
-RUN adduser haskell
+RUN addgroup --gid 6666 haskell
+RUN adduser --disabled-password --gecos "" --force-badname --ingroup haskell haskell
 RUN mkdir /appdata
 RUN chown haskell: /appdata
 

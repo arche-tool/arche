@@ -31,14 +31,20 @@ before_cache:
   - docker save -o docker_images/images.tar $(docker images -a -q)
 
 before_install:
-  - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
-  - echo "CIng version $TAG"
-  - mkdir -p "$TRAVIS_BUILD_DIR/.stack-work"
-  - chmod -R 2777 "$TRAVIS_BUILD_DIR/.stack-work"
-  - git submodule foreach --recursive  "mkdir -p .stack-work/ && chmod -R 2777 .stack-work/"
-  - mkdir -p "$TRAVIS_BUILD_DIR/.output"
-  - chmod -R 2777 "$TRAVIS_BUILD_DIR/.output"
   - docker load -i docker_images/images.tar || true
+  - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
+  
+  # create permission script 
+  - echo '#!/bin/bash' > $TRAVIS_BUILD/setFolder.sh
+  - echo 'mkdir -p       "$1"' >> $TRAVIS_BUILD/setFolder.sh
+  - echo 'chown -R :6666 "$1"' >> $TRAVIS_BUILD/setFolder.sh
+  - echo 'chmod -R 775   "$1"' >> $TRAVIS_BUILD/setFolder.sh
+  - echo 'chmod -R g+s   "$1"' >> $TRAVIS_BUILD/setFolder.sh
+  - chmod +x $TRAVIS_BUILD/setFolder.sh
+
+  - $TRAVIS_BUILD/setFolder.sh .stack-work
+  - $TRAVIS_BUILD/setFolder.sh .output
+  - git submodule foreach --recursive "$TRAVIS_BUILD/setFolder.sh .stack-work"
 
 install:
   - |
@@ -67,7 +73,7 @@ script:
         stack install --local-bin-path ".output/$BUILD-$TAG"
         ;;
       linux|windows)
-        docker container run -v $(pwd):/appdata gamma_stack:latest install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
+        docker container run -v $(pwd):/appdata:Z gamma_stack:latest install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
         ;;
     esac
     set +ex

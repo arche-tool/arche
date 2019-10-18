@@ -6,7 +6,8 @@ RUN dpkg --add-architecture i386
 RUN apt-get update
 RUN apt-get install -y wine64 wine32 curl unzip xz-utils
 
-RUN adduser haskell
+RUN addgroup --gid 6666 haskell
+RUN adduser --disabled-password --gecos "" --force-badname --ingroup haskell haskell
 RUN mkdir /appdata
 RUN chown haskell: /appdata
 
