@@ -98,10 +98,10 @@ after_failure:
         ;;
     esac
 
-# deploy:
-#   provider: releases
-#   api_key: "GITHUB OAUTH TOKEN"
-#   file: "FILE TO UPLOAD"
-#   skip_cleanup: true
-#   on:
-#     tags: true
+deploy:
+  provider: releases
+  api_key: "KcRecRX0xqKqreFsqiXxIOkIdBGyTVH3ZclV7tz/NpCCaWxLrYBFD6zwK23KR2lthI3MXXPs7S05uFQyYVfJaQP9/+LpxTHjAb0MyhzDIINBgvBlpC4qHMvWKJVM4sgp3DcxBxOeHWAfownpBQ410z5nJSsP14dTHmvtXGTY9epUSYTOUulrETu0zKoleV+B8TEdcpvdX+N6WcFiKFn2AZQaWu8bXqtSOgsMVU001Dk7D0GrzFYb6t0QSC2wYgcRdYpfD89jHLktB6oTgoc3yD1iToim/CDfnIcI4Pt6M7SuZmFzwqR6giBTmFTdHtD+hnYAra+YEHWTG7iq7gCs32sN27y9xeZ4O9ZYelp4/6esiMVm5BpkGzmtKdLVlAeIYisPW3WUCvm3k4rs2JWl6I54jU3XHz8h5yIzbZu6d1VldUO5tT+cRDQF4Xkd0qCjxkscdJJZ+lenkLifor7cDGZih0YJ8XzJZjxCOgERySXEulp/xuVmM0a8z3jWBUGyqnCwewW+klez9nj3BXRW/YFrn5N4kG/Ml0RqLQrJPAu7dCW+meNAX02m+ElsN6EYLFbp9Y/2Fal30Etsd3QN/UDKvYHTmG7v49ghcSJcWQwttdFXizwFpPqK/eX5TLKMJYatmdzRVWAkit4pGtsVrPenmVRjIt82maYNr2QCBXk="
+  file: .output/$BUILD-$TAG/*
+  skip_cleanup: true
+  on:
+    tags: true
