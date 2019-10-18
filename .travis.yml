@@ -65,7 +65,7 @@ install:
         mkdir -p ~/.local/bin
         export PATH=$HOME/.local/bin:$PATH
         travis_retry curl --insecure -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
-        stack --no-terminal --install-ghc --only-dependencies
+        stack build --no-terminal --install-ghc --only-dependencies
         ;;
     esac
     set +ex
