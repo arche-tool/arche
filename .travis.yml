@@ -30,6 +30,7 @@ before_install:
   - echo "CIng version $TAG"
   - mkdir -p $TRAVIS_BUILD_DIR/.stack-work
   - chmod -R 2777 "$TRAVIS_BUILD_DIR/.stack-work"
+  - git submodule foreach --recursive  "mkdir -p .stack-work/ && chmod -R 2777 .stack-work/"
 
 install:
   - |
