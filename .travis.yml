@@ -60,33 +60,12 @@ after_script:
   - docker ps
 
 after_success:
-  - |
-    set -ex
-    case "$BUILD" in
-      linux)
-        echo "linux bin"
-        ls -lah ".output/$BUILD-$TAG/"
-        ;;
-      windows)
-        echo "win bin"
-        ls -lah ".output/$BUILD-$TAG/"
-        ;;
-    esac
-    set +ex
+  - ls -lah ".output/$BUILD-$TAG/"
+  - for f in $(find .output/$BUILD-$TAG/* -maxdepth 0); do mv -v "$f" "$(dirname "$f")/$BUILD-$(basename "$f")-$TAG"; done
 
 after_failure:
   - df -h
-  - |
-    case "$BUILD" in
-      linux)
-        echo "linux bin"
-        echo $PATH
-        ;;
-      windows)
-        echo "win bin"
-        echo $PATH
-        ;;
-    esac
+  - free -h
 
 deploy:
   provider: releases
@@ -94,4 +73,5 @@ deploy:
   file: .output/$BUILD-$TAG/*
   skip_cleanup: true
   on:
+    branch: master
     tags: true
