@@ -20,11 +20,17 @@ git:
 
 cache:
   directories:
+  - docker_images
   - $HOME/.ghc
   - $HOME/.cabal
   - $HOME/.stack
   - $TRAVIS_BUILD_DIR/.stack-work
-  - docker_images
+  - $TRAVIS_BUILD_DIR/packages/hammer/.stack-work
+  - $TRAVIS_BUILD_DIR/packages/linear-vect/.stack-work
+  - $TRAVIS_BUILD_DIR/packages/mcl/.stack-work
+  - $TRAVIS_BUILD_DIR/packages/queryforest/.stack-work
+  - $TRAVIS_BUILD_DIR/packages/sledge/.stack-work
+  - $TRAVIS_BUILD_DIR/packages/vtk/.stack-work
 
 before_cache:
   - docker image prune -f
