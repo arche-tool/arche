@@ -27,7 +27,8 @@ cache:
   - docker_images
 
 before_cache:
-- docker save -o docker_images/images.tar $(docker images gamma_stack:latest -a -q)
+  - docker image prune -f
+  - docker save -o docker_images/images.tar $(docker images -a -q)
 
 before_install:
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
