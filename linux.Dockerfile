@@ -1,12 +1,13 @@
 FROM ubuntu:latest
+ARG USERID=6666
 
 USER root
 WORKDIR /root
 RUN apt-get update
 RUN apt-get install -y curl make build-essential libgmp-dev
 
-RUN addgroup --gid 6666 haskell
-RUN adduser --disabled-password --gecos "" --force-badname --ingroup haskell haskell
+RUN addgroup --gid $USERID haskell
+RUN adduser --disabled-password --gecos "" --force-badname --uid $USERID --gid $USERID haskell
 RUN mkdir /appdata
 RUN chown haskell: /appdata
 

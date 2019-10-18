@@ -1,4 +1,5 @@
 FROM ubuntu:latest
+ARG USERID=6666
 
 USER root
 WORKDIR /root
@@ -6,8 +7,8 @@ RUN dpkg --add-architecture i386
 RUN apt-get update
 RUN apt-get install -y wine64 wine32 curl unzip xz-utils
 
-RUN addgroup --gid 6666 haskell
-RUN adduser --disabled-password --gecos "" --force-badname --ingroup haskell haskell
+RUN addgroup --gid $USERID haskell
+RUN adduser --disabled-password --gecos "" --force-badname --uid $USERID --gid $USERID haskell
 RUN mkdir /appdata
 RUN chown haskell: /appdata
 

@@ -33,13 +33,15 @@ before_cache:
 before_install:
   - docker load -i docker_images/images.tar || true
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
+  - echo "Tag $TAG"
+  - echo "Tag $(id -u)"
   
   # create permission script 
   - echo '#!/bin/bash' > $TRAVIS_BUILD_DIR/setFolder.sh
-  - echo 'mkdir -p       "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
-  - echo 'chown -R :6666 "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
-  - echo 'chmod -R 775   "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
-  - echo 'chmod -R g+s   "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
+  - echo 'mkdir -p "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
+  - echo "chown -R :$(id -u) \"\$1\"" >> $TRAVIS_BUILD_DIR/setFolder.sh
+  - echo 'chmod -R 775 "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
+  - echo 'chmod -R g+s "$1"' >> $TRAVIS_BUILD_DIR/setFolder.sh
   - chmod +x $TRAVIS_BUILD_DIR/setFolder.sh
 
   - $TRAVIS_BUILD_DIR/setFolder.sh .stack-work
@@ -54,10 +56,10 @@ install:
     set -ex
     case "$BUILD" in
       linux)
-        docker build -t gamma_stack -f linux.Dockerfile .
+        docker build --build-arg USERID=$(id -u) -t gamma_stack -f linux.Dockerfile .
         ;;
       windows)
-        docker build -t gamma_stack -f wine.Dockerfile .
+        docker build --build-arg USERID=$(id -u) -t gamma_stack -f wine.Dockerfile .
         ;;
       osx)
         mkdir -p ~/.local/bin
