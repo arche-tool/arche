@@ -4,6 +4,8 @@
 
 GammaBuilder is a software tool for the reconstruction of the parent austenite (before phase transformation) in steels.
 
+Detailed documentation about algorithm and usage is available [here](https://gammabuilder.readthedocs.io/)
+
 ### Installation ###
 
 GammaBuilder is written in Haskell and the visualization is done in [Paraview](http://www.paraview.org/) (VTK files). Therefore the following softwares need to be installed:
