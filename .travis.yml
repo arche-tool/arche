@@ -20,7 +20,7 @@ git:
 
 cache:
   directories:
-  - docker_images
+  - $TRAVIS_BUILD_DIR/.docker_images
   - $HOME/.ghc
   - $HOME/.cabal
   - $HOME/.stack
@@ -34,13 +34,14 @@ cache:
 
 before_cache:
   - docker image prune -f
-  - docker save -o docker_images/images.tar $(docker images -a -q)
+  - docker save -o $TRAVIS_BUILD_DIR/.docker_images/images.tar $(docker images -a -q)
 
 before_install:
-  - docker load -i docker_images/images.tar || true
   - export TAG=$(git describe --abbrev=4 --dirty --always --tags)
   - echo "Tag $TAG"
   - echo "Tag $(id -u)"
+  
+  - docker load -i $TRAVIS_BUILD_DIR/.docker_images/images.tar || true
   
   # create permission script 
   - echo '#!/bin/bash' > $TRAVIS_BUILD_DIR/setFolder.sh
@@ -56,6 +57,8 @@ before_install:
 
   - ls -lah .
   - git submodule foreach --recursive "ls -la .stack-work"
+
+  - rm $TRAVIS_BUILD_DIR/setFolder.sh
 
 install:
   - |
