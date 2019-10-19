@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/lostbean/gammabuilder.svg?branch=master)](https://travis-ci.org/lostbean/gammabuilder)
+
 # GammaBuilder #
 
 GammaBuilder is a software tool for the reconstruction of the parent austenite (before phase transformation) in steels.
