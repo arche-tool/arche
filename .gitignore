@@ -4,3 +4,4 @@
 /.docker_images/
 .DS_Store*
 .stack-work/
+.vscode/
