@@ -1,0 +1,66 @@
+div#TOC {
+	float: right;
+  background: white;
+  border-color: black;
+  border-style: double;
+  margin-left: 10px;
+  min-width: 40%;
+  max-width: 60%;
+}
+
+div#TOC li {
+	list-style: none;
+}
+
+div#TOC ul {
+  padding: 10px;
+  padding-left: 25px;
+}
+
+#TOC > ul > li {
+	position: relative;
+	padding-bottom: 6px;
+}
+
+#TOC .toggle {
+	cursor: pointer;
+	position: absolute;
+	left: -28px;
+	top: -2px;
+	padding: 2px 10px;
+	color: #337ab7;
+}
+
+#TOC .toggle:hover {
+	opacity: 0.5;
+}
+
+nav#sidebar {
+	background-color: white;
+	position: fixed;
+	width: 150px;
+}
+
+div#main {}
+
+body {
+	max-width: 1000px;
+	margin: 0 auto;
+  padding-left: 150px;
+  font-size: 13pt;
+  line-height: 1.5em;
+  font-family: Georgia, serif;
+}
+
+nav#sidebar {
+	position: fixed;
+	float: left;
+	width: 200px;
+	background: white;
+	margin-left: -200px;
+}
+
+div#content {
+	background: white;
+	padding: 20px;
+}

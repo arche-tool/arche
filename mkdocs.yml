@@ -1,6 +1,0 @@
-site_name: GammaBuilder
-nav:
-    - Home: index.md
-    - Install: install.md
-    - Usage: usage.md
-theme: readthedocs
