@@ -13,6 +13,8 @@ matrix:
       env: BUILD=windows
     - os: osx
       env: BUILD=osx
+    - os: linux
+      env: BUILD=docs
 
 git:
   # whether to recursively clone submodules
@@ -76,6 +78,9 @@ install:
         travis_retry curl --insecure -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
         stack build --no-terminal --install-ghc --only-dependencies
         ;;
+      docs)
+        docker pull pandoc/latex:2.6
+        ;;
     esac
     set +ex
 
@@ -88,6 +93,9 @@ script:
         ;;
       linux|windows)
         docker container run -v $(pwd):/appdata:Z gamma_stack:latest install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
+        ;;
+      docs)
+        make -C docs
         ;;
     esac
     set +ex
@@ -111,12 +119,22 @@ after_failure:
   - free -h
 
 deploy:
-  provider: releases
-  api_key:
-    secure: "KcRecRX0xqKqreFsqiXxIOkIdBGyTVH3ZclV7tz/NpCCaWxLrYBFD6zwK23KR2lthI3MXXPs7S05uFQyYVfJaQP9/+LpxTHjAb0MyhzDIINBgvBlpC4qHMvWKJVM4sgp3DcxBxOeHWAfownpBQ410z5nJSsP14dTHmvtXGTY9epUSYTOUulrETu0zKoleV+B8TEdcpvdX+N6WcFiKFn2AZQaWu8bXqtSOgsMVU001Dk7D0GrzFYb6t0QSC2wYgcRdYpfD89jHLktB6oTgoc3yD1iToim/CDfnIcI4Pt6M7SuZmFzwqR6giBTmFTdHtD+hnYAra+YEHWTG7iq7gCs32sN27y9xeZ4O9ZYelp4/6esiMVm5BpkGzmtKdLVlAeIYisPW3WUCvm3k4rs2JWl6I54jU3XHz8h5yIzbZu6d1VldUO5tT+cRDQF4Xkd0qCjxkscdJJZ+lenkLifor7cDGZih0YJ8XzJZjxCOgERySXEulp/xuVmM0a8z3jWBUGyqnCwewW+klez9nj3BXRW/YFrn5N4kG/Ml0RqLQrJPAu7dCW+meNAX02m+ElsN6EYLFbp9Y/2Fal30Etsd3QN/UDKvYHTmG7v49ghcSJcWQwttdFXizwFpPqK/eX5TLKMJYatmdzRVWAkit4pGtsVrPenmVRjIt82maYNr2QCBXk="
-  file_glob: true
-  file: .output/$BUILD-$TAG/*
-  skip_cleanup: true
-  on:
-    branch: master
-    tags: true
+  - provider: releases
+    api_key:
+      secure: "KcRecRX0xqKqreFsqiXxIOkIdBGyTVH3ZclV7tz/NpCCaWxLrYBFD6zwK23KR2lthI3MXXPs7S05uFQyYVfJaQP9/+LpxTHjAb0MyhzDIINBgvBlpC4qHMvWKJVM4sgp3DcxBxOeHWAfownpBQ410z5nJSsP14dTHmvtXGTY9epUSYTOUulrETu0zKoleV+B8TEdcpvdX+N6WcFiKFn2AZQaWu8bXqtSOgsMVU001Dk7D0GrzFYb6t0QSC2wYgcRdYpfD89jHLktB6oTgoc3yD1iToim/CDfnIcI4Pt6M7SuZmFzwqR6giBTmFTdHtD+hnYAra+YEHWTG7iq7gCs32sN27y9xeZ4O9ZYelp4/6esiMVm5BpkGzmtKdLVlAeIYisPW3WUCvm3k4rs2JWl6I54jU3XHz8h5yIzbZu6d1VldUO5tT+cRDQF4Xkd0qCjxkscdJJZ+lenkLifor7cDGZih0YJ8XzJZjxCOgERySXEulp/xuVmM0a8z3jWBUGyqnCwewW+klez9nj3BXRW/YFrn5N4kG/Ml0RqLQrJPAu7dCW+meNAX02m+ElsN6EYLFbp9Y/2Fal30Etsd3QN/UDKvYHTmG7v49ghcSJcWQwttdFXizwFpPqK/eX5TLKMJYatmdzRVWAkit4pGtsVrPenmVRjIt82maYNr2QCBXk="
+    file_glob: true
+    file: .output/$BUILD-$TAG/*
+    skip_cleanup: true
+    on:
+      branch: master
+      tags: true
+      condition: $BUILD =~ ^(osx|windows|linux)$
+  - provider: pages
+    local_dir: docs/html
+    skip_cleanup: true
+    github_token:
+      secure: "KcRecRX0xqKqreFsqiXxIOkIdBGyTVH3ZclV7tz/NpCCaWxLrYBFD6zwK23KR2lthI3MXXPs7S05uFQyYVfJaQP9/+LpxTHjAb0MyhzDIINBgvBlpC4qHMvWKJVM4sgp3DcxBxOeHWAfownpBQ410z5nJSsP14dTHmvtXGTY9epUSYTOUulrETu0zKoleV+B8TEdcpvdX+N6WcFiKFn2AZQaWu8bXqtSOgsMVU001Dk7D0GrzFYb6t0QSC2wYgcRdYpfD89jHLktB6oTgoc3yD1iToim/CDfnIcI4Pt6M7SuZmFzwqR6giBTmFTdHtD+hnYAra+YEHWTG7iq7gCs32sN27y9xeZ4O9ZYelp4/6esiMVm5BpkGzmtKdLVlAeIYisPW3WUCvm3k4rs2JWl6I54jU3XHz8h5yIzbZu6d1VldUO5tT+cRDQF4Xkd0qCjxkscdJJZ+lenkLifor7cDGZih0YJ8XzJZjxCOgERySXEulp/xuVmM0a8z3jWBUGyqnCwewW+klez9nj3BXRW/YFrn5N4kG/Ml0RqLQrJPAu7dCW+meNAX02m+ElsN6EYLFbp9Y/2Fal30Etsd3QN/UDKvYHTmG7v49ghcSJcWQwttdFXizwFpPqK/eX5TLKMJYatmdzRVWAkit4pGtsVrPenmVRjIt82maYNr2QCBXk="
+    keep_history: true
+    on:
+      # branch: master
+      condition: $BUILD = docs
