@@ -42,12 +42,12 @@ NAV_FLAGS := \
 	--from markdown+native_divs \
 	--to html
 
-all: $(OUTPUT_HTML_FOLDERS) $(TARGET_HTML_FILES) $(TARGET_STATIC_FILES)
+all: $(TARGET_HTML_FOLDERS) $(TARGET_HTML_FILES) $(TARGET_STATIC_FILES)
 
-singlepage: $(OUTPUT_HTML_FOLDERS) $(TARGET_STATIC_FILES) html/navigation.html html/all.css
+singlepage: $(TARGET_HTML_FOLDERS) $(TARGET_STATIC_FILES) html/navigation.html html/all.css
 	$(PANDOC) $(FLAGS) --output html/full.html $(MD_FILES)
 
-$(OUTPUT_HTML_FOLDERS):
+$(TARGET_HTML_FOLDERS):
 	mkdir -p $@
 
 html/%.html: $(SOURCE_DIR)/%.md html/navigation.html html/all.css
