@@ -7,7 +7,6 @@ OUTPUT_HTML_DIR := html
 STATIC_DIR := static
 SOURCE_FOLDERS := $(shell find $(SOURCE_DIR) -type d)
 TARGET_HTML_FOLDERS := $(subst $(SOURCE_DIR),$(OUTPUT_HTML_DIR),$(SOURCE_FOLDERS)) 
-DIR := ${CURDIR}
 
 # Files
 MD_FILES := $(shell find $(SOURCE_DIR) -type f -name "*.md")
@@ -17,11 +16,16 @@ TARGET_STATIC_FILES := $(subst $(STATIC_DIR),$(OUTPUT_HTML_DIR),$(STATIC_FILES))
 
 BASE_TEMPLATE := default.html 
 SIDEBAR_TEMPLATE := toc-sidebar.html
-HEADER_HTML := $(DIR)/$(TEMPLATE_DIR)/header.html
-FOOT_NOTE_HTML := $(DIR)/$(TEMPLATE_DIR)/footer.html
+HEADER_HTML := $(TEMPLATE_DIR)/header.html
+FOOT_NOTE_HTML := $(TEMPLATE_DIR)/footer.html
 
 # Pandoc
+ifeq ($(CI),true)
+PANDOC := docker run --volume "`pwd`:/data" --user `id -u`:`id -g` pandoc/latex:2.6
+else
 PANDOC := pandoc
+endif
+
 FLAGS := \
 	--standalone \
 	--from markdown \
