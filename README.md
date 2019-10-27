@@ -4,7 +4,7 @@
 
 GammaBuilder is a software tool for the reconstruction of the parent austenite (before phase transformation) in steels.
 
-Detailed documentation about algorithm and usage is available [here](https://gammabuilder.readthedocs.io/)
+Find more information about the underlying algorithm and its use at the [documentation](https://lostbean.github.io/gammabuilder/)
 
 ### Installation ###
 
@@ -45,7 +45,7 @@ stack install
 Note that the internet access is required in order to download all the other dependencies.
 
 
-### Usage Example ###
+### Basic Usage Example ###
 
 There are three commands available on GammaBuilder:
 
