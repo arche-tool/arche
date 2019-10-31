@@ -201,7 +201,7 @@ parseRefinementSteps = option auto
    <> help "Number of refinement steps. Default 1")
 
 parseInitCluster :: Parser Double
-parseInitCluster = (min 1.2 . abs) <$> option auto
+parseInitCluster = (max 1.2 . abs) <$> option auto
    (  long "mcl-init-factor"
    <> short 's'
    <> metavar "Double"
