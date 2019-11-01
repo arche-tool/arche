@@ -65,9 +65,11 @@ import Texture.TesseractGrid
 
 newtype QuaternionFZ = QuaternionFZ {qFZ :: Quaternion} deriving (Show)
 
+instance Semigroup QuaternionFZ where
+  (<>) p q = fromQuaternion (qFZ p `mappend` qFZ q)
+
 instance Monoid QuaternionFZ where
   mempty      = QuaternionFZ mempty
-  mappend p q = fromQuaternion (qFZ p `mappend` qFZ q)
 
 instance Group QuaternionFZ where
   invert = fromQuaternion . invert . qFZ
@@ -77,7 +79,7 @@ instance Rot QuaternionFZ where
   fromQuaternion = getQinFZ
   getOmega       = getOmega . qFZ
 
-newtype OR = OR {qOR :: Quaternion} deriving (Show, Monoid, Group, Rot)
+newtype OR = OR {qOR :: Quaternion} deriving (Show, Semigroup, Monoid, Group, Rot)
 
 newtype PhaseID = PhaseID {phaseId :: Int} deriving (Show, Eq, Ord)
 

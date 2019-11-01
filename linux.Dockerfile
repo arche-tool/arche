@@ -21,6 +21,6 @@ RUN curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --w
 USER haskell
 ENV HOME /home/haskell
 ENV PATH="${HOME}/.local/bin:${PATH}"
-RUN stack setup 7.10.3
+RUN stack setup 8.6.3
 WORKDIR /appdata
 ENTRYPOINT [ "stack" ]
