@@ -32,7 +32,7 @@ Executable gamma
                    , optparse-applicative >= 0.10
                    , filepath             >= 1.3
                    , directory            >= 1.0
-
+                   , fast-logger          >= 2.4
                    , hammer               >= 0.4
                    , linear-vect          >= 0.2
                    , sledge               >= 0.4
