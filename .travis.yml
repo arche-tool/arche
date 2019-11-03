@@ -9,12 +9,14 @@ matrix:
   include:
     - os: linux
       env: BUILD=linux
-    - os: windows
-      env: BUILD=windows
-    - os: osx
-      env: BUILD=osx
     - os: linux
       env: BUILD=docs
+    - os: windows
+      env: BUILD=windows
+      if: branch = master
+    - os: osx
+      env: BUILD=osx
+      if: branch = master
 
 git:
   # whether to recursively clone submodules
