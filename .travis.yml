@@ -1,6 +1,6 @@
 sudo: required
 
-language: generic
+language: shell
 
 services:
   - docker
@@ -9,7 +9,7 @@ matrix:
   include:
     - os: linux
       env: BUILD=linux
-    - os: linux
+    - os: windows
       env: BUILD=windows
     - os: osx
       env: BUILD=osx
@@ -70,7 +70,10 @@ install:
         docker build --build-arg USERID=$(id -u) -t gamma_stack -f linux.Dockerfile .
         ;;
       windows)
-        docker build --build-arg USERID=$(id -u) -t gamma_stack -f wine.Dockerfile .
+        mkdir -p ~/.local/bin
+        export PATH=$HOME/.local/bin:$PATH
+        travis_retry curl -L https://get.haskellstack.org/stable/windows-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack.exe'
+        stack build --no-terminal --install-ghc --only-dependencies
         ;;
       osx)
         mkdir -p ~/.local/bin
@@ -91,8 +94,11 @@ script:
       osx)
         stack install --local-bin-path ".output/$BUILD-$TAG"
         ;;
-      linux|windows)
+      linux)
         docker container run -v $(pwd):/appdata:Z gamma_stack:latest install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
+        ;;
+      windows)
+        stack install --local-bin-path ".output/$BUILD-$TAG"
         ;;
       docs)
         make -C docs
