@@ -18,8 +18,8 @@ Executable gamma
                     -threaded
                     -rtsopts
                     -Wall
-                    -auto-all
-                    -caf-all
+                    -fprof-auto
+                    -fprof-cafs
   hs-source-dirs:    src
   main-Is:           Main.hs
   other-modules:
