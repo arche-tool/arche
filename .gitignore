@@ -3,5 +3,6 @@
 /.output/
 /.docker_images/
 .DS_Store*
+.stack-root/
 .stack-work/
 .vscode/
