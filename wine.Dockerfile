@@ -25,9 +25,9 @@ RUN rm -rf win_stack
 
 # Set local GHC
 RUN mkdir -p ~/.wine/drive_c/ghc
-RUN curl -L https://downloads.haskell.org/~ghc/7.10.3/ghc-7.10.3-x86_64-unknown-mingw32.tar.xz | tar xJ -C ~/.wine/drive_c/ghc
+RUN curl -L https://downloads.haskell.org/~ghc/8.6.3/ghc-8.6.3-x86_64-unknown-mingw32.tar.xz | tar xJ -C ~/.wine/drive_c/ghc
 RUN echo '#!/bin/sh' > ~/.local/bin/stack.exe
-RUN echo 'WINEPATH=C:\\\\ghc\\\\ghc-7.10.3\\\\bin wine /home/haskell/.local/bin/win_stack.exe --system-ghc --no-install-ghc "$@"' >> ~/.local/bin/stack.exe
+RUN echo 'WINEPATH=C:\\\\ghc\\\\ghc-8.6.3\\\\bin wine /home/haskell/.local/bin/win_stack.exe --system-ghc --no-install-ghc "$@"' >> ~/.local/bin/stack.exe
 RUN chmod +x ~/.local/bin/stack.exe
 RUN mkdir -p ~/.wine/drive_c/users
 RUN chmod -R o+w "$HOME/.wine/drive_c/users/"

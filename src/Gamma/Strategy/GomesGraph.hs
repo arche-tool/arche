@@ -1,6 +1,8 @@
 {-# LANGUAGE
-    RecordWildCards
+    DataKinds
   , FlexibleInstances
+  , RecordWildCards
+  , OverloadedStrings
   #-}
 
 module Gamma.Strategy.GomesGraph
@@ -8,17 +10,19 @@ module Gamma.Strategy.GomesGraph
   , Cfg(..)
   ) where
 
-import Control.Arrow       ((&&&))
-import Control.Monad       (forM_, when, replicateM_, zipWithM_, void)
-import Control.Monad.RWS   (RWST(..), ask, get, put, runRWST)
+import Control.Arrow         ((&&&))
+import Control.Monad         (forM_, when, replicateM_, zipWithM_, void)
+import Control.Monad.RWS     (RWST(..), ask, asks, get, put, runRWST)
 import Control.Monad.Trans
 import Control.Parallel.Strategies
-import Data.HashMap.Strict (HashMap)
-import Data.Maybe          (mapMaybe, fromMaybe)
-import Data.Vector.Unboxed (Vector)
-import Data.Word           (Word8)
+import Data.HashMap.Strict   (HashMap)
+import Data.Maybe            (mapMaybe, fromMaybe)
+import Data.TDigest          (TDigest)
+import Data.Vector.Unboxed   (Vector)
+import Data.Word             (Word8)
 import System.FilePath
 import System.IO
+import System.Log.FastLogger (LoggerSet, ToLogStr)
 import System.Process
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
@@ -26,6 +30,9 @@ import qualified Data.Vector.Unboxed.Mutable  as MU
 import qualified Data.HashMap.Strict          as HM
 import qualified Data.HashSet                 as HS
 import qualified Data.List                    as L
+import qualified Data.Text.Format             as F
+import qualified Data.TDigest                 as TD
+import qualified System.Log.FastLogger        as Log
 
 import File.ANGReader (ANGdata)
 import File.CTFReader (CTFdata)
@@ -101,6 +108,7 @@ data GomesConfig
   , productGrains   :: HashMap Int ProductGrain
   , productGraph    :: Graph Int Double
   , orientationGrid :: ODF
+  , stdoutLogger    :: LoggerSet
   }
 
 data GomesState
@@ -113,8 +121,32 @@ type Gomes = RWST GomesConfig () GomesState IO
 
 -- =======================================================================================
 
-getGomesConfig :: Cfg -> OR -> Either ANGdata CTFdata -> Maybe GomesConfig
-getGomesConfig cfg ror ebsd = let
+logInfo :: (ToLogStr a)=> a -> Gomes ()
+logInfo msg = asks stdoutLogger >>= (\logger -> liftIO . Log.pushLogStrLn logger . Log.toLogStr $ msg) 
+
+getDist :: (a -> Double) -> V.Vector a -> TDigest 10
+getDist func = TD.compress . V.foldl (\td x -> TD.insert (func x) td) mempty
+
+logParentStatsState :: Gomes ()
+logParentStatsState = get >>= logParentStats . parentGrains
+
+logParentStats :: V.Vector ParentGrain -> Gomes ()
+logParentStats parents = let
+  tdNumProducts = getDist (fromIntegral . length . productMembers) parents
+  renderMsg q = let
+    v = maybe 0.0 id $ TD.quantile (fromIntegral q / 100.0) tdNumProducts
+    in F.format "{} products per parent grain at {}% quantile." $ (F.prec 2 v, F.left 2 '0' q)
+  in do
+    logInfo ("[GomesGraph] " <> renderMsg (5 :: Int))
+    logInfo ("[GomesGraph] " <> renderMsg (25 :: Int))
+    logInfo ("[GomesGraph] " <> renderMsg (50 :: Int))
+    logInfo ("[GomesGraph] " <> renderMsg (75 :: Int))
+    logInfo ("[GomesGraph] " <> renderMsg (95 :: Int))
+
+-- =======================================================================================
+
+getGomesConfig :: Cfg -> OR -> Either ANGdata CTFdata -> LoggerSet -> Maybe GomesConfig
+getGomesConfig cfg ror ebsd logger = let
   noIsleGrains = excluedeFloatingGrains cfg
   qpBox = readEBSDToVoxBox
           (C.rotation &&& C.phase)
@@ -133,6 +165,7 @@ getGomesConfig cfg ror ebsd = let
      , structureGraph = micro
      , productGraph   = graphWeight noIsleGrains qpBox micro ror
      , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
+     , stdoutLogger   = logger
      }
   in fmap func (getGrainID' (misoAngle cfg) Cubic qpBox)
 
@@ -219,6 +252,7 @@ plotEBSD name = do
 
 run :: Cfg -> IO ()
 run cfg@Cfg{..} = do
+  logger <- Log.newStdoutLoggerSet Log.defaultBufSize
   ebsd <- readEBSD ang_input
   let
     ror  = convert withOR
@@ -226,9 +260,10 @@ run cfg@Cfg{..} = do
     doit = do
       grainClustering
       plotResults "1st-step"
-      replicateM_ nref clusteringRefinement
+      logParentStatsState
+      replicateM_ nref (clusteringRefinement >> logParentStatsState)
       plotResults "final-step"
-  gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror ebsd)
+  gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror ebsd logger)
   putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
   void $ runRWST doit gomescfg (getInitState gomescfg)
 
@@ -400,7 +435,7 @@ refineParentGrain p@ParentGrain{..} = do
     then return (V.singleton p)
     else do
     gg <- liftIO $ findClusters graingraph2 mclFactor (useExternalMCL inputCfg)
-    liftIO $ print (gg, productMembers)
+    -- logInfo $ show (gg, productMembers)
     return $ V.map (getParentGrainData cfg) gg
 
 -- ========================================= MCL =========================================

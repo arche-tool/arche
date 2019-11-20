@@ -1,6 +1,6 @@
 sudo: required
 
-language: generic
+language: shell
 
 services:
   - docker
@@ -10,11 +10,13 @@ matrix:
     - os: linux
       env: BUILD=linux
     - os: linux
+      env: BUILD=docs
+    - os: windows
       env: BUILD=windows
+      if: branch = master
     - os: osx
       env: BUILD=osx
-    - os: linux
-      env: BUILD=docs
+      if: branch = master
 
 git:
   # whether to recursively clone submodules
@@ -27,6 +29,7 @@ cache:
   - $HOME/.cabal
   - $HOME/.stack
   - $TRAVIS_BUILD_DIR/.stack-work
+  - $TRAVIS_BUILD_DIR/.stack-root
   - $TRAVIS_BUILD_DIR/packages/hammer/.stack-work
   - $TRAVIS_BUILD_DIR/packages/linear-vect/.stack-work
   - $TRAVIS_BUILD_DIR/packages/mcl/.stack-work
@@ -68,9 +71,13 @@ install:
     case "$BUILD" in
       linux)
         docker build --build-arg USERID=$(id -u) -t gamma_stack -f linux.Dockerfile .
+        docker container run -v $(pwd):/appdata:Z gamma_stack:latest build --no-terminal --install-ghc --only-dependencies --stack-root /appdata/.stack-root
         ;;
       windows)
-        docker build --build-arg USERID=$(id -u) -t gamma_stack -f wine.Dockerfile .
+        mkdir -p ~/.local/bin
+        export PATH=$HOME/.local/bin:$PATH
+        travis_retry curl -L https://get.haskellstack.org/stable/windows-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack.exe'
+        stack build --no-terminal --install-ghc --only-dependencies
         ;;
       osx)
         mkdir -p ~/.local/bin
@@ -91,8 +98,11 @@ script:
       osx)
         stack install --local-bin-path ".output/$BUILD-$TAG"
         ;;
-      linux|windows)
-        docker container run -v $(pwd):/appdata:Z gamma_stack:latest install --allow-different-user --local-bin-path ".output/$BUILD-$TAG"
+      linux)
+        docker container run -v $(pwd):/appdata:Z gamma_stack:latest install --allow-different-user --stack-root /appdata/.stack-root --local-bin-path ".output/$BUILD-$TAG"
+        ;;
+      windows)
+        stack install --local-bin-path ".output/$BUILD-$TAG"
         ;;
       docs)
         make -C docs
