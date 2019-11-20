@@ -3,6 +3,7 @@
   , FlexibleInstances
   , RecordWildCards
   , OverloadedStrings
+  , ScopedTypeVariables
   #-}
 
 module Gamma.Strategy.GomesGraph
@@ -542,19 +543,27 @@ renderQuaternions Cfg{..} name qs = let
 -- ====================================== Plotting EBSD/CTF =============================================
 
 genParentEBSD :: Gomes (Either ANGdata CTFdata)
-genParentEBSD = ask >>= either (fmap Left . genParentANG) (fmap Right . genParentCTF) . inputEBSD
+genParentEBSD = do
+  pp <- asks (parentPhaseID . inputCfg)
+  qs <- U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
+  ebsd <- asks inputEBSD
+  return $ either (Left . genParentANG qs pp) (Right . genParentCTF qs pp) ebsd
   where
-    genMap = U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
+    genParentANG :: V.Vector Quaternion -> Maybe PhaseID -> ANGdata -> ANGdata
+    genParentANG qs parentPhase ang = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
+      where
+        insRotation q angPoint = angPoint {
+          A.rotation = q,
+          A.phaseNum = maybe (A.phaseNum angPoint) phaseId parentPhase
+          }
 
-    genParentANG :: ANGdata -> Gomes ANGdata
-    genParentANG ang = func <$> genMap
-      where func qs = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
-            insRotation q p = p {A.rotation = q}
-
-    genParentCTF :: CTFdata -> Gomes CTFdata
-    genParentCTF ang = func <$> genMap
-      where func qs = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
-            insRotation q p = p {C.rotation = q}
+    genParentCTF :: V.Vector Quaternion -> Maybe PhaseID -> CTFdata -> CTFdata
+    genParentCTF qs parentPhase ang = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
+      where
+        insRotation q ctfPoint = ctfPoint {
+          C.rotation = q,
+          C.phase = maybe (C.phase ctfPoint) phaseId parentPhase
+          }
 
 -- ========================================== Debugging ==========================================
 
