@@ -13,10 +13,10 @@ matrix:
       env: BUILD=docs
     - os: windows
       env: BUILD=windows
-      if: branch = master
+      if: tag IS present
     - os: osx
       env: BUILD=osx
-      if: branch = master
+      if: tag IS present
 
 git:
   # whether to recursively clone submodules
@@ -136,7 +136,9 @@ deploy:
     file: .output/$BUILD-$TAG/*
     skip_cleanup: true
     on:
-      branch: master
+      branch:
+        - master
+        - /v\d+\.\d+[a-z]/
       tags: true
       condition: $BUILD =~ ^(osx|windows|linux)$
   - provider: pages
