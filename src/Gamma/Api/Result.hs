@@ -1,12 +1,21 @@
-module Api.Result where
+{-# LANGUAGE DeriveGeneric #-}
 
-import Data.Vector.Unboxed (Vector)
+module Api.Result
+  ( MicroStructure(..)
+  , VoxelInfo
+  , packVoxBox
+  ) where
+
+import Data.Aeson
 import Data.HashMap.Strict   (HashMap)
+import Data.Vector.Unboxed (Vector)
+import GHC.Generics
+
+import qualified Data.Vector.Unboxed as V
+
 import Hammer.VoxBox
 import Hammer.VoxBox.Render
 import Linear.Vect (Vec3(..))
-
-import qualified Data.Vector.Unboxed as V
 
 data MicroStructure
     = MicroStructure
@@ -14,7 +23,9 @@ data MicroStructure
     , yVertices :: Vector Double
     , zVertices :: Vector Double
     , voxels :: Vector (((Int, Int), (Int, Int)), ((Int, Int), (Int, Int)))
-    } deriving ()
+    } deriving (Generic, Show)
+
+instance ToJSON MicroStructure
 
 type VoxelInfo a = HashMap Int a 
 
@@ -24,7 +35,7 @@ packVoxBox vbox = let
   ps    = getVoxBoxCornersPoints vbext
   in MicroStructure {
     xVertices = V.map (\(Vec3 x _ _) -> x) ps,
-    yVertices = V.map (\(Vec3 x _ _) -> x) ps,
-    zVertices = V.map (\(Vec3 x _ _) -> x) ps,
-    voxels = V.empty
-}
+    yVertices = V.map (\(Vec3 _ y _) -> y) ps,
+    zVertices = V.map (\(Vec3 _ _ z) -> z) ps,
+    voxels = V.fromList . map (renderVoxelVolume vbext) . getRangePos . dimension $ vbox 
+    }
