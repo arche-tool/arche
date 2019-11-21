@@ -1,10 +1,12 @@
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE TemplateHaskell           #-}
 
 module Main where
 
--- ========================================= Main ========================================
+import Aws.Lambda
 
-main :: IO ()
-main = do
-  putStrLn "Hey!"
+import Handler.Person
+
+-- ========================================= Main ========================================
+generateLambdaDispatcher

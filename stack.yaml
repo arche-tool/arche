@@ -9,7 +9,9 @@ packages:
 - packages/vtk/
 - packages/linear-vect/
 
-extra-deps: []
+extra-deps:
+- aws-0.21.1@sha256:5290b819bd425f28c736b93a84955ced145bdb631a26d784d1b952e2e0ddc6b8,14259
+- aws-lambda-haskell-runtime-2.0.1@sha256:17a1a9ded282d9ddc2a77f9dc32a986edaf7b0c2a1eeaf4ab631762620e467c5,2893
 
 flags:
   hammer:

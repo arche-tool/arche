@@ -3,7 +3,21 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: aws-0.21.1@sha256:5290b819bd425f28c736b93a84955ced145bdb631a26d784d1b952e2e0ddc6b8,14259
+    pantry-tree:
+      size: 6843
+      sha256: 59469aba89aa215e5b3ff94b7fe2d866c2dd0cea750e4fbed5e5bc05f3bc9a84
+  original:
+    hackage: aws-0.21.1@sha256:5290b819bd425f28c736b93a84955ced145bdb631a26d784d1b952e2e0ddc6b8,14259
+- completed:
+    hackage: aws-lambda-haskell-runtime-2.0.1@sha256:17a1a9ded282d9ddc2a77f9dc32a986edaf7b0c2a1eeaf4ab631762620e467c5,2893
+    pantry-tree:
+      size: 1411
+      sha256: 92ef0734578678e855b4106d9c16fa3f1ce60716d14b57e55b7452ab0bd1cdec
+  original:
+    hackage: aws-lambda-haskell-runtime-2.0.1@sha256:17a1a9ded282d9ddc2a77f9dc32a986edaf7b0c2a1eeaf4ab631762620e467c5,2893
 snapshots:
 - completed:
     size: 496697
