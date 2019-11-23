@@ -43,8 +43,12 @@ Executable gamma-server
                     -threaded
                     -rtsopts
                     -Wall
-                    -fprof-auto
-                    -fprof-cafs
+                    -fPIC
+                    -static
+                    -optc-static
+                    -optl-static
+                    -optl-pthread
+  ld-options:       -static
   build-depends:     gamma-builder
                    , base                       == 4.*
                    , hammer                     >= 0.4
