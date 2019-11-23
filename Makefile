@@ -5,7 +5,8 @@ GIT_OK := $(shell ( [ -n '$(git tag --points-at `git rev-parse HEAD`)' ] && [ -z
 SHARED_VOL := /appdata
 STACK_ROOT := $(SHARED_VOL)/.stack-root
 TARGET_OS := linux
-OUTPUT_DIR := .output/$(TARGET_OS)-$(GIT_VERSION)
+OUTPUT_ROOT_DIR := .output
+OUTPUT_DIR := $(OUTPUT_ROOT_DIR)/$(TARGET_OS)-$(GIT_VERSION)
 
 ifeq ($(OS),Windows_NT)
     OS := Windows
@@ -31,6 +32,7 @@ all: stack.yaml.lock cli aws-lambda
 
 clean:
 	$(STACK) clean
+	rm -rf $(OUTPUT_ROOT_DIR)/*
 	docker image prune -f
 
 cli: gamma
