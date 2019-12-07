@@ -21,7 +21,6 @@ greet person = "Hello, " ++ name person ++ "!"
 
 handler :: Event Person -> Context -> IO (Either String (Response String))
 handler Event{..} _ = do
-  putStrLn (show resource)
   let person = body
   pure $ Right Response
     { statusCode = 200

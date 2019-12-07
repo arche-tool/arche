@@ -32,13 +32,12 @@ data Method
   deriving (Show, Eq, Generic, FromJSON, ToJSON)
 
 data Event a = Event
-  { resource :: String
-  , path :: String
+  { path :: String
   , body :: a
   , httpMethod :: Method
   , headers :: Map String String
   , pathParameters :: Map String String
-  , isBase64Encoded :: Bool
+  , queryParameters :: Map String String
   } deriving (Generic, FromJSON)
 
 
