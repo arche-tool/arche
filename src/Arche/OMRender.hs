@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Gamma.OMRender
+module Arche.OMRender
        ( RenderOM
        , showOMQI
        , showOMCI
