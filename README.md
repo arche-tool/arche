@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/lostbean/arche.svg?branch=master)](https://travis-ci.org/lostbean/arche)
+[![Build Status](https://travis-ci.org/arche-tool/arche.svg?branch=master)](https://travis-ci.org/arche-tool/arche)
 
 # Arche #
 
