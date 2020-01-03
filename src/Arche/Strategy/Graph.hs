@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Gamma.Strategy.Graph
+module Arche.Strategy.Graph
        ( run
        , Cfg(..)
        ) where
@@ -22,7 +22,7 @@ import           Texture.Symmetry
 import           Texture.Orientation
 import           Texture.IPF
 
-import           Gamma.Grains
+import           Arche.Grains
 
 data Cfg =
   Cfg

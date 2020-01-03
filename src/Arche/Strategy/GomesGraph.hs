@@ -6,7 +6,7 @@
   , ScopedTypeVariables
   #-}
 
-module Gamma.Strategy.GomesGraph
+module Arche.Strategy.GomesGraph
   ( run
   , Cfg(..)
   ) where
@@ -53,8 +53,8 @@ import Texture.HyperSphere
 import qualified File.ANGReader as A
 import qualified File.CTFReader as C
 
-import Gamma.Grains
-import Gamma.OR
+import Arche.Grains
+import Arche.OR
 
 data Cfg =
   Cfg
@@ -204,8 +204,8 @@ plotVTK name = do
   attrORVar  <- genProductFitVTKAttr (-1) (const $ const (fst . variantNumber)) "VariantNumber"
   attrLocErr <- genProductFitVTKAttr (-1) (const $ const (unDeg . misfitAngle)) "ErrorPerProduct"
 
-  attrAvgGIPF <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)                 "Gamma Avg Orientation [IPF]"
-  attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Gamma Orientation [IPF]"
+  attrAvgGIPF <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)                 "Arche Avg Orientation [IPF]"
+  attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Arche Orientation [IPF]"
   attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . productAvgOrientation . snd)             "Alpha Orientation [IPF]"
   let
     attrVoxAIPF  = genVoxBoxAttr "VoxelAlpha" (getCubicIPFColor . fst) orientationBox
@@ -346,19 +346,19 @@ getParentGrainData GomesConfig{..} mids = let
   info = U.fromList $ mapMaybe getInfo mids
   wt   = U.foldl' (\acc (w,_,_) -> acc + w) 0 info
 
-  --(gamma, err) = getWGammaTess (parentPhaseID inputCfg) realORs info
-  (gamma, err) = getWGammaKernel orientationGrid (parentPhaseID inputCfg) realORs info
+  --(arche, err) = getWArcheTess (parentPhaseID inputCfg) realORs info
+  (arche, err) = getWArcheKernel orientationGrid (parentPhaseID inputCfg) realORs info
 
   getFitInfo :: (Double, QuaternionFZ, PhaseID) -> ParentProductFit
   getFitInfo (wi, qi, phase)
     | Just phase == parentPhaseID inputCfg = ParentProductFit (wi / wt) 0 (-1, mempty)
     | otherwise                            = ParentProductFit (wi / wt) gerr nvar
     where
-      (gerr, nvar) = singleerrorfunc qi gamma realORs
+      (gerr, nvar) = singleerrorfunc qi arche realORs
 
   in ParentGrain
      { productMembers        = mids
-     , parentOrientation     = gamma
+     , parentOrientation     = arche
      , parentAvgErrorFit     = err
      , parentErrorPerProduct = map getFitInfo (U.toList info)
      }
@@ -366,11 +366,11 @@ getParentGrainData GomesConfig{..} mids = let
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
-getWGammaKernel :: ODF -> Maybe PhaseID -> Vector OR -> Vector (Double, QuaternionFZ, PhaseID) -> (Quaternion, FitError)
-getWGammaKernel odf phaseID ors xs = (gamma, err)
+getWArcheKernel :: ODF -> Maybe PhaseID -> Vector OR -> Vector (Double, QuaternionFZ, PhaseID) -> (Quaternion, FitError)
+getWArcheKernel odf phaseID ors xs = (arche, err)
   where
     (was, wms) = U.partition (\(_,_,p) -> Just p == phaseID) xs
-    (gamma, err) = gammaFinderKernel odf ors as ms
+    (arche, err) = archeFinderKernel odf ors as ms
     (_, as, _) = U.unzip3 was
     (_, ms, _) = U.unzip3 wms
 
@@ -378,16 +378,16 @@ getWGammaKernel odf phaseID ors xs = (gamma, err)
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
 -- TODO: Remove
-_getWGammaTess :: Int -> Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
-_getWGammaTess phaseID ors xs = (gamma, err)
+_getWArcheTess :: Int -> Vector OR -> Vector (Double, QuaternionFZ, Int) -> (Quaternion, FitError)
+_getWArcheTess phaseID ors xs = (arche, err)
   where
     (gs, as) = U.partition (\(_,_,p) -> p == phaseID) xs
     g0 | U.null gs = let (g, _, _) = hotStartTesseract ors qs in g
        | otherwise = averageQuaternion (V.convert $ U.map (\(_,q,_) -> qFZ q) gs :: V.Vector Quaternion)
     (ws, qs, _) = U.unzip3 as
     errfunc = weightederrorfunc ws qs
-    err     = errfunc gamma ors
-    gamma   = findGamma errfunc g0 ors
+    err     = errfunc arche ors
+    arche   = findArche errfunc g0 ors
 
 -- ================================ Clustering Refinement ================================
 

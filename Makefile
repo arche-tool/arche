@@ -7,8 +7,8 @@ GIT_OK := $(shell ( [ -n '$(git tag --points-at `git rev-parse HEAD`)' ] && [ -z
 
 all: stack.yaml.lock build
 
-build: $(DIST_DIR)/build/gamma/gamma
-	cp $(DIST_DIR)/build/gamma/gamma $(DIST_DIR)/build/gamma/gamma-$(GIT_VERSION)
+build: $(DIST_DIR)/build/arche/arche
+	cp $(DIST_DIR)/build/arche/arche $(DIST_DIR)/build/arche/arche$(GIT_VERSION)
 
 stack.yaml.lock: 
 	stack freeze
@@ -16,7 +16,7 @@ stack.yaml.lock:
 clean:
 	stack clean
 
-$(DIST_DIR)/build/gamma/gamma: stack.yaml.lock gamma-builder.cabal
+$(DIST_DIR)/build/arche/arche: stack.yaml.lock arche.cabal
 	stack build --ghc-options="$(GHCFLAGS)"
 
 $(info $(GIT_OK))

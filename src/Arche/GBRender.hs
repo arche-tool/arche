@@ -2,7 +2,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
 
-module Gamma.GBRender
+module Arche.GBRender
        ( RenderGB
        , showGBMiso
        , showGBMisoKS
@@ -19,7 +19,7 @@ import           Hammer.VTK.VoxBox ()
 import           Texture.Orientation
 import           Texture.Symmetry
 
-import           Gamma.OR
+import           Arche.OR
 
 -- =======================================================================================
 

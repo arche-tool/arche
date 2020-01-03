@@ -1,4 +1,4 @@
-name:                gamma-builder
+name:                arche
 version:             0.1.2.0
 synopsis:            Software to reconstrut Austenite for EBSD map.
 -- description:
@@ -11,7 +11,7 @@ category:            Development
 build-type:          Simple
 cabal-version:       >=1.8
 
-Executable gamma
+Executable arche
   buildable:         True
   ghc-options:      -O2
                     -funbox-strict-fields
@@ -23,11 +23,11 @@ Executable gamma
   hs-source-dirs:    src
   main-Is:           Main.hs
   other-modules:
-                    Gamma.Grains
-                    Gamma.OR
-                    Gamma.Strategy.GomesGraph
-                    Gamma.Strategy.Graph
-                    Gamma.Strategy.ORFitAll
+                    Arche.Grains
+                    Arche.OR
+                    Arche.Strategy.GomesGraph
+                    Arche.Strategy.Graph
+                    Arche.Strategy.ORFitAll
   build-depends:     base                 == 4.*
                    , optparse-applicative >= 0.10
                    , filepath             >= 1.3

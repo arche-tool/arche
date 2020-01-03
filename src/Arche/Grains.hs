@@ -1,4 +1,4 @@
-module Gamma.Grains
+module Arche.Grains
   ( getGrainID
   , getGrainID'
   , getGrainPhase
