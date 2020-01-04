@@ -1,10 +1,6 @@
 <nav id=sidebar>
 
-About
-
-* [Home](index.html)
-
-Usage
+[![Home](logo/arche_logo.png){width="80px"}](index.html)
 
 * [Usage](usage.html)
 * [Install](install.html)
