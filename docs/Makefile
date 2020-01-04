@@ -11,7 +11,7 @@ TARGET_HTML_FOLDERS := $(subst $(SOURCE_DIR),$(OUTPUT_HTML_DIR),$(SOURCE_FOLDERS
 # Files
 MD_FILES := $(shell find $(SOURCE_DIR) -type f -name "*.md")
 TARGET_HTML_FILES := $(patsubst %.md,%.html,$(subst $(SOURCE_DIR),$(OUTPUT_HTML_DIR),$(MD_FILES)))
-STATIC_FILES := $(wildcard $(STATIC_DIR)/*)
+STATIC_FILES := $(shell find $(STATIC_DIR) -mindepth 1 -maxdepth 1)
 TARGET_STATIC_FILES := $(subst $(STATIC_DIR),$(OUTPUT_HTML_DIR),$(STATIC_FILES))
 
 BASE_TEMPLATE := default.html 
@@ -19,12 +19,7 @@ SIDEBAR_TEMPLATE := toc-sidebar.html
 HEADER_HTML := $(TEMPLATE_DIR)/header.html
 FOOT_NOTE_HTML := $(TEMPLATE_DIR)/footer.html
 
-# Pandoc
-ifeq ($(CI),true)
 PANDOC := docker run --volume "`pwd`:/data" --user `id -u`:`id -g` pandoc/latex:2.6
-else
-PANDOC := pandoc
-endif
 
 FLAGS := \
 	--standalone \
@@ -56,8 +51,8 @@ html/%.html: $(SOURCE_DIR)/%.md html/navigation.html html/all.css
 html/navigation.html: navigation.md
 	$(PANDOC) $(NAV_FLAGS) --output $@ $<
 
-$(TARGET_STATIC_FILES): $(STATIC_FILES)
-	cp $< $@
+$(TARGET_STATIC_FILES):
+	cp -r $(subst $(OUTPUT_HTML_DIR),$(STATIC_DIR),$@) $@
 
 html/all.css:
 	cat css/bootstrap.min.css > $(OUTPUT_HTML_DIR)/all.css
