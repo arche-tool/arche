@@ -13,36 +13,26 @@ Find more information about the underlying algorithm and its use at the [WIP doc
 
 Arche is written in Haskell and the visualization is done in [Paraview](http://www.paraview.org/) (VTK files). Therefore the following softwares need to be installed:
 
+* [git](https://git-scm.com/downloads)
 * [stack](http://docs.haskellstack.org/en/stable/install_and_upgrade/#installupgrade)
 * [Paraview](http://www.paraview.org/download/)
 
 Once the stack is installed, open a terminal (cmd.exe in Windows), go to a folder where the files will be placed on and then run the following commands:
 
 ```
-#!bash
-
 git clone git@github.com:arche-tool/arche.git
-
 cd arche
-
 git submodule update --init
-
 stack install
-
 ```
 
 In order to update to the latest modifications, go the folder that contains the source files and run the following commands:
 
 ```
-#!bash
-
 cd arche
-
 git pull
 git submodule update --init
-
 stack install
-
 ```
 
 Note that the internet access is required in order to download all the other dependencies.
