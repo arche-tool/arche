@@ -25,6 +25,7 @@ import System.FilePath
 import System.IO
 import System.Log.FastLogger (LoggerSet, ToLogStr)
 import System.Process
+import Text.Printf (printf)
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
 import qualified Data.Vector.Unboxed.Mutable  as MU
@@ -260,10 +261,12 @@ run cfg@Cfg{..} = do
     nref = fromIntegral refinementSteps
     doit = do
       grainClustering
-      plotResults "1st-step"
+      get >>= plotResults . printf "mcl_%.2f" . mclFactor
       logParentStatsState
-      replicateM_ nref (clusteringRefinement >> logParentStatsState)
-      plotResults "final-step"
+      replicateM_ nref $ do
+        clusteringRefinement
+        logParentStatsState
+        get >>= plotResults . printf "mcl_%.2f" . mclFactor
   gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror ebsd logger)
   putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
   void $ runRWST doit gomescfg (getInitState gomescfg)
