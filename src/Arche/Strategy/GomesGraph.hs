@@ -198,9 +198,12 @@ plotVTK name = do
   cfg@GomesConfig{..} <- ask
   attrAvgAID <- genProductVTKAttr    (-1) fst "Product Grain ID"
   attrGID    <- genParentVTKAttr     (-1) fst "Parent Grain ID"
+
   attrAvgErr <- genParentVTKAttr     (-1) (unDeg . avgError . parentAvgErrorFit . snd) "Parent Avg Error Fit [deg]"
   attrDevErr <- genParentVTKAttr     (-1) (unDeg . devError . parentAvgErrorFit . snd) "Parent StdDev Error Fit [deg]"
   attrMaxErr <- genParentVTKAttr     (-1) (unDeg . maxError . parentAvgErrorFit . snd) "Parent Max Error Fit [deg]"
+  attrNumPro <- genParentVTKAttr     (-1) (length . productMembers . snd)              "Parent Number of Product Components"
+
   attrMID    <- genProductFitVTKAttr (-1) (const $ const areaFraction)          "Product Grain Area Fraction"
   attrORVar  <- genProductFitVTKAttr (-1) (const $ const (fst . variantNumber)) "Product OR Variant Number"
   attrLocErr <- genProductFitVTKAttr (-1) (const $ const (unDeg . misfitAngle)) "Product Error Fit [deg]"
@@ -219,6 +222,7 @@ plotVTK name = do
             , attrAvgErr
             , attrDevErr
             , attrMaxErr
+            , attrNumPro
             , attrLocErr
             , attrORVar
             , attrVoxPhase
