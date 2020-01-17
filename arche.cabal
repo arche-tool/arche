@@ -1,4 +1,4 @@
-name:                gamma-builder
+name:                arche
 version:             0.1.2.0
 synopsis:            Software to reconstrut Austenite for EBSD map.
 -- description:
@@ -15,7 +15,7 @@ Flag server
     Description:     Build the server exectable.
     Default:         True
 
-Executable gamma
+Executable arche
   buildable:         True
   ghc-options:      -O2
                     -funbox-strict-fields
@@ -26,7 +26,7 @@ Executable gamma
                     -fprof-cafs
   hs-source-dirs:    src-cli
   main-Is:           Main.hs
-  build-depends:     gamma-builder
+  build-depends:     arche
                    , base                 == 4.*
                    , optparse-applicative >= 0.10
                    , filepath             >= 1.3
@@ -35,7 +35,7 @@ Executable gamma
                    , linear-vect          >= 0.2
                    , sledge               >= 0.4
 
-Executable gamma-server
+Executable arche-server
   hs-source-dirs:    src-server
   main-Is:           Main.hs
   ghc-options:      -O2
@@ -49,7 +49,7 @@ Executable gamma-server
                     -optl-static
                     -optl-pthread
   ld-options:       -static
-  build-depends:     gamma-builder
+  build-depends:     arche
                    , base                       == 4.*
                    , hammer                     >= 0.4
                    , linear-vect                >= 0.2
@@ -80,11 +80,11 @@ Library
                     -fprof-auto
                     -fprof-cafs
   exposed-modules:
-                    Gamma.Grains
-                    Gamma.OR
-                    Gamma.Strategy.GomesGraph
-                    Gamma.Strategy.Graph
-                    Gamma.Strategy.ORFitAll
+                    Arche.Grains
+                    Arche.OR
+                    Arche.Strategy.GomesGraph
+                    Arche.Strategy.Graph
+                    Arche.Strategy.ORFitAll
   build-depends:     base                 == 4.*
                    , aeson                >= 1.0
                    , bytestring           >= 0.10

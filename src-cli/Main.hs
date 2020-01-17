@@ -3,10 +3,10 @@
 
 module Main where
 
-import qualified Gamma.OR                   as OR
-import qualified Gamma.Strategy.Graph       as Graph
-import qualified Gamma.Strategy.ORFitAll    as ORFitAll
-import qualified Gamma.Strategy.GomesGraph  as GomesGraph
+import qualified Arche.OR                   as OR
+import qualified Arche.Strategy.Graph       as Graph
+import qualified Arche.Strategy.ORFitAll    as ORFitAll
+import qualified Arche.Strategy.GomesGraph  as GomesGraph
 
 import           System.Directory            (doesFileExist)
 import           Control.Monad               (when)
@@ -51,8 +51,8 @@ main = do
   where
     opts = info (helper <*> parseMode)
            ( fullDesc
-           <> progDesc "Reconstructs gamma phase from EBSD data"
-           <> header "Gamma Builder" )
+           <> progDesc "Reconstructs arche phase from EBSD data"
+           <> header "Arche Builder" )
 
 -- ======================================= Common tools ==================================
 

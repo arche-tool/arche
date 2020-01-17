@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Gamma.Strategy.ORFitAll
+module Arche.Strategy.ORFitAll
   ( run
   , Cfg(..)
   ) where
@@ -29,8 +29,8 @@ import Texture.Orientation
 import qualified File.ANGReader as A
 import qualified File.CTFReader as C
 
-import Gamma.Grains
-import Gamma.OR
+import Arche.Grains
+import Arche.OR
 
 data Cfg =
   Cfg

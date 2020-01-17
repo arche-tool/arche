@@ -15,12 +15,12 @@ else
 endif
 
 ifeq ($(OS),Windows)
-	docker build --build-arg USERID=$(shell id -u) -t gamma_stack -f linux.Dockerfile .
-    STACK := docker container run -v $(shell pwd):$(SHARED_VOL):Z gamma_stack:latest
+	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
+    STACK := docker container run -v $(shell pwd):$(SHARED_VOL):Z arche_stack:latest
 endif
 ifeq ($(OS),Darwin)
-	docker build --build-arg USERID=$(shell id -u) -t gamma_stack -f linux.Dockerfile .
-    STACK := docker container run -v $(shell pwd):$(SHARED_VOL):Z gamma_stack:latest
+	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
+    STACK := docker container run -v $(shell pwd):$(SHARED_VOL):Z arche_stack:latest
 endif
 ifeq ($(OS),Linux)
     STACK := stack
@@ -35,25 +35,25 @@ clean:
 	rm -rf $(OUTPUT_ROOT_DIR)/*
 	docker image prune -f
 
-cli: gamma
-	mv $(OUTPUT_DIR)/gamma $(OUTPUT_DIR)/gamma-$(GIT_VERSION)
+cli: arche
+	mv $(OUTPUT_DIR)/arche $(OUTPUT_DIR)/arche-$(GIT_VERSION)
 
-aws-lambda: gamma-server
-	mv $(OUTPUT_DIR)/gamma-server $(OUTPUT_DIR)/bootstrap
+aws-lambda: arche-server
+	mv $(OUTPUT_DIR)/arche-server $(OUTPUT_DIR)/bootstrap
 	pushd $(OUTPUT_DIR) && zip function-$(GIT_VERSION).zip bootstrap && popd
 	rm -f $(OUTPUT_DIR)/bootstrap
 
 stack.yaml.lock: 
 	$(STACK) freeze
 
-gamma: install-deps stack.yaml.lock gamma-builder.cabal
-	$(STACK) install gamma-builder:exe:gamma --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
+arche: install-deps stack.yaml.lock arche.cabal
+	$(STACK) install arche:exe:arche --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 
-gamma-server: install-deps stack.yaml.lock gamma-builder.cabal
-	$(STACK) install gamma-builder:exe:gamma-server --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
+arche-server: install-deps stack.yaml.lock arche.cabal
+	$(STACK) install arche:exe:arche-server --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 
 install-deps: docker-image
 	$(STACK) build --no-terminal --install-ghc --only-dependencies --stack-root $(STACK_ROOT)
 
 docker-image:
-	DOCKER_BUILDKIT=1 docker build --build-arg USERID=$(shell id -u) -t gamma_stack -f linux.Dockerfile .
+	DOCKER_BUILDKIT=1 docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .

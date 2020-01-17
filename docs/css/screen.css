@@ -60,6 +60,10 @@ nav#sidebar {
 	margin-left: -200px;
 }
 
+nav#sidebar ul {
+	padding-left: 20px;
+}
+
 div#content {
 	background: white;
 	padding: 20px;

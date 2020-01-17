@@ -5,12 +5,12 @@
   , TemplateHaskell
   , TypeFamilies
   #-}
-module Gamma.OR
+module Arche.OR
   ( -- * Product-Parent mismatch evaluation
-    findGamma
+    findArche
   , findOR
   , findORFace
-  , hotStartGamma
+  , hotStartArche
   , hotStartOR
   , hotStartTesseract
   , FitError (avgError, devError, maxError)
@@ -22,7 +22,7 @@ module Gamma.OR
   , weightederrorfunc
   , uniformerrorfunc
   , faceerrorfunc
-  , gammaFinderKernel
+  , archeFinderKernel
   -- * Deconvolution
   , oneStepDeconvulition
     -- * Orientation Relationship
@@ -37,8 +37,8 @@ module Gamma.OR
     -- * Phases
   , PhaseID (..)
     -- * Test functions
-  , testGammaFit
-  , testFindGamma
+  , testArcheFit
+  , testFindArche
   , testTesseractFitting
   , testMisoKS
   ) where
@@ -175,17 +175,17 @@ findOR errf ga t0 = let
   guess = rodriVec $ fromQuaternion $ qOR t0
   in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS (deltaVec3 func) guess
 
-findGamma :: ErrorFunc -> Quaternion -> Vector OR -> Quaternion
-findGamma errf q0 ors = let
+findArche :: ErrorFunc -> Quaternion -> Vector OR -> Quaternion
+findArche errf q0 ors = let
   func v = let
-    gamma = toQuaternion $ mkUnsafeRodrigues v
-    in fromAngle $ avgError $ errf gamma ors
+    arche = toQuaternion $ mkUnsafeRodrigues v
+    in fromAngle $ avgError $ errf arche ors
   guess = rodriVec $ fromQuaternion q0
   cfg   = BFGScfg { epsi = 1e-4, tol = 1e-4, niter = 200 }
   in toQuaternion $ mkUnsafeRodrigues $ bfgs cfg (deltaVec3 func) guess
 
-hotStartGamma :: ErrorFunc -> Quaternion
-hotStartGamma errf = let
+hotStartArche :: ErrorFunc -> Quaternion
+hotStartArche errf = let
   qs = V.fromList
        [ toQuaternion (mkEuler (Deg _phi1) (Deg _phi) (Deg _phi2))
        | _phi1 <- [0.0, 3 .. 90]
@@ -221,11 +221,11 @@ singleerrorfunc productQ parentQ ors = let
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
 uniformerrorfunc :: Vector QuaternionFZ -> Quaternion -> Vector OR -> FitError
-uniformerrorfunc ms gamma ors
+uniformerrorfunc ms arche ors
   | G.null ms = FitError 0 0 0
   | otherwise = let
     n     = fromIntegral (G.length ms)
-    errs  = G.map (\m -> unDeg $ fst $ singleerrorfunc m gamma ors) ms
+    errs  = G.map (\m -> unDeg $ fst $ singleerrorfunc m arche ors) ms
     avg   = G.sum errs / n
     diff  = G.map ((\x->x*x) . (-) avg) errs
     dev   = sqrt (G.sum diff / n)
@@ -239,10 +239,10 @@ uniformerrorfunc ms gamma ors
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
 weightederrorfunc :: Vector Double -> Vector QuaternionFZ -> Quaternion-> Vector OR -> FitError
-weightederrorfunc ws ms gamma ors
+weightederrorfunc ws ms arche ors
   | G.null ws || G.null ms = FitError 0 0 0
   | otherwise = let
-    errs = G.map (\m -> unDeg $ fst $ singleerrorfunc m gamma ors) ms
+    errs = G.map (\m -> unDeg $ fst $ singleerrorfunc m arche ors) ms
     wt   = G.sum ws
     wq   = G.zipWith (*) ws errs
     diff = G.map ((\x->x*x) . (-) avg) errs
@@ -254,7 +254,7 @@ weightederrorfunc ws ms gamma ors
        , maxError = Deg (G.maximum wq / wt)
        }
 
--- ================================= Gamma finder width kernel ===========================
+-- ================================= Arche finder width kernel ===========================
 
 -- | Generate a PPODF (Possible Parent Orientation Function) using another ODF grid structure
 -- for effeciecy sake. It also takes in consideranting both remaining paraents and products
@@ -265,9 +265,9 @@ genPPODF odf ors rgs ms = addPoints (U.map qFZ rgs U.++ gs) (resetODF odf)
     func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
     gs     = U.concatMap (func . qFZ) ms
 
-gammaFinderKernel :: ODF -> Vector OR -> Vector QuaternionFZ
+archeFinderKernel :: ODF -> Vector OR -> Vector QuaternionFZ
                   -> Vector QuaternionFZ -> (Quaternion, FitError)
-gammaFinderKernel odf ors rgs ms = (q, err)
+archeFinderKernel odf ors rgs ms = (q, err)
   where
     odf1   = genPPODF odf ors rgs ms
     (q, _) = getMaxOrientation odf1
@@ -333,8 +333,8 @@ derivingUnbox "PhaseID"
 
 -- ================================= Test Function =======================================
 
-testGammaFit :: Quaternion -> Vector Quaternion -> OR -> (FitError, FitError)
-testGammaFit ga gs t = let
+testArcheFit :: Quaternion -> Vector Quaternion -> OR -> (FitError, FitError)
+testArcheFit ga gs t = let
   gms = G.map getQinFZ gs
   m1  = uniformerrorfunc gms ga (genTS t)
   m2  = errorfuncSlowButSure ga gs (qOR t)
@@ -354,8 +354,8 @@ testFindOR = do
   print (convert t' :: AxisPair)
   print ((convert $ hotStartOR errf a) :: AxisPair)
 
-testFindGamma :: IO ()
-testFindGamma = randomIO >>= plotErrFunc
+testFindArche :: IO ()
+testFindArche = randomIO >>= plotErrFunc
 
 plotErrFunc :: Quaternion -> IO ()
 plotErrFunc a = let
@@ -370,7 +370,7 @@ plotErrFunc a = let
   gi   = so3ToQuaternion $ grid U.! (U.minIndex es)
   in do
     let
-      a'   = findGamma errf mempty ksORs
+      a'   = findArche errf mempty ksORs
       fa   = toFZ Cubic a
       fa'  = toFZ Cubic a'
       fgi  = toFZ Cubic gi
@@ -378,7 +378,7 @@ plotErrFunc a = let
     print "=================="
     print $ "Expect: " ++ show fa
     print (test fa fa')
-    print $ testGammaFit a' gms ksOR
+    print $ testArcheFit a' gms ksOR
     print $ "from " ++ show fgi ++ " got: " ++ show fa'
 
     writeUniVTKfile "/home/edgar/Desktop/SO3ErrFunc.vtu" False vtk'
@@ -440,19 +440,19 @@ testPPODF dir = do
   qg2 <- applyDeviation (Deg 15) qg1
   ors <- U.mapM (fmap OR . applyDeviation (Deg 4) . qOR) ksORs
   let
-    gamma1 = qFZ $ getQinFZ qg1
-    gamma2 = qFZ $ getQinFZ qg2
-    ms1    = G.map (getQinFZ . (gamma1 #<=) . toQuaternion) ors
-    ms2    = G.map (getQinFZ . (gamma2 #<=) . toQuaternion) ors
+    arche1 = qFZ $ getQinFZ qg1
+    arche2 = qFZ $ getQinFZ qg2
+    ms1    = G.map (getQinFZ . (arche1 #<=) . toQuaternion) ors
+    ms2    = G.map (getQinFZ . (arche2 #<=) . toQuaternion) ors
     odf0   = buildEmptyODF 3 Cubic (Deg 5)
     ppodf0 = genPPODF odf0 ors U.empty (ms1 G.++ ms2)
     (g1, i1, _, ppodf1) = oneStepDeconvulition ppodf0
     (g2, i2, _, ppodf2) = oneStepDeconvulition ppodf1
     (g3, i3, _, ppodf3) = oneStepDeconvulition ppodf2
-    ps = U.fromList [gamma1, gamma2, g1, g2, g3]
-  print $ uniformerrorfunc ms1 gamma1 ksORs
-  print $ uniformerrorfunc ms2 gamma2 ksORs
-  print (gamma1, gamma2, g1, g2, g3)
+    ps = U.fromList [arche1, arche2, g1, g2, g3]
+  print $ uniformerrorfunc ms1 arche1 ksORs
+  print $ uniformerrorfunc ms2 arche2 ksORs
+  print (arche1, arche2, g1, g2, g3)
   print (i1, i2, i3)
   writeUniVTKfile (dir ++ "/tess-fittest-ODF0.vtu"  ) True (renderODFVTK ppodf0)
   writeUniVTKfile (dir ++ "/tess-fittest-ODF1.vtu"  ) True (renderODFVTK ppodf1)
@@ -465,13 +465,13 @@ testTesseractFitting dir = do
   qg  <- randomIO
   ors <- U.mapM (applyDeviation (Deg 5) . qOR) ksORs
   let
-    gamma = qFZ $ getQinFZ qg
-    ms    = G.map (getQinFZ . (gamma #<=) . toQuaternion) (U.map OR ors)
+    arche = qFZ $ getQinFZ qg
+    ms    = G.map (getQinFZ . (arche #<=) . toQuaternion) (U.map OR ors)
     (gt, et, tt)  = hotStartTesseract ksORs ms
-    --(gf, ef, orf) = getWGammaOR       ksOR ws (G.map qFZ ms)
-    ps = U.fromList [gamma, gt]
-  print $ uniformerrorfunc ms gamma ksORs
-  print gamma
+    --(gf, ef, orf) = getWArcheOR       ksOR ws (G.map qFZ ms)
+    ps = U.fromList [arche, gt]
+  print $ uniformerrorfunc ms arche ksORs
+  print arche
   print (gt, et)
   --print $ (gf, ef)
   writeUniVTKfile (dir ++ "/tess-fittest.vti") True (plotTesseract tt)
