@@ -25,6 +25,7 @@ import System.FilePath
 import System.IO
 import System.Log.FastLogger (LoggerSet, ToLogStr)
 import System.Process
+import Text.Printf (printf)
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
 import qualified Data.Vector.Unboxed.Mutable  as MU
@@ -195,21 +196,24 @@ plotResults name = do
 plotVTK :: String -> Gomes ()
 plotVTK name = do
   cfg@GomesConfig{..} <- ask
-  attrAvgAID <- genProductVTKAttr    (-1) fst "Alpha Id"
-  attrGID    <- genParentVTKAttr     (-1) fst "ParentGrainID"
-  attrAvgErr <- genParentVTKAttr     (-1) (unDeg . avgError . parentAvgErrorFit . snd) "AvgError"
-  attrDevErr <- genParentVTKAttr     (-1) (unDeg . devError . parentAvgErrorFit . snd) "DevError"
-  attrMaxErr <- genParentVTKAttr     (-1) (unDeg . maxError . parentAvgErrorFit . snd) "MaxError"
-  attrMID    <- genProductFitVTKAttr (-1) (const $ const areaFraction)          "ProductGrainAreaFraction"
-  attrORVar  <- genProductFitVTKAttr (-1) (const $ const (fst . variantNumber)) "VariantNumber"
-  attrLocErr <- genProductFitVTKAttr (-1) (const $ const (unDeg . misfitAngle)) "ErrorPerProduct"
+  attrAvgAID <- genProductVTKAttr    (-1) fst "Product Grain ID"
+  attrGID    <- genParentVTKAttr     (-1) fst "Parent Grain ID"
 
-  attrAvgGIPF <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)                 "Arche Avg Orientation [IPF]"
-  attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Arche Orientation [IPF]"
-  attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . productAvgOrientation . snd)             "Alpha Orientation [IPF]"
+  attrAvgErr <- genParentVTKAttr     (-1) (unDeg . avgError . parentAvgErrorFit . snd) "Parent Avg Error Fit [deg]"
+  attrDevErr <- genParentVTKAttr     (-1) (unDeg . devError . parentAvgErrorFit . snd) "Parent StdDev Error Fit [deg]"
+  attrMaxErr <- genParentVTKAttr     (-1) (unDeg . maxError . parentAvgErrorFit . snd) "Parent Max Error Fit [deg]"
+  attrNumPro <- genParentVTKAttr     (-1) (length . productMembers . snd)              "Parent Number of Product Components"
+
+  attrMID    <- genProductFitVTKAttr (-1) (const $ const areaFraction)          "Product Grain Area Fraction"
+  attrORVar  <- genProductFitVTKAttr (-1) (const $ const (fst . variantNumber)) "Product OR Variant Number"
+  attrLocErr <- genProductFitVTKAttr (-1) (const $ const (unDeg . misfitAngle)) "Product Error Fit [deg]"
+
+  attrAvgGIPF <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)                 "Parent Orientation [IPF]"
+  attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . productAvgOrientation . snd)             "Product Orientation [IPF]"
+  attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Product Parent Orientation Component [IPF]"
   let
-    attrVoxAIPF  = genVoxBoxAttr "VoxelAlpha" (getCubicIPFColor . fst) orientationBox
-    attrVoxPhase = genVoxBoxAttr "Phases" snd orientationBox
+    attrVoxAIPF  = genVoxBoxAttr "Voxel Product Orientation [IPF]" (getCubicIPFColor . fst) orientationBox
+    attrVoxPhase = genVoxBoxAttr "Voxel Phase ID" snd orientationBox
     vtkD  = renderVoxBoxVTK grainIDBox attrs
     attrs = [ attrAvgGIPF
             , attrGIPF
@@ -218,6 +222,7 @@ plotVTK name = do
             , attrAvgErr
             , attrDevErr
             , attrMaxErr
+            , attrNumPro
             , attrLocErr
             , attrORVar
             , attrVoxPhase
@@ -260,10 +265,12 @@ run cfg@Cfg{..} = do
     nref = fromIntegral refinementSteps
     doit = do
       grainClustering
-      plotResults "1st-step"
+      get >>= plotResults . printf "mcl_%.2f" . mclFactor
       logParentStatsState
-      replicateM_ nref (clusteringRefinement >> logParentStatsState)
-      plotResults "final-step"
+      replicateM_ nref $ do
+        clusteringRefinement
+        logParentStatsState
+        get >>= plotResults . printf "mcl_%.2f" . mclFactor
   gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror ebsd logger)
   putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
   void $ runRWST doit gomescfg (getInitState gomescfg)
