@@ -64,7 +64,8 @@ Executable arche-server
                    , conduit-extra              >= 1.3
                    , resourcet                  >= 1.2
   other-modules:
-                     Handler.Person
+                     Handler.SubmitANG 
+                     Util.AWS
   if flag(server)
     buildable:       True
   else 
