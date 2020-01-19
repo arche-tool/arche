@@ -4,5 +4,6 @@
 
 * [Usage](usage.html)
 * [Install](install.html)
+* [AWS configuration](aws.html)
 
 </nav>
