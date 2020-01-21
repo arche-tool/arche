@@ -38,7 +38,7 @@ data Event a = Event
   , headers :: Map String String
   , pathParameters :: Map String String
   , queryParameters :: Map String String
-  } deriving (Generic, FromJSON)
+  } deriving (Generic, FromJSON, Show)
 
 
 -- ============================== Response wrapper ===============================
@@ -48,4 +48,4 @@ data Response a = Response
   , body :: a
   , isBase64Encoded :: Bool
   , headers :: Map String String
-  } deriving (Generic, ToJSON)
+  } deriving (Generic, ToJSON, Show)

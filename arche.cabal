@@ -63,7 +63,9 @@ Executable arche-server
                    , conduit                    >= 1.3
                    , conduit-extra              >= 1.3
                    , resourcet                  >= 1.2
+                   , uuid                       >= 1.0
   other-modules:
+                     Handler.GetSession
                      Handler.SubmitANG 
                      Util.AWS
   if flag(server)

@@ -6,7 +6,7 @@ module Main where
 
 import Aws.Lambda
 
-import Handler.Person
+import Handler.GetSession
 
 -- ========================================= Main ========================================
 generateLambdaDispatcher
