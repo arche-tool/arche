@@ -75,6 +75,7 @@ Executable arche-server
                   , uuid                       >= 1.0
   other-modules:
                     Handler.GetSession
+                    Handler.ORFit 
                     Handler.SubmitANG 
                     Type.APIGateway
                     Util.AWS
