@@ -27,8 +27,6 @@ import           Arche.Grains
 data Cfg =
   Cfg
   { misoAngle   :: Deg
-  , ang_input   :: FilePath
-  , base_output :: FilePath
   } deriving (Show)
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
@@ -40,8 +38,8 @@ getCubicIPFColor = let
   unColor (RGBColor rgb) = rgb
   in unColor . getRGBColor . snd . getIPFColor Cubic ND . toQuaternion
 
-run :: Cfg -> IO ()
-run Cfg{..} = do
+run :: Cfg -> FilePath -> FilePath -> IO ()
+run Cfg{..} ang_input base_output = do
   ebsd <- readEBSD ang_input
   let vbp = readEBSDToVoxBox C.phase    A.phaseNum ebsd
   let vbq = readEBSDToVoxBox C.rotation A.rotation ebsd

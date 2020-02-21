@@ -60,8 +60,6 @@ import Arche.OR
 data Cfg =
   Cfg
   { misoAngle              :: Deg
-  , ang_input              :: FilePath
-  , base_output            :: FilePath
   , useExternalMCL         :: Bool
   , excluedeFloatingGrains :: Bool
   , refinementSteps        :: Word8
@@ -188,13 +186,21 @@ grainClustering = do
            , mclFactor    = mclFactor * stepClusterFactor inputCfg
            }
 
-plotResults :: String -> Gomes ()
-plotResults name = do
-  plotVTK  name
-  plotEBSD name
+plotResults :: FilePath -> Gomes ()
+plotResults base_file = do
+  plotVTK  base_file
+  plotEBSD base_file
+
+plotEBSD :: FilePath -> Gomes ()
+plotEBSD base_filename = do
+  Cfg{..} <- fmap inputCfg ask
+  ebsd <- genParentEBSD
+  liftIO $ do
+    when outputANGMap $ renderANGFile (base_filename <.> "ang") $ either id toANG ebsd
+    when outputCTFMap $ renderCTFFile (base_filename <.> "ctf") $ either toCTF id ebsd
 
 plotVTK :: String -> Gomes ()
-plotVTK name = do
+plotVTK base_file = do
   cfg@GomesConfig{..} <- ask
   attrAvgAID <- genProductVTKAttr    (-1) fst "Product Grain ID"
   attrGID    <- genParentVTKAttr     (-1) fst "Parent Grain ID"
@@ -230,7 +236,7 @@ plotVTK name = do
             , attrAvgAIPF
             , attrAvgAID
             ]
-  liftIO $ plotVTKD inputCfg (vtkD,  name)
+  liftIO $ writeUniVTKfile (base_file <.> "vtr") True vtkD
 
 getTransformedProduct :: GomesConfig -> (Quaternion, PhaseID) -> ParentGrain -> Quaternion
 getTransformedProduct cfg (q, phase) p
@@ -247,17 +253,8 @@ findBestTransformation ors ref q = let
   i   = U.maxIndex ms
   in qFZ . getQinFZ $ qs U.! i
 
-plotEBSD :: String -> Gomes ()
-plotEBSD name = do
-  Cfg{..} <- fmap inputCfg ask
-  let file = base_output ++ name
-  ebsd <- genParentEBSD
-  liftIO $ do
-    when outputANGMap $ renderANGFile (file  <.> "ang") $ either id toANG ebsd
-    when outputCTFMap $ renderCTFFile (file  <.> "ctf") $ either toCTF id ebsd
-
-run :: Cfg -> IO ()
-run cfg@Cfg{..} = do
+run :: Cfg -> FilePath -> FilePath -> IO ()
+run cfg@Cfg{..} ang_input base_output = do
   logger <- Log.newStdoutLoggerSet Log.defaultBufSize
   ebsd <- readEBSD ang_input
   let
@@ -265,7 +262,7 @@ run cfg@Cfg{..} = do
     nref = fromIntegral refinementSteps
     doit = do
       grainClustering
-      get >>= plotResults . printf "mcl_%.2f" . mclFactor
+      get >>= plotResults . (base_output <>) . printf "mcl_%.2f" . mclFactor
       logParentStatsState
       replicateM_ nref $ do
         clusteringRefinement
@@ -520,9 +517,6 @@ genParentGrainBitmap nullvalue func = do
 
 -- ====================================== Plotting VTK ===================================================
 
-plotVTKD :: (RenderElemVTK a)=> Cfg -> (VTK a, String) -> IO ()
-plotVTKD Cfg{..} (vtk, name) = writeUniVTKfile (base_output ++ name  <.> "vtr") True vtk
-
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=> String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
 genVoxBoxAttr name func qBox = mkPointAttr name (func . (grainID qBox U.!))
 
@@ -541,11 +535,11 @@ getCubicIPFColor = let
   unColor (RGBColor rgb) = rgb
   in unColor . getRGBColor . snd . getIPFColor Cubic ND . convert
 
-renderQuaternions ::Cfg -> String -> Vector Quaternion -> IO ()
-renderQuaternions Cfg{..} name qs = let
+renderQuaternions ::Cfg -> FilePath -> Vector Quaternion -> IO ()
+renderQuaternions Cfg{..} base_file qs = let
   vtk  = renderSO3PointsVTK . U.map quaternionToSO3 $ qs
   attr = mkPointValueAttr "IPF" (\i _ -> getCubicIPFColor $ qs U.! i)
-  in writeUniVTKfile (base_output ++ name  <.> "vtu") True (vtk `addPointValueAttr` attr)
+  in writeUniVTKfile (base_file <.> "vtu") True (vtk `addPointValueAttr` attr)
 
 -- ====================================== Plotting EBSD/CTF =============================================
 
@@ -574,8 +568,8 @@ genParentEBSD = do
 
 -- ========================================== Debugging ==========================================
 
-_plotOrientations :: String -> Int -> Gomes ()
-_plotOrientations name gid = do
+_plotOrientations :: FilePath -> Int -> Gomes ()
+_plotOrientations base_file gid = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
   let mProductGrain = HM.lookup gid productGrains
@@ -586,5 +580,5 @@ _plotOrientations name gid = do
   forM_ ((,,) <$> mProductGrain <*> mParentGrain <*> mFit)  $ \(productGrain, parentGrain, _fit) -> do
     let qs = V.convert . V.map (qFZ . getQinFZ) . getProductOrientations $ productGrain
     liftIO $ do
-      renderQuaternions inputCfg (name ++ "_product") qs
-      renderQuaternions inputCfg (name ++ "_parent" ) $ U.fromList [parentOrientation parentGrain]
+      renderQuaternions inputCfg (base_file <> "_product") qs
+      renderQuaternions inputCfg (base_file <> "_parent" ) $ U.fromList [parentOrientation parentGrain]
