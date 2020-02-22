@@ -7,7 +7,6 @@ module Arche.Strategy.ORFitAll
   ) where
 
 import Control.Arrow       ((&&&))
-import Control.Monad       (when)
 import Data.Maybe          (mapMaybe)
 import Data.HashMap.Strict (HashMap)
 import Data.Vector.Unboxed (Vector)

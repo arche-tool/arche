@@ -45,7 +45,7 @@ orFitHandler angHash = do
       
   rsp <- runAWS s3cfg vox_bucket
       
-  return $ case R.parseANG ang of
+  return $ case R.loadANG ang of
     Right _ -> Right ()
     Left err -> Left err
   
