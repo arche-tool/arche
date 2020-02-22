@@ -140,18 +140,7 @@ parseORFitAll = ORFitAll.Cfg
   <$> parseMisoAngle
   <*> parseORbyAvg
   <*> parseRenderORMap
-  <*> parseORs
-
-parseORs :: Parser [AxisPair]
-parseORs = let
-  func :: (Int, Int, Int, Double) -> AxisPair
-  func (v1, v2, v3, w) = mkAxisPair v (Deg w)
-      where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
-  reader :: Parser (Int, Int, Int, Double)
-  reader = argument auto
-           (  metavar "(Int,Int,Int,Double)" <>
-              help "The default OR is KS <1,1,2> (Deg 90).")
-  in (map func <$> many reader)
+  <*> optional parseOR
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch

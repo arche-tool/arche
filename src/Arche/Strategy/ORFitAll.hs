@@ -34,42 +34,35 @@ import Arche.OR
 
 data Cfg =
   Cfg
-  { misoAngle   :: Deg
-  , optByAvg    :: Bool
-  , renderORMap :: Bool
-  , moreOR      :: [AxisPair]
+  { misoAngle    :: Deg
+  , optByAvg     :: Bool
+  , renderORMap  :: Bool
+  , predefinedOR :: Maybe AxisPair
   } deriving (Show)
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
 run cfg@Cfg{..} ang_input base_output = do
   ebsd <- readEBSD ang_input
-  let vbq = readEBSDToVoxBox
-            (C.rotation &&& C.phase   )
-            (A.rotation &&& A.phaseNum)
-            ebsd
   gen <- initTFGen
-  (gidBox, voxMap) <- maybe (error "No grain detected!") return
-                      (getGrainID' misoAngle Cubic vbq)
   let
-    mkr  = fst $ getMicroVoxel (gidBox, voxMap)
-    qmap = getGrainAverageQ vbq voxMap
-    getGoods = U.filter ((5 >) . evalMisoORWithKS)
+    getGoods         = U.filter ((5 >) . evalMisoORWithKS)
+    vbq              = readEBSDToVoxBox (C.rotation &&& C.phase) (A.rotation &&& A.phaseNum) ebsd
+    (gidBox, voxMap) = maybe (error "No grain detected!") id (getGrainID' misoAngle Cubic vbq)
+    mkr              = fst $ getMicroVoxel (gidBox, voxMap)
+    qmap             = getGrainAverageQ vbq voxMap
     segs
       | optByAvg  = getGoods $ getGBbyAverage  qmap mkr gen 1000
       | otherwise = getGoods $ getGBbySegments vbq  mkr gen 1000
 
     -- fitting OR
     realOR = findORFace segs ksOR
+    ror = maybe realOR (OR . toQuaternion) predefinedOR
+    
+    vtk = renderVTK cfg vbq qmap mkr ror
+    orEval = evaluateOR ror segs
 
-    doit (name, ror) = do
-      let
-        vtk = renderVTK cfg vbq qmap mkr ror
-        orEval = evaluateOR ror segs
-      showOREvaluation orEval 
-      when renderORMap $ writeUniVTKfile (base_output ++ name <.> "vtu") True vtk
-    inOR = zip (map (("OR"++) . show) [1::Int ..]) (map (OR . toQuaternion) moreOR)
-
-  mapM_ doit $ ("Calculated", realOR) : inOR
+  showOREvaluation orEval 
+  when renderORMap $ writeUniVTKfile (base_output <.> "vtu") True vtk
 
 renderVTK :: Cfg -> VoxBox (Quaternion, Int) -> HashMap Int (Quaternion, Int) -> MicroVoxel -> OR -> VTK Vec3D
 renderVTK Cfg{..} vbq qmap mkr ror
@@ -184,7 +177,7 @@ faceMisoOR ors qmap face = maybe pi id getM
 
 data OrientationRelationship
   = OrientationRelationship
-  { or :: OR
+  { orValue :: OR
   , orAxis :: (Int, Int, Int)
   , orAngle :: Deg
   } deriving (Show)
@@ -216,7 +209,7 @@ mkOrientationRelationship ror = let
   (v,w) = axisAngle ap
   axis  = aproxToIdealAxis v 0.001
   in OrientationRelationship
-    { or = ror
+    { orValue = ror
     , orAxis = axis
     , orAngle = toAngle w
     }
