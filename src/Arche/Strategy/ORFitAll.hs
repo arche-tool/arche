@@ -36,7 +36,6 @@ data Cfg =
   Cfg
   { misoAngle    :: Deg
   , optByAvg     :: Bool
-  , renderORMap  :: Bool
   , predefinedOR :: Maybe AxisPair
   } deriving (Show)
 
@@ -61,8 +60,8 @@ run cfg@Cfg{..} ang_input base_output = do
     vtk = renderVTK cfg vbq qmap mkr ror
     orEval = evaluateOR ror segs
 
-  showOREvaluation orEval 
-  when renderORMap $ writeUniVTKfile (base_output <.> "vtu") True vtk
+  printOREvaluation orEval 
+  writeUniVTKfile (base_output <.> "vtu") True vtk
 
 renderVTK :: Cfg -> VoxBox (Quaternion, Int) -> HashMap Int (Quaternion, Int) -> MicroVoxel -> OR -> VTK Vec3D
 renderVTK Cfg{..} vbq qmap mkr ror
@@ -246,8 +245,8 @@ printOR OrientationRelationship{..} = let
   msg = "OR: " ++ show [h, k, l] ++ " " ++ show orAngle
   in putStrLn msg
 
-showOREvaluation :: OREvaluation -> IO ()
-showOREvaluation OREvaluation{..} = do
+printOREvaluation :: OREvaluation -> IO ()
+printOREvaluation OREvaluation{..} = do
   putStrLn $ "Error: " ++ show misfitError
   printOR orientationRelationship
   printKSDev ksDeviation
