@@ -14,9 +14,10 @@ import System.FilePath
 import System.Random.TF
 import System.Random.TF.Init
 import System.Random.TF.Instances
-import qualified Data.Vector         as V
-import qualified Data.Vector.Unboxed as U
-import qualified Data.HashMap.Strict as HM
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Vector          as V
+import qualified Data.Vector.Unboxed  as U
+import qualified Data.HashMap.Strict  as HM
 
 import File.EBSD
 import Linear.Vect
@@ -39,10 +40,17 @@ data Cfg =
   } deriving (Show)
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
-run cfg@Cfg{..} ang_input base_output = do
-  ebsd <- readEBSD ang_input
+run cfg@Cfg{..} ebsd_file base_output = do
+  bs <- BSL.readFile ebsd_file
+  (orEval, vtk) <- processEBSD cfg bs
+  printOREvaluation orEval 
+  writeUniVTKfile (base_output <.> "vtu") True vtk
+
+processEBSD :: Cfg -> BSL.ByteString -> IO (OREvaluation, VTK Vec3D)
+processEBSD cfg@Cfg{..} bs = do
   gen <- initTFGen
   let
+    ebsd             = loadEBSD bs
     getGoods         = U.filter ((5 >) . evalMisoORWithKS)
     vbq              = readEBSDToVoxBox (C.rotation &&& C.phase) (A.rotation &&& A.phaseNum) ebsd
     (gidBox, voxMap) = maybe (error "No grain detected!") id (getGrainID' misoAngle Cubic vbq)
@@ -52,15 +60,13 @@ run cfg@Cfg{..} ang_input base_output = do
       | optByAvg  = getGoods $ getGBbyAverage  qmap mkr gen 1000
       | otherwise = getGoods $ getGBbySegments vbq  mkr gen 1000
 
-    -- fitting OR
     realOR = findORFace segs ksOR
     ror = maybe realOR (OR . toQuaternion) predefinedOR
     
     vtk = renderVTK cfg vbq qmap mkr ror
     orEval = evaluateOR ror segs
 
-  printOREvaluation orEval 
-  writeUniVTKfile (base_output <.> "vtu") True vtk
+  return (orEval, vtk)
 
 renderVTK :: Cfg -> VoxBox (Quaternion, Int) -> HashMap Int (Quaternion, Int) -> MicroVoxel -> OR -> VTK Vec3D
 renderVTK Cfg{..} vbq qmap mkr ror

@@ -26,6 +26,7 @@ import System.IO
 import System.Log.FastLogger (LoggerSet, ToLogStr)
 import System.Process
 import Text.Printf (printf)
+import qualified Data.ByteString.Lazy         as BSL
 import qualified Data.Vector                  as V
 import qualified Data.Vector.Unboxed          as U
 import qualified Data.Vector.Unboxed.Mutable  as MU
@@ -254,23 +255,30 @@ findBestTransformation ors ref q = let
   in qFZ . getQinFZ $ qs U.! i
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
-run cfg@Cfg{..} ang_input base_output = do
+run cfg ebsd_file base_output = do
+  bs <- BSL.readFile ebsd_file
+  let savePlot = get >>= plotResults . (base_output <>) . printf "mcl_%.2f" . mclFactor
+  void $ processEBSD cfg bs savePlot
+
+processEBSD :: Cfg -> BSL.ByteString -> Gomes () -> IO GomesState
+processEBSD cfg@Cfg{..} bs action = do
   logger <- Log.newStdoutLoggerSet Log.defaultBufSize
-  ebsd <- readEBSD ang_input
   let
+    ebsd = loadEBSD bs
     ror  = convert withOR
     nref = fromIntegral refinementSteps
     doit = do
       grainClustering
-      get >>= plotResults . (base_output <>) . printf "mcl_%.2f" . mclFactor
+      action
       logParentStatsState
       replicateM_ nref $ do
         clusteringRefinement
         logParentStatsState
-        get >>= plotResults . printf "mcl_%.2f" . mclFactor
+        action
   gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror ebsd logger)
   putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
-  void $ runRWST doit gomescfg (getInitState gomescfg)
+  (_, final, _) <- runRWST doit gomescfg (getInitState gomescfg)
+  return final
 
 -- ==================================== Initial Graph ====================================
 
