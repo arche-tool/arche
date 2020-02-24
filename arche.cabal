@@ -79,6 +79,7 @@ Executable arche-server
                     Handler.SubmitANG 
                     Type.APIGateway
                     Util.AWS
+                    Util.OrphanInstances
 
 Library
   hs-source-dirs:    src
@@ -94,7 +95,6 @@ Library
                     Arche.Strategy.Graph
                     Arche.Strategy.ORFitAll
   build-depends:     base                 == 4.*
-                   , aeson                >= 1.0
                    , bytestring           >= 0.10
                    , containers           >= 0.5
                    , fast-logger          >= 2.4

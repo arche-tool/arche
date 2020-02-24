@@ -1,5 +1,6 @@
 {-# LANGUAGE
     ExistentialQuantification
+  , DeriveGeneric
   , GeneralizedNewtypeDeriving
   , MultiParamTypeClasses
   , TemplateHaskell
@@ -44,6 +45,7 @@ module Arche.OR
   ) where
 
 import Data.Vector.Unboxed (Vector)
+import GHC.Generics        (Generic)
 import Data.Vector.Unboxed.Deriving
 import System.Random
 import qualified Data.Vector         as V
@@ -79,9 +81,15 @@ instance Rot QuaternionFZ where
   fromQuaternion = getQinFZ
   getOmega       = getOmega . qFZ
 
-newtype OR = OR {qOR :: Quaternion} deriving (Show, Semigroup, Monoid, Group, Rot)
+newtype OR
+  = OR
+  { qOR :: Quaternion
+  } deriving (Show, Semigroup, Monoid, Generic, Group, Rot)
 
-newtype PhaseID = PhaseID {phaseId :: Int} deriving (Show, Eq, Ord)
+newtype PhaseID
+  = PhaseID
+  { phaseId :: Int
+  } deriving (Show, Eq, Ord, Generic)
 
 mkOR :: Vec3D -> Deg -> OR
 mkOR v = OR . toQuaternion . mkAxisPair v
@@ -126,7 +134,7 @@ data FitError
   { avgError :: Deg
   , devError :: Deg
   , maxError :: Deg
-  } deriving (Show)
+  } deriving (Show, Generic)
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
 

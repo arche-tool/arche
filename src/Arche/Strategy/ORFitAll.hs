@@ -1,15 +1,33 @@
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Arche.Strategy.ORFitAll
   ( run
+  , processEBSD
   , Cfg(..)
+  , OrientationRelationship
+    ( orValue
+    , orAxis
+    , orAngle
+    )
+  , KSDeviation
+    ( directDeviation
+    , planeDeviation
+    , axisDeviation
+    )
+  , OREvaluation
+    ( orientationRelationship
+    , ksDeviation
+    , misfitError
+    )
   ) where
 
 import Control.Arrow       ((&&&))
 import Data.Maybe          (mapMaybe)
 import Data.HashMap.Strict (HashMap)
 import Data.Vector.Unboxed (Vector)
+import GHC.Generics        (Generic)
 import System.FilePath
 import System.Random.TF
 import System.Random.TF.Init
@@ -184,21 +202,21 @@ data OrientationRelationship
   { orValue :: OR
   , orAxis :: (Int, Int, Int)
   , orAngle :: Deg
-  } deriving (Show)
+  } deriving (Generic, Show)
 
 data KSDeviation
   = KSDeviation
   { directDeviation :: Deg
   , planeDeviation :: Deg
   , axisDeviation :: Deg
-  } deriving (Show)
+  } deriving (Generic, Show)
 
 data OREvaluation
   = OREvaluation
   { orientationRelationship :: OrientationRelationship
   , ksDeviation :: KSDeviation
   , misfitError :: FitError
-  } deriving (Show)
+  } deriving (Generic, Show)
 
 evaluateOR :: OR -> Vector ((Quaternion, Int), (Quaternion, Int)) -> OREvaluation
 evaluateOR ror segs = OREvaluation
