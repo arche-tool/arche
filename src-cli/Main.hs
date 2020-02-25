@@ -87,11 +87,10 @@ parseOR = let
   func (v1, v2, v3, w) = mkAxisPair v (Deg w)
       where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
   in (func <$> option auto
-   (  long "or"
-   <> short 'r'
-   <> metavar "\"(Int,Int,Int,Double)\""
-   <> value (1,1,2,90)
-   <> help "The default OR is KS <1,1,2> (Deg 90)."))
+    (  long "or"
+    <> short 'r'
+    <> metavar "\"(Int,Int,Int,Double)\""
+    ))
 
 parseInOut :: Parser (FilePath, FilePath)
 parseInOut = let
