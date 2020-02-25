@@ -18,5 +18,8 @@ flags:
     test: false
   queryforest:
     test: false
+  arche:
+    server: false
+    cli: true
 
 extra-package-dbs: []
