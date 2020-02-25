@@ -52,9 +52,4 @@ handler Event{..} _ = do
     sesCfg :: SES.SesConfiguration Aws.NormalQuery
     sesCfg = SES.sesHttpsPost SES.sesUsEast1
   SES.SendRawEmailResponse {SES.srmrMessageId = rsp} <- runAWS sesCfg mail 
-  pure $ Right Response
-    { statusCode = 200
-    , body = rsp
-    , isBase64Encoded = False
-    , headers = Data.Map.singleton "Content-Type" "application/json"
-    }
+  pure . Right . okJson $ rsp

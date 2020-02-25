@@ -33,9 +33,10 @@ import Type.APIGateway
 import Util.AWS
 import Util.OrphanInstances ()
 
-handler :: Event String -> Context -> IO (Either String (Response OREvaluation))
+handler :: Event Text -> Context -> IO (Either String (Response OREvaluation))
 handler Event{..} _ = do
-  return $ Left "WIP"
+  rsp <- orFitHandler body
+  return $ fmap okJson rsp
 
 orFitHandler :: Text -> IO (Either String OREvaluation)
 orFitHandler angHash = do
