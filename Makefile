@@ -47,10 +47,10 @@ stack.yaml.lock:
 	$(STACK) freeze
 
 arche: install-deps stack.yaml.lock arche.cabal
-	$(STACK) install arche:exe:arche --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
+	$(STACK) install arche:exe:arche --flag arche:cli --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 
 arche-server: install-deps stack.yaml.lock arche.cabal
-	$(STACK) install arche:exe:arche-server --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
+	$(STACK) install arche:exe:arche-server --flag arche:server --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 
 install-deps: docker-image
 	$(STACK) build --no-terminal --install-ghc --only-dependencies --stack-root $(STACK_ROOT)
