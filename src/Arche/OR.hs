@@ -1,6 +1,7 @@
 {-# LANGUAGE
-    ExistentialQuantification
+    BangPatterns
   , DeriveGeneric
+  , ExistentialQuantification
   , GeneralizedNewtypeDeriving
   , MultiParamTypeClasses
   , TemplateHaskell
@@ -131,9 +132,9 @@ misoSingleOR ors symm q1 q2 = let
 
 data FitError
   = FitError
-  { avgError :: Deg
-  , devError :: Deg
-  , maxError :: Deg
+  { avgError :: !Deg
+  , devError :: !Deg
+  , maxError :: !Deg
   } deriving (Show, Generic)
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError

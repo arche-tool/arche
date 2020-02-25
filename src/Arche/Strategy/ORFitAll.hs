@@ -1,6 +1,9 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE
+    BangPatterns
+  , DeriveGeneric
+  , FlexibleInstances
+  , RecordWildCards
+  #-}
 
 module Arche.Strategy.ORFitAll
   ( run
@@ -79,10 +82,9 @@ processEBSD cfg@Cfg{..} bs = do
       | otherwise = getGoods $ getGBbySegments vbq  mkr gen 1000
 
     realOR = findORFace segs ksOR
-    ror = maybe realOR (OR . toQuaternion) predefinedOR
-    
+    !ror = maybe realOR (OR . toQuaternion) predefinedOR
+    !orEval = evaluateOR ror segs
     vtk = renderVTK cfg vbq qmap mkr ror
-    orEval = evaluateOR ror segs
 
   return (orEval, vtk)
 
@@ -199,23 +201,23 @@ faceMisoOR ors qmap face = maybe pi id getM
 
 data OrientationRelationship
   = OrientationRelationship
-  { orValue :: OR
-  , orAxis :: (Int, Int, Int)
-  , orAngle :: Deg
+  { orValue :: !OR
+  , orAxis :: !(Int, Int, Int)
+  , orAngle :: !Deg
   } deriving (Generic, Show)
 
 data KSDeviation
   = KSDeviation
-  { directDeviation :: Deg
-  , planeDeviation :: Deg
-  , axisDeviation :: Deg
+  { directDeviation :: !Deg
+  , planeDeviation :: !Deg
+  , axisDeviation :: !Deg
   } deriving (Generic, Show)
 
 data OREvaluation
   = OREvaluation
-  { orientationRelationship :: OrientationRelationship
-  , ksDeviation :: KSDeviation
-  , misfitError :: FitError
+  { orientationRelationship :: !OrientationRelationship
+  , ksDeviation :: !KSDeviation
+  , misfitError :: !FitError
   } deriving (Generic, Show)
 
 evaluateOR :: OR -> Vector ((Quaternion, Int), (Quaternion, Int)) -> OREvaluation
