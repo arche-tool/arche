@@ -16,7 +16,6 @@ import qualified Data.Aeson as A
 import qualified Data.UUID as UUID
 import qualified Data.ByteString.Lazy         as BSL
 import qualified System.Log.FastLogger        as Log
-import Aws.Lambda
 import Data.Conduit ((.|), runConduit, mapOutput)
 import Data.Conduit.Binary (sinkLbs)
 import Data.Conduit.Text(decode)
@@ -38,9 +37,9 @@ import Util.OrphanInstances ()
 logInfo :: (ToLogStr a)=> LoggerSet -> a -> IO ()
 logInfo logger = Log.pushLogStrLn logger . Log.toLogStr 
 
-handler :: Event Text -> Context -> IO (Either String (Response OREvaluation))
-handler Event{..} _ = do
-  rsp <- orFitHandler body
+handler :: Text -> IO (Either String (Response OREvaluation))
+handler input = do
+  rsp <- orFitHandler input
   return $ fmap okJson rsp
 
 orFitHandler :: Text -> IO (Either String OREvaluation)

@@ -9,9 +9,7 @@ import qualified Aws
 import qualified Aws.Ses as SES
 import qualified Data.UUID as UUID
 import GHC.Generics
-import Aws.Lambda
 import Data.Aeson
-import Data.Map
 import Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import System.Random (randomIO)
@@ -44,8 +42,8 @@ buildEmail email token = let
     srmSource = Just sender
   }
 
-handler :: Event Person -> Context -> IO (Either String (Response Text))
-handler Event{..} _ = do
+handler :: Event Person -> IO (Either String (Response Text))
+handler Event{..} = do
   token <- randomIO
   let
     mail = buildEmail (email body) (Token token)
