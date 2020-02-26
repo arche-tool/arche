@@ -6,6 +6,7 @@ RUN apt-get update
 RUN apt-get install -y ca-certificates build-essential libgmp-dev zlib1g-dev language-pack-en-base sysbench
 
 # Copy local code to the container image.
+USER root
 WORKDIR /usr/src/app
 COPY .output/${BUILD_NAME}/arche-server /usr/src/app/arche-server
 COPY .aws-keys /root/.aws-keys
