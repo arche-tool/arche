@@ -6,3 +6,4 @@
 .stack-root/
 .stack-work/
 .vscode/
+.aws-keys

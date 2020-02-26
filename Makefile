@@ -6,7 +6,8 @@ SHARED_VOL := /appdata
 STACK_ROOT := $(SHARED_VOL)/.stack-root
 TARGET_OS := linux
 OUTPUT_ROOT_DIR := .output
-OUTPUT_DIR := $(OUTPUT_ROOT_DIR)/$(TARGET_OS)-$(GIT_VERSION)
+BUILD_NAME := $(TARGET_OS)-$(GIT_VERSION)
+OUTPUT_DIR := $(OUTPUT_ROOT_DIR)/$(BUILD_NAME)
 
 ifeq ($(OS),Windows_NT)
     OS := Windows
@@ -30,16 +31,18 @@ endif
 
 all: stack.yaml.lock cli aws-lambda
 
-clean:
+clean-stack:
 	$(STACK) clean
+
+clean:
 	rm -rf $(OUTPUT_ROOT_DIR)/*
 	docker image prune -f
 
 cli: arche
 	mv $(OUTPUT_DIR)/arche $(OUTPUT_DIR)/arche-$(GIT_VERSION)
 
-aws-lambda: arche-server
-	mv $(OUTPUT_DIR)/arche-server $(OUTPUT_DIR)/bootstrap
+aws-lambda: arche-server-$(GIT_VERSION)
+	cp $(OUTPUT_DIR)/arche-server $(OUTPUT_DIR)/bootstrap
 	pushd $(OUTPUT_DIR) && zip function-$(GIT_VERSION).zip bootstrap && popd
 	rm -f $(OUTPUT_DIR)/bootstrap
 
@@ -49,7 +52,7 @@ stack.yaml.lock:
 arche: install-deps stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche --flag arche:cli --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 
-arche-server: install-deps stack.yaml.lock arche.cabal
+arche-server-$(GIT_VERSION): install-deps stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche-server --flag arche:server --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 
 install-deps: docker-image
@@ -57,3 +60,9 @@ install-deps: docker-image
 
 docker-image:
 	DOCKER_BUILDKIT=1 docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
+
+docker_server_image-$(GIT_VERSION): arche-server-$(GIT_VERSION)
+	DOCKER_BUILDKIT=1 docker build --build-arg BUILD_NAME=$(BUILD_NAME) -t arche_server-$(GIT_VERSION) -f server.Dockerfile .
+
+run-server: docker_server_image-$(GIT_VERSION)
+	docker container run -p 8080:8080 arche_server-$(GIT_VERSION):latest
