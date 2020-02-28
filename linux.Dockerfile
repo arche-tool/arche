@@ -1,14 +1,11 @@
 FROM ubuntu:16.04
-ARG USERID=6666
 
 USER root
-WORKDIR /root
-
-RUN apt-get update
-RUN apt-get install -y curl make build-essential libgmp-dev zlib1g-dev language-pack-en-base
+RUN apt-get update && apt-get install -y curl make build-essential libgmp-dev zlib1g-dev language-pack-en-base
 RUN update-locale LC_ALL=en_US.UTF8 LANG=en_US.UTF8
 RUN locale-gen
 
+ARG USERID=6666
 RUN addgroup --gid $USERID haskell
 RUN adduser --disabled-password --gecos "" --force-badname --uid $USERID --gid $USERID haskell
 RUN mkdir /appdata

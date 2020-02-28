@@ -57,6 +57,9 @@ arche: install-deps stack.yaml.lock arche.cabal
 arche-server-$(BUILD_NAME): install-deps stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche-server --flag arche:server --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 
+arche-bench-$(BUILD_NAME): install-deps stack.yaml.lock arche.cabal
+	$(STACK) install arche:exe:arche-bench --flag arche:benchmark --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
+
 install-deps: docker-image
 	$(STACK) build --no-terminal --install-ghc --only-dependencies --stack-root $(STACK_ROOT)
 
@@ -66,8 +69,14 @@ docker-image:
 docker_server_image-$(BUILD_NAME): arche-server-$(BUILD_NAME)
 	DOCKER_BUILDKIT=1 docker build --build-arg BUILD_NAME=$(BUILD_NAME) -t gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME) -t arche_server-$(BUILD_NAME) -f server.Dockerfile .
 
+docker_bench_image-$(BUILD_NAME): arche-bench-$(BUILD_NAME)
+	DOCKER_BUILDKIT=1 docker build --build-arg BUILD_NAME=$(BUILD_NAME) -t arche_bench-$(BUILD_NAME) -f benchmark.Dockerfile .
+
 run-server: docker_server_image-$(BUILD_NAME)
-	docker container run -p 8080:8080 arche_server-$(BUILD_NAME):latest
+	docker container run -p 8888:8080 arche_server-$(BUILD_NAME):latest
+
+run-bench: docker_bench_image-$(BUILD_NAME)
+	docker container run arche_bench-$(BUILD_NAME):latest
 
 deploy-server: docker_server_image-$(BUILD_NAME)
 	docker push gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME)

@@ -1,6 +1,3 @@
-{-# LANGUAGE RecordWildCards           #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
@@ -64,10 +61,8 @@ simpleServer listAs getA postA =
 userServer :: Server (SimpleAPI "users" User UserId)
 userServer = simpleServer
   (return [])
-  (\userid -> 
-      if userid == 0
-      then return $ Left "john"
-      else do
-        liftIO $ orFitHandler "FeNi.ang"
+  (\userid -> if userid > 1
+    then return $ Left (show userid)
+    else liftIO $ orFitHandler "FeNi.ang"
   )
   (\_user -> return NoContent)

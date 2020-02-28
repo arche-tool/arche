@@ -27,7 +27,7 @@ import System.Log.FastLogger (LoggerSet, ToLogStr)
 
 import qualified Arche.Strategy.ORFitAll as OR
 import Arche.Strategy.ORFitAll (OREvaluation)
-import Data.VTK (renderUniVTK, writeUniVTKfile)
+import Data.VTK (VTK, renderUniVTK)
 import Texture.Orientation (Deg(..))
 
 import Type.APIGateway
@@ -78,4 +78,3 @@ orFitHandler angHash = do
   logInfo logger $ "Saved VTK back to S3: " <> show()
   
   return $ Right orEval
-  

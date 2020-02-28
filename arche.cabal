@@ -23,6 +23,10 @@ Flag cli
     Description:     Build the cli exectable.
     Default:         True
 
+Flag benchmark
+    Description:     Build the cli exectable.
+    Default:         False
+
 Executable arche
   if flag(cli)
     buildable:    True
@@ -129,3 +133,28 @@ Library
     , unordered-containers >= 0.2
     , vector               >= 0.10
     , vector-th-unbox      >= 0.2
+
+Executable arche-bench
+  if flag(benchmark)
+    buildable:    True
+  else
+    buildable:    False
+  ghc-options:
+    -O2
+    -funbox-strict-fields
+    -rtsopts
+    -Wall
+  hs-source-dirs: benchmark
+  main-Is:        Main.hs
+  build-depends:
+      arche
+    , base                       == 4.*
+    , hammer                     >= 0.4
+    , linear-vect                >= 0.2
+    , sledge                     >= 0.4
+    , vtk                        >= 0.1
+    , bytestring                 >= 0.10
+    , containers                 >= 0.5
+    , random                     >= 1.0
+    , text                       >= 1.0
+    , criterion                  >= 1.0
