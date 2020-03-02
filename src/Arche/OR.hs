@@ -19,6 +19,7 @@ module Arche.OR
   , evalMisoOR
   , misoSingleOR
   , misoDoubleOR
+  , misoDoubleOR'
   , misoDoubleKS
   , singleerrorfunc
   , weightederrorfunc
@@ -49,6 +50,7 @@ import Data.Vector.Unboxed (Vector)
 import GHC.Generics        (Generic)
 import Data.Vector.Unboxed.Deriving
 import System.Random
+import qualified Data.List           as L
 import qualified Data.Vector         as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Generic as G
@@ -115,6 +117,17 @@ genTS (OR t) = let
 
 misoDoubleKS :: Symm -> Quaternion -> Quaternion -> Double
 misoDoubleKS = misoDoubleOR ksORs
+
+misoDoubleOR' :: [OR] -> Symm -> Quaternion -> Quaternion -> Double
+misoDoubleOR' ors symm q1 q2 = let
+  -- Fully correct. Need prove that works!
+  func :: Double -> OR -> Double
+  func min_theta o_r = let
+    ks1 = ((q1 #<=) . qOR) o_r
+    ks2 = ((q2 #<=) . qOR) o_r
+    theta = getMisoAngle symm ks1 ks2
+    in min min_theta theta
+  in L.foldl' func 180 ors
 
 misoDoubleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
 misoDoubleOR ors symm q1 q2 = let

@@ -158,3 +158,4 @@ Executable arche-bench
     , random                     >= 1.0
     , text                       >= 1.0
     , criterion                  >= 1.0
+    , vector                     >= 0.10
