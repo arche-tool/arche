@@ -4,7 +4,8 @@ module Main where
 
 import Criterion
 import Criterion.Main
-import System.Random (mkStdGen, random)
+import Data.Map.Strict (fromList)
+import System.Random (mkStdGen, random, randoms)
 import qualified Data.Vector.Unboxed as U
 
 import Arche.OR (OR(..), misoDoubleOR, misoDoubleOR', genTS)
@@ -13,6 +14,11 @@ import Texture.Symmetry (Symm(..), getSymmOps, getInFZ, SymmOp(..))
 
 main :: IO ()
 main = defaultMain [
+  bgroup "reference" [ 
+      bench "fib" $ benchFib 35
+    , bench "malloc" $ benchMalloc
+  ],
+  
   bgroup "misoDoubleOR" [ 
       bench "with-eta" $ benchMiso misoDoubleOREta
     , bench "no-eta" $ benchMiso misoDoubleORNoEta
@@ -57,3 +63,22 @@ getMisoAngleEta symm = let
   foo = getAbsShortOmega . getInFZ (getSymmOps symm)
   -- avoiding eta expansion of q1 and q2 to memorize
   in \q1 q2 -> foo (q2 -#- q1)
+
+
+-- ======================= Reference Benchmark =========================
+benchMalloc :: Benchmarkable
+benchMalloc = let
+  xs = zip (randoms (mkStdGen 0) :: [Int]) [1 :: Int .. 10000]
+  in nf Data.Map.Strict.fromList xs
+
+benchFib :: Int -> Benchmarkable
+benchFib = nf fib
+  where
+    fib :: Int -> Int
+    fib m
+      | m < 0     = error "negative!"
+      | otherwise = go m
+      where
+        go 0 = 0
+        go 1 = 1
+        go n = go (n-1) + go (n-2)
