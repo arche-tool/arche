@@ -4,70 +4,56 @@ module Main where
 
 import Criterion
 import Criterion.Main
-import System.Random (mkStdGen, random, randoms)
-import Data.Map.Strict (fromList)
+import System.Random (mkStdGen, random)
 import qualified Data.Vector.Unboxed as U
 
 import Arche.OR (OR(..), misoDoubleOR, misoDoubleOR', genTS)
-import Texture.Orientation ((#<=), Quaternion)
-import Texture.Symmetry (Symm(..), getMisoAngle)
+import Texture.Orientation ((#<=), (-#-), getAbsShortOmega, Quaternion(..))
+import Texture.Symmetry (Symm(..), getSymmOps, getInFZ, SymmOp(..))
 
 main :: IO ()
 main = defaultMain [
-  bgroup "fib" [
-      bench "25" $ whnf fib 25
-    , bench "40" $ whnf fib 40
-    ],
-  
-  bgroup "malloc" [ 
-      bench "Data.Map.Strict.fromList" $ benchMalloc 
-  ],
-  
-  bgroup "#<=" [
-      bench "seed3" $ benchQComp 3
-  ],
-
   bgroup "misoDoubleOR" [ 
-      bench "seed3" $ benchMisoDOR 3
-    , bench "prime-seed7" $ benchMisoDOR' 7
-  ]
+      bench "with-eta" $ benchMiso misoDoubleOREta
+    , bench "no-eta" $ benchMiso misoDoubleORNoEta
+    ]
   ]
 
-benchMisoDOR :: Int -> Benchmarkable
-benchMisoDOR i = let
-  s0 = mkStdGen i
+benchMiso :: (U.Vector OR -> Symm -> Quaternion -> Quaternion -> Double) -> Benchmarkable
+benchMiso probe = let
+  s0 = mkStdGen 666
   (q1, s1) = random s0
   (q2, s2) = random s1
   (q3, _) = random s2
   ors = genTS . OR $ q3
-  in nf (\(ors', qa, qb) -> misoDoubleOR ors' Cubic qa qb) (ors, q1, q2)
+  in nf (\(ors', qa, qb) -> probe ors' Cubic qa qb) (ors, q1, q2)
 
-benchMisoDOR' :: Int -> Benchmarkable
-benchMisoDOR' i = let
-  s0 = mkStdGen i
-  (q1, s1) = random s0
-  (q2, s2) = random s1
-  (q3, _) = random s2
-  ors = U.toList . genTS . OR $ q3
-  in nf (\(ors', qa, qb) -> misoDoubleOR' ors' Cubic qa qb) (ors, q1, q2)
 
-benchQComp :: Int -> Benchmarkable
-benchQComp i = let
-  s0 = mkStdGen i
-  (q1 :: Quaternion, s1) = random s0
-  (q2, _) = random s1
-  in nf (\(qa, qb) -> qa #<= qb) (q1, q2)
+-- ======================= No eta =========================
+misoDoubleORNoEta ::U.Vector OR -> Symm -> Quaternion -> Quaternion -> Double
+misoDoubleORNoEta ors symm q1 q2 = let
+  ks1 = U.map ((q1 #<=) . qOR) ors
+  ks2 = U.map ((q2 #<=) . qOR) ors
+  -- Fully correct. Need prove that works!
+  ops = getSymmOps symm
+  foo q = U.map (getMisoAngleNoEta ops q) ks2
+  in U.minimum $ U.concatMap foo ks1
 
-benchMalloc :: Benchmarkable
-benchMalloc = let
-  xs = zip (randoms (mkStdGen 0) :: [Int]) [1 :: Int .. 100000]
-  in nf Data.Map.Strict.fromList xs
+getMisoAngleNoEta :: U.Vector SymmOp -> Quaternion -> Quaternion -> Double
+getMisoAngleNoEta ops q1 q2 = getAbsShortOmega $ getInFZ ops (q2 -#- q1)
 
-fib :: Int -> Int
-fib m
-  | m < 0     = error "negative!"
-  | otherwise = go m
-  where
-    go 0 = 0
-    go 1 = 1
-    go n = go (n-1) + go (n-2)
+
+-- ======================= With eta =========================
+misoDoubleOREta ::U.Vector OR -> Symm -> Quaternion -> Quaternion -> Double
+misoDoubleOREta ors symm q1 q2 = let
+  ks1 = U.map ((q1 #<=) . qOR) ors
+  ks2 = U.map ((q2 #<=) . qOR) ors
+  -- Fully correct. Need prove that works!
+  foo q = U.map (getMisoAngleEta symm q) ks2
+  in U.minimum $ U.concatMap foo ks1
+
+getMisoAngleEta :: Symm -> Quaternion -> Quaternion -> Double
+getMisoAngleEta symm = let
+  foo = getAbsShortOmega . getInFZ (getSymmOps symm)
+  -- avoiding eta expansion of q1 and q2 to memorize
+  in \q1 q2 -> foo (q2 -#- q1)
