@@ -1,6 +1,5 @@
 GHCFLAGS=-Wall -XNoCPP -fno-warn-name-shadowing -XHaskell98
 GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
-DIST_DIR := $(shell stack path --dist-dir)
 GIT_OK := $(shell ( [ -n '$(git tag --points-at `git rev-parse HEAD`)' ] && [ -z '$(git status -s)' ] ) && echo 1 || echo 0)
 SHARED_VOL := /appdata
 STACK_ROOT := $(SHARED_VOL)/.stack-root

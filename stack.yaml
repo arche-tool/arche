@@ -1,4 +1,4 @@
-resolver: lts-13.9
+resolver: lts-14.27
 
 packages:
 - '.'
@@ -12,6 +12,7 @@ packages:
 extra-deps:
 - aws-0.21.1@sha256:5290b819bd425f28c736b93a84955ced145bdb631a26d784d1b952e2e0ddc6b8,14259
 - aws-lambda-haskell-runtime-2.0.1@sha256:17a1a9ded282d9ddc2a77f9dc32a986edaf7b0c2a1eeaf4ab631762620e467c5,2893
+- text-format-0.3.2@sha256:ea4e0cfd66e5a0224cbff2753eb160e71c9e383e86f293db77adeba5706bab94,1766
 
 flags:
   hammer:
