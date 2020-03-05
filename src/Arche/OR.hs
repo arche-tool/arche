@@ -119,18 +119,17 @@ misoDoubleKS = misoDoubleOR ksORs
 
 misoDoubleOR :: Vector OR -> Vector SymmOp -> Quaternion -> Quaternion -> Double
 misoDoubleOR ors symOps q1 q2 = let
-  -- Fully correct. Need prove that works!
-  func :: OR -> Double
-  func o_r = let
-    ks1 = ((q1 #<=) . qOR) o_r
-    ks2 = ((q2 #<=) . qOR) o_r
+  lor = U.toList ors
+  func :: OR -> OR -> Double
+  func ora orb = let
+    ks1 = ((q1 #<=) . qOR) ora
+    ks2 = ((q2 #<=) . qOR) orb
     in getMisoAngleFaster symOps ks1 ks2
-  in U.minimum $ U.map func ors
+  in L.minimum [ func ora orb | ora <- lor, orb <- lor ]
 
 misoSingleOR :: Vector OR -> Vector SymmOp -> Quaternion -> Quaternion -> Double
 misoSingleOR ors symOps q1 q2 = let
-  ks = U.map (getMisoAngleFaster symOps (q2 #<= q1) . qOR) ors
-  -- Fully correct. Need prove that works!
+  ks = U.map (getMisoAngleFaster symOps q1 . (q2 #<=) . qOR) ors
   in U.minimum ks
 
 data FitError

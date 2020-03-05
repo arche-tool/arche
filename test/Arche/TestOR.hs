@@ -82,20 +82,20 @@ test = testGroup "OR"
   ]
 
 testMisoSingleOR :: OR -> Quaternion -> Quaternion -> Property
-testMisoSingleOR or q1 q2 = let
-  ors = genTS or
+testMisoSingleOR ora q1 q2 = let
+  ors = genTS ora
   symOps = getSymmOps Cubic
-  in binaryTest "matchRef" (~=) (misoSingleOR2 ors Cubic q1 q2) (misoSingleORRef ors Cubic q1 q2)
+  in binaryTest "matchRef" (~=) (misoSingleOR ors symOps q1 q2) (misoSingleORRef ors Cubic q1 q2)
 
 testMisoDoubleOR :: OR -> Quaternion -> Quaternion -> Property
-testMisoDoubleOR or q1 q2 = let
-  ors = genTS or
+testMisoDoubleOR ora q1 q2 = let
+  ors = genTS ora
   symOps = getSymmOps Cubic
-  in binaryTest "matchRef" (~=) (misoDoubleOR2 ors Cubic q1 q2) (misoDoubleORRef ors Cubic q1 q2)
+  in binaryTest "matchRef" (~=) (misoDoubleOR ors symOps q1 q2) (misoDoubleORRef ors Cubic q1 q2)
 
 testMisoDoubleORTransitive :: OR -> Quaternion -> Quaternion -> Property
-testMisoDoubleORTransitive  or q1 q2 = let
-  ors = genTS or
+testMisoDoubleORTransitive  ora q1 q2 = let
+  ors = genTS ora
   symOps = getSymmOps Cubic
   in binaryTest "nor" (~=) (misoDoubleOR    ors symOps q1 q2) (misoDoubleOR    ors symOps q2 q1)  .&&.
      binaryTest "ref" (~=) (misoDoubleORRef ors Cubic  q1 q2) (misoDoubleORRef ors Cubic  q2 q1)
@@ -111,20 +111,3 @@ misoSingleORRef :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
 misoSingleORRef ors symm q1 q2 = let
   ks = U.map ((q2 #<=) . qOR) ors
   in U.minimum $ U.map (getMisoAngle symm q1) ks
-
-misoDoubleOR2 :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
-misoDoubleOR2 ors symOps q1 q2 = let
-  -- Fully correct. Need prove that works!
-  lor = U.toList ors
-  func :: OR -> OR -> Double
-  func ora orb = let
-    ks1 = ((q1 #<=) . qOR) ora
-    ks2 = ((q2 #<=) . qOR) orb
-    in getMisoAngle symOps ks1 ks2
-  in L.minimum $ [ func ora orb | ora <- lor, orb <- lor ]
-
-misoSingleOR2 :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
-misoSingleOR2 ors symOps q1 q2 = let
-  ks = U.map (getMisoAngle symOps q1 . (q2 #<=) . qOR) ors
-  -- Fully correct. Need prove that works!
-  in U.minimum ks
