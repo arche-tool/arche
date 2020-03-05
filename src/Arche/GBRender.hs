@@ -26,10 +26,14 @@ import           Arche.OR
 data RenderGB = forall a . RenderElemVTK a => RenderGB String (Quaternion -> Quaternion -> a)
 
 showGBMiso :: Symm -> RenderGB
-showGBMiso symm = RenderGB "Misorientation" (\q1 q2 -> unDeg $ toAngle $ (getMisoAngle symm q1 q2))
+showGBMiso symm = let
+  symOps = getSymmOps Cubic
+  in RenderGB "Misorientation" (\q1 q2 -> unDeg $ toAngle $ (getMisoAngleFaster symOps q1 q2))
 
 showGBMisoKS :: Symm -> RenderGB
-showGBMisoKS symm = RenderGB "Misorientation KS" (\q1 q2 -> unDeg $ toAngle $ (misoDoubleKS symm q1 q2))
+showGBMisoKS symm = let
+  symOps = getSymmOps Cubic
+  in RenderGB "Misorientation KS" (\q1 q2 -> unDeg $ toAngle $ (misoDoubleKS symOps q1 q2))
 
 -- =======================================================================================
 

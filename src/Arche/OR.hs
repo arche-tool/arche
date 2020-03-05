@@ -19,7 +19,6 @@ module Arche.OR
   , evalMisoOR
   , misoSingleOR
   , misoDoubleOR
-  , misoDoubleOR'
   , misoDoubleKS
   , singleerrorfunc
   , weightederrorfunc
@@ -115,32 +114,22 @@ genTS (OR t) = let
   vs = V.convert $ getAllSymmVec (getSymmOps Cubic) v
   in G.map (OR . mergeQuaternion . (,) w) vs
 
-misoDoubleKS :: Symm -> Quaternion -> Quaternion -> Double
+misoDoubleKS :: Vector SymmOp -> Quaternion -> Quaternion -> Double
 misoDoubleKS = misoDoubleOR ksORs
 
-misoDoubleOR' :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
-misoDoubleOR' ors symm q1 q2 = let
-  symOps = getSymmOps symm
+misoDoubleOR :: Vector OR -> Vector SymmOp -> Quaternion -> Quaternion -> Double
+misoDoubleOR ors symOps q1 q2 = let
   -- Fully correct. Need prove that works!
   func :: OR -> Double
   func o_r = let
     ks1 = ((q1 #<=) . qOR) o_r
     ks2 = ((q2 #<=) . qOR) o_r
-    theta = getMisoAngleFaster symOps ks1 ks2
-    in theta
+    in getMisoAngleFaster symOps ks1 ks2
   in U.minimum $ U.map func ors
 
-misoDoubleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
-misoDoubleOR ors symm q1 q2 = let
-  ks1 = U.map ((q1 #<=) . qOR) ors
-  ks2 = U.map ((q2 #<=) . qOR) ors
-  -- Fully correct. Need prove that works!
-  foo q = U.map (getMisoAngle symm q) ks2
-  in U.minimum $ U.concatMap foo ks1
-
-misoSingleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
-misoSingleOR ors symm q1 q2 = let
-  ks = U.map (getMisoAngle symm (q2 #<= q1) . qOR) ors
+misoSingleOR :: Vector OR -> Vector SymmOp -> Quaternion -> Quaternion -> Double
+misoSingleOR ors symOps q1 q2 = let
+  ks = U.map (getMisoAngleFaster symOps (q2 #<= q1) . qOR) ors
   -- Fully correct. Need prove that works!
   in U.minimum ks
 
@@ -155,8 +144,10 @@ type ErrorFunc = Quaternion -> Vector OR -> FitError
 
 evalMisoOR :: Vector OR -> (Quaternion, Int) -> (Quaternion, Int) -> Double
 evalMisoOR ors (qa, pa) (qb, pb)
-  | pa == pb  = misoDoubleOR ors Cubic qa qb
-  | otherwise = misoSingleOR ors Cubic qa qb
+  | pa == pb  = misoDoubleOR ors symOps qa qb
+  | otherwise = misoSingleOR ors symOps qa qb
+  where
+    symOps = getSymmOps Cubic
 
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
