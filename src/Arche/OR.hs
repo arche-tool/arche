@@ -118,16 +118,17 @@ genTS (OR t) = let
 misoDoubleKS :: Symm -> Quaternion -> Quaternion -> Double
 misoDoubleKS = misoDoubleOR ksORs
 
-misoDoubleOR' :: [OR] -> Symm -> Quaternion -> Quaternion -> Double
+misoDoubleOR' :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
 misoDoubleOR' ors symm q1 q2 = let
+  symOps = getSymmOps symm
   -- Fully correct. Need prove that works!
-  func :: Double -> OR -> Double
-  func min_theta o_r = let
+  func :: OR -> Double
+  func o_r = let
     ks1 = ((q1 #<=) . qOR) o_r
     ks2 = ((q2 #<=) . qOR) o_r
-    theta = getMisoAngle symm ks1 ks2
-    in min min_theta theta
-  in L.foldl' func 180 ors
+    theta = getMisoAngleFaster symOps ks1 ks2
+    in theta
+  in U.minimum $ U.map func ors
 
 misoDoubleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
 misoDoubleOR ors symm q1 q2 = let
@@ -139,9 +140,9 @@ misoDoubleOR ors symm q1 q2 = let
 
 misoSingleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
 misoSingleOR ors symm q1 q2 = let
-  ks = U.map ((q2 #<=) . qOR) ors
+  ks = U.map (getMisoAngle symm (q2 #<= q1) . qOR) ors
   -- Fully correct. Need prove that works!
-  in U.minimum $ U.map (getMisoAngle symm q1) ks
+  in U.minimum ks
 
 data FitError
   = FitError

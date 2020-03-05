@@ -6,6 +6,7 @@ import Criterion
 import Criterion.Main
 import Data.Map.Strict (fromList)
 import System.Random (mkStdGen, random, randoms)
+import qualified Data.List as L
 import qualified Data.Vector.Unboxed as U
 
 import Arche.OR (OR(..), misoDoubleOR, misoDoubleOR', genTS)
@@ -22,6 +23,10 @@ main = defaultMain [
   bgroup "misoDoubleOR" [ 
       bench "with-eta" $ benchMiso misoDoubleOREta
     , bench "no-eta" $ benchMiso misoDoubleORNoEta
+    , bench "normal" $ benchMiso misoDoubleOR
+    , bench "improved" $ benchMiso misoDoubleOR'
+    , bench "improved2" $ benchMiso2 misoDoubleOR2
+    , bench "improved3" $ benchMiso3 misoDoubleOR3
     ]
   ]
 
@@ -34,6 +39,23 @@ benchMiso probe = let
   ors = genTS . OR $ q3
   in nf (\(ors', qa, qb) -> probe ors' Cubic qa qb) (ors, q1, q2)
 
+benchMiso2 :: ([OR] -> Symm -> Quaternion -> Quaternion -> Double) -> Benchmarkable
+benchMiso2 probe = let
+  s0 = mkStdGen 666
+  (q1, s1) = random s0
+  (q2, s2) = random s1
+  (q3, _) = random s2
+  ors = U.toList . genTS . OR $ q3
+  in nf (\(ors', qa, qb) -> probe ors' Cubic qa qb) (ors, q1, q2)
+
+benchMiso3 :: (U.Vector OR -> U.Vector SymmOp -> Quaternion -> Quaternion -> Double) -> Benchmarkable
+benchMiso3 probe = let
+  s0 = mkStdGen 666
+  (q1, s1) = random s0
+  (q2, s2) = random s1
+  (q3, _) = random s2
+  ors = genTS . OR $ q3
+  in nf (\(ors', qa, qb, ops) -> probe ors' ops qa qb) (ors, q1, q2, getSymmOps Cubic)
 
 -- ======================= No eta =========================
 misoDoubleORNoEta ::U.Vector OR -> Symm -> Quaternion -> Quaternion -> Double
@@ -47,6 +69,30 @@ misoDoubleORNoEta ors symm q1 q2 = let
 
 getMisoAngleNoEta :: U.Vector SymmOp -> Quaternion -> Quaternion -> Double
 getMisoAngleNoEta ops q1 q2 = getAbsShortOmega $ getInFZ ops (q2 -#- q1)
+
+misoDoubleOR2 :: [OR] -> Symm -> Quaternion -> Quaternion -> Double
+misoDoubleOR2 ors symm q1 q2 = let
+  --symOps = getSymmOps symm
+  -- Fully correct. Need prove that works!
+  func :: OR -> Double
+  func o_r = let
+    ks1 = ((q1 #<=) . qOR) o_r
+    ks2 = ((q2 #<=) . qOR) o_r
+    theta = getMisoAngleEta symm ks1 ks2
+    in theta
+  in L.minimum $ map func ors
+
+misoDoubleOR3 ::U.Vector OR -> U.Vector SymmOp -> Quaternion -> Quaternion -> Double
+misoDoubleOR3 ors ops q1 q2 = let
+  --symOps = getSymmOps symm
+  -- Fully correct. Need prove that works!
+  func :: OR -> Double
+  func o_r = let
+    ks1 = ((q1 #<=) . qOR) o_r
+    ks2 = ((q2 #<=) . qOR) o_r
+    theta = getMisoAngleNoEta ops ks1 ks2
+    in theta
+  in U.minimum $ U.map func ors
 
 
 -- ======================= With eta =========================
