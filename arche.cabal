@@ -1,12 +1,10 @@
 name:                arche
 version:             0.1.2.0
-synopsis:            Software to reconstrut Austenite for EBSD map.
--- description:
+synopsis:            Software to reconstrut parent phase in martensitic transformations.
 license:             AllRightsReserved
 license-file:        LICENSE
 author:              Edgar Gomes de Araujo
 maintainer:          Edgar.Gomes@UGent.be
--- copyright:
 category:            Development
 build-type:          Simple
 cabal-version:       >=1.8
@@ -22,10 +20,6 @@ Flag static
 Flag cli
     Description:     Build the cli exectable.
     Default:         True
-
-Flag benchmark
-    Description:     Build the cli exectable.
-    Default:         False
 
 Executable arche
   if flag(cli)
@@ -105,8 +99,6 @@ Library
     -O2
     -funbox-strict-fields
     -Wall
-    -fprof-auto
-    -fprof-cafs
   exposed-modules:
     Arche.Grains
     Arche.OR
