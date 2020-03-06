@@ -37,6 +37,7 @@ clean-stack:
 
 clean:
 	rm -rf $(OUTPUT_ROOT_DIR)/*
+	docker rmi $(docker images 'arche_server-*' -q) --force
 	docker image prune -f
 
 cli: arche
