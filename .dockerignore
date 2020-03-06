@@ -1,6 +1,5 @@
 *
 !.output
 !.aws-keys
-!benchmark/data
 !linux.Dockerfile
 !wine.Dockerfile

@@ -1,12 +1,11 @@
 FROM ubuntu:18.04
 
-RUN apt-get update && apt-get install -y ca-certificates build-essential libgmp-dev zlib1g-dev language-pack-en-base sysbench
+RUN apt-get update && apt-get install -y ca-certificates libgmp10 libc6
 
 # Copy local code to the container image.
 USER root
 ARG BUILD_NAME
 WORKDIR /usr/src/app
-COPY benchmark/data /usr/src/app/benchmark/data
 COPY .aws-keys /root/.aws-keys
 COPY .output/${BUILD_NAME}/arche-server /usr/src/app/arche-server
 
@@ -15,6 +14,5 @@ COPY .output/${BUILD_NAME}/arche-server /usr/src/app/arche-server
 ENV PORT 8080
 
 ENV PATH="/usr/src/app:${PATH}"
-ENV LANG en_US.utf8
 # Run the web service on container startup.
 CMD ["arche-server"]

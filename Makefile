@@ -1,4 +1,3 @@
-GHCFLAGS=-Wall -XNoCPP -fno-warn-name-shadowing -XHaskell98
 GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
 GIT_OK := $(shell ( [ -n '$(git tag --points-at `git rev-parse HEAD`)' ] && [ -z '$(git status -s)' ] ) && echo 1 || echo 0)
 SHARED_VOL := /appdata
@@ -7,6 +6,7 @@ TARGET_OS := linux
 OUTPUT_ROOT_DIR := .output
 BUILD_NAME := $(TARGET_OS)-$(GIT_VERSION)
 OUTPUT_DIR := $(OUTPUT_ROOT_DIR)/$(BUILD_NAME)
+STACK_ARGS := --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 
 GC_PROJ := apt-muse-269419
 
@@ -51,10 +51,10 @@ stack.yaml.lock:
 	$(STACK) freeze
 
 arche: install-deps stack.yaml.lock arche.cabal
-	$(STACK) install arche:exe:arche --flag arche:cli --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
+	$(STACK) install arche:exe:arche --flag arche:cli $(STACK_ARGS)
 
 arche-server-$(BUILD_NAME): install-deps stack.yaml.lock arche.cabal
-	$(STACK) install arche:exe:arche-server --flag arche:server --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
+	$(STACK) install arche:exe:arche-server --flag arche:server $(STACK_ARGS)
 
 install-deps: docker-image
 	$(STACK) build --no-terminal --install-ghc --only-dependencies --stack-root $(STACK_ROOT)
@@ -69,7 +69,7 @@ run-server: docker_server_image-$(BUILD_NAME)
 	docker container run -p 8888:8080 arche_server-$(BUILD_NAME):latest
 
 run-bench: install-deps stack.yaml.lock arche.cabal
-	$(STACK) bench arche:arche-bench --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
+	$(STACK) bench arche:arche-bench $(STACK_ARGS)
 
 deploy-server: docker_server_image-$(BUILD_NAME)
 	docker push gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME)

@@ -59,6 +59,7 @@ Executable arche-server
       -optl-pthread
   ghc-options:
     -O2
+    -threaded
     -funbox-strict-fields
     -rtsopts
     -Wall
