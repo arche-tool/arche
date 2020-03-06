@@ -135,11 +135,16 @@ Benchmark arche-bench
     -Wall
   hs-source-dirs: benchmark
   main-Is:        Main.hs
+  other-modules:
+    Benchmark.OR
+    Benchmark.ORFit
   build-depends:
       arche
     , base                       == 4.*
     , linear-vect                >= 0.2
     , sledge                     >= 0.4
+    , vtk                        >= 0.1
+    , bytestring                 >= 0.10
     , containers                 >= 0.5
     , random                     >= 1.0
     , criterion                  >= 1.0
