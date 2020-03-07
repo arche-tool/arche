@@ -15,6 +15,7 @@ import Control.Monad.IO.Class (liftIO)
 
 import Handler.ORFit
 import Arche.Strategy.ORFitAll (OREvaluation)
+import Util.OrphanInstances ()
 
 type UserId = Int
 
@@ -63,6 +64,6 @@ userServer = simpleServer
   (return [])
   (\userid -> if userid > 1
     then return $ Left (show userid)
-    else liftIO $ orFitHandler "FeNi.ang"
+    else liftIO $ Right <$> orFitHandler "arche-ang" "TestSample.ang"
   )
   (\_user -> return NoContent)

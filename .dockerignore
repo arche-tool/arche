@@ -1,5 +1,5 @@
 *
 !.output
-!.aws-keys
+!.credentials.json
 !linux.Dockerfile
 !wine.Dockerfile

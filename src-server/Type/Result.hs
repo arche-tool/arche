@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Api.Result
+module Type.Result
   ( MicroStructure(..)
   , VoxelInfo
   , packVoxBox

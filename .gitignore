@@ -6,5 +6,5 @@
 .stack-root/
 .stack-work/
 .vscode/
-.aws-keys
+.credentials.json
 profile/

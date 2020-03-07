@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y ca-certificates libgmp10 libc6
 USER root
 ARG BUILD_NAME
 WORKDIR /usr/src/app
-COPY .aws-keys /root/.aws-keys
+COPY .credentials.json /root/.config/gcloud/application_default_credentials.json
 COPY .output/${BUILD_NAME}/arche-server /usr/src/app/arche-server
 
 # Service must listen to $PORT environment variable.

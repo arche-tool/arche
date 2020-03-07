@@ -30,7 +30,7 @@ endif
 
 .PHONY: all clean
 
-all: stack.yaml.lock cli aws-lambda
+all: stack.yaml.lock cli
 
 clean-stack:
 	$(STACK) clean
@@ -42,11 +42,6 @@ clean:
 
 cli: arche
 	mv $(OUTPUT_DIR)/arche $(OUTPUT_DIR)/arche-$(GIT_VERSION)
-
-aws-lambda: arche-server-$(BUILD_NAME)
-	cp $(OUTPUT_DIR)/arche-server $(OUTPUT_DIR)/bootstrap
-	pushd $(OUTPUT_DIR) && zip function-$(GIT_VERSION).zip bootstrap && popd
-	rm -f $(OUTPUT_DIR)/bootstrap
 
 stack.yaml.lock: 
 	$(STACK) freeze
