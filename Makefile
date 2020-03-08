@@ -56,10 +56,10 @@ install-deps: docker-image
 	$(STACK) build --no-terminal --install-ghc --only-dependencies --stack-root $(STACK_ROOT)
 
 docker-image:
-	DOCKER_BUILDKIT=1 docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
+	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
 
 docker_server_image-$(BUILD_NAME): arche-server-$(BUILD_NAME)
-	DOCKER_BUILDKIT=1 docker build --build-arg BUILD_NAME=$(BUILD_NAME) -t gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME) -t arche_server-$(BUILD_NAME) -f server.Dockerfile .
+	docker build --build-arg BUILD_NAME=$(BUILD_NAME) -t gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME) -t arche_server-$(BUILD_NAME) -f server.Dockerfile .
 
 run-server: docker_server_image-$(BUILD_NAME)
 	docker container run -p 8888:8080 arche_server-$(BUILD_NAME):latest
