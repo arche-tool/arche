@@ -98,7 +98,7 @@ script:
         stack install --local-bin-path ".output/$BUILD-$TAG"
         ;;
       linux)
-        make
+        make cli
         ;;
       windows)
         stack install --local-bin-path ".output/$BUILD-$TAG"
