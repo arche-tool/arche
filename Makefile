@@ -17,11 +17,12 @@ endif
 ifdef local
 	STACK_ARGS := --local-bin-path $(OUTPUT_DIR)
 	STACK := stack
+	BUILD_STACK_IMAGE :=
 else
 	STACK_ROOT := $(SHARED_VOL)/.stack-root
 	STACK_ARGS := --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 	STACK := docker container run -v $(shell pwd):$(SHARED_VOL):Z arche_stack:latest
-	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
+	BUILD_STACK_IMAGE := arche_stack_image
 endif
 
 .PHONY: all clean
@@ -48,8 +49,11 @@ arche: install-deps stack.yaml.lock arche.cabal
 arche-server-$(BUILD_NAME): install-deps stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche-server --flag arche:server $(STACK_ARGS)
 
-install-deps:
+install-deps: $(BUILD_STACK_IMAGE) 
 	$(STACK) build --no-terminal --install-ghc --only-dependencies $(STACK_ARGS)
+
+arche_stack_image:
+	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
 
 docker_server_image-$(BUILD_NAME): arche-server-$(BUILD_NAME)
 	docker build --build-arg BUILD_NAME=$(BUILD_NAME) -t gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME) -t arche_server-$(BUILD_NAME) -f server.Dockerfile .

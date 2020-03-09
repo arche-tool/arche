@@ -95,13 +95,13 @@ script:
     set -ex
     case "$BUILD" in
       osx)
-        stack install --local-bin-path ".output/$BUILD-$TAG"
+        make local=1 cli
         ;;
       linux)
         make cli
         ;;
       windows)
-        stack install --local-bin-path ".output/$BUILD-$TAG"
+        make local=1 cli
         ;;
       docs)
         make -C docs
