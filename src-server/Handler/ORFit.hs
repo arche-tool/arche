@@ -1,9 +1,14 @@
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE KindSignatures      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE TypeOperators       #-}
 
-module Handler.ORFit where
+module Handler.ORFit
+  ( orFitAPI
+  , orFitHandler
+  ) where
 
 import Control.Lens                 ((&), (.~), (<&>), (?~))
 import Control.Monad                (void)
@@ -18,11 +23,23 @@ import System.IO                    (stdout)
 import qualified Data.Conduit.Binary    as Conduit
 import qualified Network.Google         as Google
 import qualified Network.Google.Storage as Storage
+import Servant
 
 import qualified Arche.Strategy.ORFitAll as OR
 import Arche.Strategy.ORFitAll  (OREvaluation)
 import Data.VTK                 (renderUniVTK)
 import Texture.Orientation      (Deg(..))
+
+import Type.API
+
+orFitAPI :: Server (SimpleAPI "users" User UserId)
+orFitAPI = 
+  (return []) :<|>
+  (\userid -> if userid > 1
+    then return $ Left (show userid)
+    else liftIO $ Right <$> orFitHandler "arche-ang" "TestSample.ang"
+  ) :<|>
+  (\_user -> return NoContent)
 
 orFitHandler :: Text -> Text -> IO (OREvaluation)
 orFitHandler bucket angHash = do
