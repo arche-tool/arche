@@ -58,7 +58,7 @@ data Cfg =
   { misoAngle    :: Deg
   , optByAvg     :: Bool
   , predefinedOR :: Maybe AxisPair
-  } deriving (Show)
+  } deriving (Generic, Show)
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
 run cfg@Cfg{..} ebsd_file base_output = do

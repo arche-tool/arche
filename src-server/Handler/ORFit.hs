@@ -32,27 +32,24 @@ import Texture.Orientation      (Deg(..))
 
 import Type.API
 
-orFitAPI :: Server (SimpleAPI "users" User UserId)
-orFitAPI = 
-  (return []) :<|>
-  (\userid -> if userid > 1
-    then return $ Left (show userid)
-    else liftIO $ Right <$> orFitHandler "arche-ang" "TestSample.ang"
-  ) :<|>
-  (\_user -> return NoContent)
+orFitAPI :: Server ORFitAPI
+orFitAPI = let
+  cfg = OR.Cfg  { OR.misoAngle    = Deg 5
+                , OR.optByAvg     = False
+                , OR.predefinedOR = Nothing
+                }
+  in   (return [])
+  :<|> (\angHash -> liftIO $ Right <$> orFitHandler cfg "arche-ang" angHash)
+  :<|> (\_user -> return NoContent)
 
-orFitHandler :: Text -> Text -> IO (OREvaluation)
-orFitHandler bucket angHash = do
+
+orFitHandler :: OR.Cfg -> Text -> HashANG -> IO (OREvaluation)
+orFitHandler cfg bucket (HashANG angHash) = do
   lgr  <- Google.newLogger Google.Info stdout
 
   env  <- Google.newEnv <&>
         (Google.envLogger .~ lgr)
       . (Google.envScopes .~ Storage.storageReadWriteScope)
-
-  let cfg = OR.Cfg { OR.misoAngle    = Deg 5
-                   , OR.optByAvg     = False
-                   , OR.predefinedOR = Nothing
-                   }
 
   runResourceT . Google.runGoogle env $ do
     stream <- Google.download (Storage.objectsGet bucket angHash)

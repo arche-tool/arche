@@ -10,33 +10,25 @@ import Data.Aeson
 import GHC.Generics
 import GHC.TypeLits
 import Servant
+import Data.Text (Text)
 
 import Arche.Strategy.ORFitAll (OREvaluation)
+import qualified Arche.Strategy.ORFitAll as OR
 
-type API = SimpleAPI "users" User UserId
+type API = ORFitAPI
 
--- Three endpoints:
---   - GET /<name>
---   - GET /<name>/<some 'i'>
---   - POST /<name>
-type SimpleAPI (name :: Symbol) a i = name :>
-  (                         Get '[JSON] [a]
-  :<|> Capture "id" i    :> Get '[JSON] (Either String OREvaluation)
-  :<|> ReqBody '[JSON] a :> Post '[JSON] NoContent
+type ORFitAPI = "orfit" :>
+  (                               Get  '[JSON] [Either String OREvaluation]
+  :<|> Capture "ang" HashANG   :> Get  '[JSON] (Either String OREvaluation)
+  :<|> ReqBody '[JSON] OR.Cfg  :> Post '[JSON] NoContent
   )
 
-type UserId = Int
+newtype HashANG = HashANG Text deriving (Show, Generic, Eq)
+instance FromJSON HashANG
+instance ToJSON   HashANG
+instance FromHttpApiData HashANG where
+    parseUrlPiece txt = Right $ HashANG txt
 
-data User = User { username :: String, age :: Int }
-  deriving Generic
-
-instance FromJSON User
-instance ToJSON   User
-
-type ProductId = Int
-
-data Product = Product { productname :: String }
-  deriving Generic
-
-instance FromJSON Product
-instance ToJSON   Product
+newtype StorageBucket = StorageBucket Text deriving (Show, Generic, Eq)
+instance FromJSON StorageBucket
+instance ToJSON   StorageBucket
