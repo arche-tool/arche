@@ -79,6 +79,7 @@ Executable arche-server
     , containers                 >= 0.5
     , fast-logger                >= 2.4
     , gogol                      >= 0.4
+    , gogol-firestore            >= 0.4
     , gogol-storage              >= 0.4
     , http-conduit               >= 2.0
     , http-media                 >= 0.8
@@ -93,8 +94,10 @@ Executable arche-server
     , warp                       >= 3.0
   other-modules:
     Handler.ORFit 
+    Handler.SubmitANG 
     Type.API
     Type.Result
+    Type.Store
     Util.OrphanInstances
 
 Library

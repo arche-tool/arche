@@ -5,6 +5,13 @@
 
 packages:
 - completed:
+    hackage: gogol-firestore-0.5.0@sha256:a0894069b5eb10f5c3b61b68348e79cfe567708100729a3d72d075918f2131b2,3830
+    pantry-tree:
+      size: 3948
+      sha256: cf30476c13dd795f8d0bb4b70e909a3b6313a46a5fdeb9cc7ced67029dd1eed0
+  original:
+    hackage: gogol-firestore-0.5.0@sha256:a0894069b5eb10f5c3b61b68348e79cfe567708100729a3d72d075918f2131b2,3830
+- completed:
     hackage: gogol-storage-0.5.0@sha256:ba90fd79b014316e0c6088b30f9757e2394bb8af4265615ca5ea284b930586f9,4815
     pantry-tree:
       size: 5847
