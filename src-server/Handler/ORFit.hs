@@ -31,6 +31,7 @@ import Data.VTK                 (renderUniVTK)
 import Texture.Orientation      (Deg(..))
 
 import Type.API
+import Type.Storage
 
 orFitAPI :: Server ORFitAPI
 orFitAPI = let

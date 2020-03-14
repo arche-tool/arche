@@ -21,10 +21,13 @@ import qualified Network.Google.FireStore as FireStore
 import qualified Network.Google.Storage   as Storage
 import qualified Data.ByteString.Lazy     as BSL
 
-import File.EBSD            (loadEBSD)
+import File.EBSD (loadEBSD, EBSDdata(ANG, CTF))
 
 import Type.API
+import Type.Storage
 import Type.Store
+
+import Util.Hash (calculateHashEBSD)
 
 submitAngHandler :: BSL.ByteString -> IO (User)
 submitAngHandler bs = do
@@ -35,15 +38,15 @@ submitAngHandler bs = do
       . (Google.envScopes .~ FireStore.cloudPlatformScope)
 
   hash <- runResourceT . Google.runGoogle env $ do
-    case loadEBSD bs of
-      Right ctf  -> do
-        let ctfHash = HashEBSD "dddd" 
-        saveEBSD ctfBucket ctfHash bs
-        return ctfHash
-      Left ang -> do
-        let angHash = HashEBSD "dddd" 
-        saveEBSD angBucket angHash bs
-        return angHash
+    let
+      ebsd = either error id (loadEBSD bs)
+      ebsdHash = calculateHashEBSD ebsd 
+    case ebsd of
+      CTF _ -> do
+        saveEBSD ctfBucket ebsdHash bs
+      ANG _ -> do
+        saveEBSD angBucket ebsdHash bs
+    return ebsdHash
 
   runResourceT . Google.runGoogle env $ do
     let path = "projects/apt-muse-269419/databases/(default)/documents/users/j01nabZkuzXv149VIrY8"
