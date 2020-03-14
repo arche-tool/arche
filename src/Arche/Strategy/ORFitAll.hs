@@ -71,10 +71,14 @@ processEBSD :: Cfg -> BSL.ByteString -> IO (OREvaluation, VTK Vec3D)
 processEBSD cfg@Cfg{..} bs = do
   gen <- initTFGen
   let
-    ebsd             = loadEBSD bs
-    getGoods         = U.filter ((5 >) . evalMisoORWithKS)
-    vbq              = readEBSDToVoxBox (C.rotation &&& C.phase) (A.rotation &&& A.phaseNum) ebsd
+    vbq = either error id $ do
+      ebsd <- loadEBSD bs
+      readEBSDToVoxBox
+        (C.rotation &&& C.phase)
+        (A.rotation &&& A.phaseNum)
+        ebsd
     (gidBox, voxMap) = maybe (error "No grain detected!") id (getGrainID' misoAngle Cubic vbq)
+    getGoods         = U.filter ((5 >) . evalMisoORWithKS)
     mkr              = fst $ getMicroVoxel (gidBox, voxMap)
     qmap             = getGrainAverageQ vbq voxMap
     segs

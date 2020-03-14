@@ -3,6 +3,7 @@
 
 module Arche.Strategy.Graph
        ( run
+       , processEBSD
        , Cfg(..)
        ) where
 
@@ -49,11 +50,11 @@ run cfg ebsd_file base_output = do
       writeUniVTKfile (base_output ++ "_vertex.vtu") True $ renderMicroVertexVTK gids micro
 
 processEBSD :: Cfg -> BSL.ByteString -> Either String (VoxBox GrainID, MicroVoxel, [VTKAttrPoint a])
-processEBSD Cfg{..} bs = let
-  ebsd = loadEBSD bs
-  vbp = readEBSDToVoxBox C.phase    A.phaseNum ebsd
-  vbq = readEBSDToVoxBox C.rotation A.rotation ebsd
-  in case getGrainID misoAngle Cubic (vbq) of
+processEBSD Cfg{..} bs = do
+  ebsd <- loadEBSD bs
+  vbp <- readEBSDToVoxBox C.phase    A.phaseNum ebsd
+  vbq <- readEBSDToVoxBox C.rotation A.rotation ebsd
+  case getGrainID misoAngle Cubic (vbq) of
     Nothing -> Left "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg

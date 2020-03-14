@@ -2,7 +2,7 @@
 module Type.Store where
 
 import qualified Network.Google.FireStore as FireStore
-import Control.Lens                 ((&), (.~), (^.), (^?), (<&>), (?~), (^?!), ix, preview, _Just)
+import Control.Lens                 ((^.), (^?), ix)
 import Data.Text                    (Text)
 
 class ToDocument a where

@@ -102,7 +102,7 @@ data GomesConfig
   { inputCfg        :: Cfg
   , realOR          :: OR
   , realORs         :: Vector OR
-  , inputEBSD       :: Either ANGdata CTFdata
+  , inputEBSD       :: EBSDdata
   , orientationBox  :: VoxBox (Quaternion, Int)
   , grainIDBox      :: VoxBox GrainID
   , structureGraph  :: MicroVoxel
@@ -146,29 +146,31 @@ logParentStats parents = let
 
 -- =======================================================================================
 
-getGomesConfig :: Cfg -> OR -> Either ANGdata CTFdata -> LoggerSet -> Maybe GomesConfig
-getGomesConfig cfg ror ebsd logger = let
-  noIsleGrains = excluedeFloatingGrains cfg
-  qpBox = readEBSDToVoxBox
+getGomesConfig :: Cfg -> OR -> Either String EBSDdata -> LoggerSet -> Either String GomesConfig
+getGomesConfig cfg ror maybeEBSD logger = do
+  ebsd  <- maybeEBSD 
+  qpBox <- readEBSDToVoxBox
           (C.rotation &&& C.phase)
           (A.rotation &&& A.phaseNum)
           ebsd
-  func (gidBox, voxMap) = let
-    micro = fst $ getMicroVoxel (gidBox, voxMap)
-    in GomesConfig
-     { inputCfg       = cfg
-     , realOR         = ror
-     , realORs        = genTS ror
-     , inputEBSD      = ebsd
-     , orientationBox = qpBox
-     , grainIDBox     = gidBox
-     , productGrains  = getProductGrainData qpBox voxMap
-     , structureGraph = micro
-     , productGraph   = graphWeight noIsleGrains qpBox micro ror
-     , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
-     , stdoutLogger   = logger
-     }
-  in fmap func (getGrainID' (misoAngle cfg) Cubic qpBox)
+  let 
+    noIsleGrains = excluedeFloatingGrains cfg
+    func (gidBox, voxMap) = let
+      micro = fst $ getMicroVoxel (gidBox, voxMap)
+      in GomesConfig
+        { inputCfg       = cfg
+        , realOR         = ror
+        , realORs        = genTS ror
+        , inputEBSD      = ebsd
+        , orientationBox = qpBox
+        , grainIDBox     = gidBox
+        , productGrains  = getProductGrainData qpBox voxMap
+        , structureGraph = micro
+        , productGraph   = graphWeight noIsleGrains qpBox micro ror
+        , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
+        , stdoutLogger   = logger
+        }
+  maybe (Left "No grain detected!") (Right . func) (getGrainID' (misoAngle cfg) Cubic qpBox)
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
@@ -275,7 +277,7 @@ processEBSD cfg@Cfg{..} bs action = do
         clusteringRefinement
         logParentStatsState
         action
-  gomescfg <- maybe (error "No grain detected!") return (getGomesConfig cfg ror ebsd logger)
+  gomescfg <- either error return (getGomesConfig cfg ror ebsd logger)
   putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
   (_, final, _) <- runRWST doit gomescfg (getInitState gomescfg)
   return final
@@ -556,7 +558,9 @@ genParentEBSD = do
   pp <- asks (parentPhaseID . inputCfg)
   qs <- U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
   ebsd <- asks inputEBSD
-  return $ either (Left . genParentANG qs pp) (Right . genParentCTF qs pp) ebsd
+  return $ case ebsd of
+    ANG ang -> Left  . genParentANG qs pp $ ang
+    CTF ctf -> Right . genParentCTF qs pp $ ctf
   where
     genParentANG :: V.Vector Quaternion -> Maybe PhaseID -> ANGdata -> ANGdata
     genParentANG qs parentPhase ang = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}

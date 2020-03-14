@@ -43,8 +43,8 @@ orFitAPI = let
   :<|> (\_user -> return NoContent)
 
 
-orFitHandler :: OR.Cfg -> Text -> HashANG -> IO (OREvaluation)
-orFitHandler cfg bucket (HashANG angHash) = do
+orFitHandler :: OR.Cfg -> Text -> HashEBSD -> IO (OREvaluation)
+orFitHandler cfg bucket (HashEBSD angHash) = do
   lgr  <- Google.newLogger Google.Info stdout
 
   env  <- Google.newEnv <&>
