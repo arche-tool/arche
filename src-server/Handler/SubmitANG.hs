@@ -28,33 +28,45 @@ import Type.Storage
 import Type.Store
 
 import Util.Hash (calculateHashEBSD)
+import Util.FireStore (toDoc)
 
-submitAngHandler :: BSL.ByteString -> IO (User)
-submitAngHandler bs = do
+submitAngHandler :: User -> BSL.ByteString -> IO ()
+submitAngHandler user bs = do
   lgr  <- Google.newLogger Google.Info stdout
 
   env  <- Google.newEnv <&>
         (Google.envLogger .~ lgr)
       . (Google.envScopes .~ FireStore.cloudPlatformScope)
 
-  hash <- runResourceT . Google.runGoogle env $ do
+  runResourceT . Google.runGoogle env $ do
     let
       ebsd = either error id (loadEBSD bs)
       ebsdHash = calculateHashEBSD ebsd 
     case ebsd of
       CTF _ -> do
-        saveEBSD ctfBucket ebsdHash bs
+        saveEBSD ebsdBucket ebsdHash bs
       ANG _ -> do
-        saveEBSD angBucket ebsdHash bs
-    return ebsdHash
+        saveEBSD ebsdBucket ebsdHash bs
+    writeHashEBSD user ebsdHash 
 
-  runResourceT . Google.runGoogle env $ do
-    let path = "projects/apt-muse-269419/databases/(default)/documents/users/j01nabZkuzXv149VIrY8"
-    doc :: FireStore.Document <- Google.send (FireStore.projectsDatabasesDocumentsGet path)
-    either error return (fromDoc doc)
+type GCP = '["https://www.googleapis.com/auth/cloud-platform"]
 
-saveEBSD :: StorageBucket -> HashEBSD -> BSL.ByteString
-        -> Google.Google '["https://www.googleapis.com/auth/cloud-platform"] ()
+writeUser :: User -> Google.Google GCP ()
+writeUser user = do
+    let path = "projects/apt-muse-269419/databases/(default)/documents/users/" <> email user
+    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc user) path)
+
+writeHashEBSD :: User -> HashEBSD -> Google.Google GCP ()
+writeHashEBSD user (HashEBSD hash)  = do
+    let path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hash
+    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc user) path)
+
+writeNewUser :: User -> Google.Google GCP ()
+writeNewUser user = do
+    let path = "projects/apt-muse-269419/databases/(default)/documents"
+    void $ Google.send (FireStore.projectsDatabasesDocumentsCreateDocument path "users" (toDoc user))
+
+saveEBSD :: StorageBucket -> HashEBSD -> BSL.ByteString -> Google.Google GCP ()
 saveEBSD bucket (HashEBSD angHash) bs = let
     body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS bs)
     vox_key = angHash

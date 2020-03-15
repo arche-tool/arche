@@ -11,8 +11,7 @@ module Type.Storage
     , facesBucket
     , edgesBucket
     , vertexBucket
-    , angBucket
-    , ctfBucket
+    , ebsdBucket
     ) where
 
 import GHC.Generics
@@ -34,8 +33,5 @@ edgesBucket  = StorageBucket "edges"
 vertexBucket :: StorageBucket
 vertexBucket = StorageBucket "vertex"
 
-angBucket :: StorageBucket
-angBucket = StorageBucket "ang"
-
-ctfBucket :: StorageBucket
-ctfBucket = StorageBucket "ctf"
+ebsdBucket :: StorageBucket
+ebsdBucket = StorageBucket "ebsd"

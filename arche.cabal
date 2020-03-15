@@ -100,6 +100,7 @@ Executable arche-server
     Type.Result
     Type.Storage
     Type.Store
+    Util.FireStore
     Util.OrphanInstances
     Util.Hash
 
