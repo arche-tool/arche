@@ -1,19 +1,15 @@
-module GammaViewer exposing (main)
+module Main exposing (main)
 
 import Browser
-import Browser.Events exposing (onAnimationFrameDelta, onMouseDown, onMouseMove, onMouseUp, onResize)
-import Dict exposing (Dict)
-import Html exposing (Html, div, text)
+import Browser.Events exposing (onMouseDown, onMouseMove, onMouseUp, onResize)
+import Html exposing (Html, div, text, img)
 import Html.Attributes as Attr
-import Html.Events exposing (on, onCheck, onInput)
+import Html.Events exposing (on, onInput)
 import Json.Decode as JD exposing (int)
-import Math.Matrix4 as M4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
-import Math.Vector3 exposing (Vec3, vec3)
-import String exposing (fromInt)
-import Task
+import Math.Vector3 exposing (vec3)
+import Math.Matrix4 as M4
 import WebGL as GL
-import Debug exposing (log, toString)
 
 import Draw.Types exposing (Mesh, CameraInfo)
 import Draw.Assembler exposing (renderMesh)
@@ -112,14 +108,14 @@ getCamera { mouseDelta, zoom, windowSize } =
 view : Model -> Html.Html Msg
 view model =
     div []
-        [ selectModel model
+        [ img [ Attr.src "/arche_logo.svg" ] []
+        , selectModel model
         , case model.mesh of
             Ok msh ->
                 GL.toHtmlWith [ GL.antialias, GL.depth 1 ]
                     [ onZoom
                     , Attr.width model.windowSize.width
                     , Attr.height model.windowSize.height
-                    , Attr.style "position" "absolute"
                     ]
                     [renderModel model msh]
 
