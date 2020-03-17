@@ -25,17 +25,6 @@ loadMesh url msg =
         mesh = compile testMicro (Dict.fromList [(0, vec4 1.0 0.0 0.0 1.0), (1, vec4 0.0 1.0 0.0 1.0)])
     in  msg (Result.fromMaybe "testError" (Just mesh))
 
-loadObjFileWith : String -> (Result String String -> msg) -> Cmd msg
-loadObjFileWith url msg =
-    Http.toTask (Http.getString url)
-        |> Task.andThen (\s -> Task.succeed (Ok s))
-        |> Task.onError (\e -> Task.succeed (Err <| httpErrorFor e))
-        |> Task.attempt (\r -> case r of
-            Ok (Ok m)  -> msg (Ok m)
-            Ok (Err e) -> msg (Err e)
-            Err e      -> msg (Err e)
-        )
-
 httpErrorFor : Http.Error -> String
 httpErrorFor e =
     case e of
@@ -51,5 +40,5 @@ httpErrorFor e =
         Http.BadStatus response ->
             "Failed"
 
-        Http.BadPayload string response ->
-            fromInt response.status.code ++ ": invalid request in " ++ response.body
+        Http.BadBody err ->
+            "Invalid request in " ++ err

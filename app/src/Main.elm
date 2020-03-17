@@ -1,163 +1,132 @@
 module Main exposing (main)
 
 import Browser
-import Browser.Events exposing (onMouseDown, onMouseMove, onMouseUp, onResize)
-import Html exposing (Html, div, text, img)
-import Html.Attributes as Attr
-import Html.Events exposing (on, onInput)
-import Json.Decode as JD exposing (int)
-import Math.Vector2 as Vec2 exposing (Vec2, vec2)
-import Math.Vector3 exposing (vec3)
-import Math.Matrix4 as M4
-import WebGL as GL
+import Browser.Navigation as Nav
+import Html exposing (..)
+import Html.Attributes exposing (..)
+import Platform.Cmd as Cmd
+import Url
+import Url.Parser as Url
 
-import Draw.Types exposing (Mesh, CameraInfo)
-import Draw.Assembler exposing (renderMesh)
-import Draw.Loader exposing (loadMesh)
+import Page.Upload as Upload
+import Page.Draw as Viewer
 
+-- =========== MAIN ===========
 main : Program () Model Msg
 main =
-    Browser.element
-        { init = always ( initModel, initCmd )
-        , view = view
-        , subscriptions = subscriptions
-        , update = update
-        }
+  Browser.application
+    { init = init
+    , view = view
+    , update = update
+    , subscriptions = subscriptions
+    , onUrlChange = UrlChanged
+    , onUrlRequest = LinkClicked
+    }
 
--- ================================== Model ===================================
+-- =========== MODEL ===========
 type alias Model =
-    { mesh : Result String Mesh
-    , currentModel : String
-    , zoom : Float
-    , isDown : Bool
-    , lastMousePos : Vec2
-    , mouseDelta : Vec2
-    , windowSize : Size
-    }
+  { key  : Nav.Key
+  , url  : Url.Url
+  , page : Maybe Page
+  , uploadModel : Upload.Model
+  , viewerModel : Viewer.Model
+  }
 
 
-initModel : Model
-initModel =
-    { mesh = loadMesh "testMesh" (\x -> x)
-    , currentModel = "testMesh"
-    , zoom = 5
-    , isDown = False
-    , lastMousePos = vec2 0 0
-    , mouseDelta = vec2 0 (pi / 2)
-    , windowSize = Size 800 600
-    }
+type Page
+    = HomePage 
+    | UploadPage
+    | ViewerPage
 
-initCmd : Cmd Msg
-initCmd = Cmd.batch []
 
--- ================================== Update ===================================
-type alias Size = { width : Int, height : Int }
+init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init flags url key =
+  let
+    (upModel, _) = Upload.init flags 
+    model = Model key url (parseUrl url) upModel Viewer.init
+  in ( model, Cmd.none )
 
+-- =========== UPDATE ===========
 type Msg
-    = LoadMesh String (Result String Mesh)
-    | Zoom Float
-    | MouseMove Int Int
-    | MouseDown Int Int
-    | MouseUp
-    | ResizeWindow Int Int
-    | SelectMesh String
+  = LinkClicked Browser.UrlRequest
+  | UrlChanged Url.Url
+  | Upload Upload.Msg
+  | Viewer Viewer.Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        Zoom dy ->
-            ( { model | zoom = max 0.01 (model.zoom + dy / 100) }, Cmd.none )
+  case msg of
+    LinkClicked urlRequest ->
+      case urlRequest of
+        Browser.Internal url ->
+          ( model, Nav.pushUrl model.key (Url.toString url) )
 
-        SelectMesh url ->
-            ( model, Cmd.none )
+        Browser.External href ->
+          ( model, Nav.load href )
 
-        LoadMesh url mesh ->
-            ( model , Cmd.none )
+    UrlChanged url ->
+      ( { model | url = url, page = parseUrl url }
+      , Cmd.none
+      )
 
-        MouseDown x y ->
-            ( { model | isDown = True, lastMousePos = vec2 (toFloat x) (toFloat y) }, Cmd.none )
-
-        MouseUp ->
-            ( { model | isDown = False }, Cmd.none )
-
-        MouseMove x y ->
-            let pos = vec2 (toFloat x) (toFloat y)
-            in ( { model | mouseDelta = getDelta pos model.lastMousePos model.mouseDelta, lastMousePos = pos }, Cmd.none )
-
-        ResizeWindow x y ->
-            ( { model | windowSize = { width = x, height = y } }, Cmd.none )
+    Upload upmsg ->
+      let
+        (newModel, newCmd) = Upload.update upmsg model.uploadModel
+      in ( {model | uploadModel = newModel }, Cmd.map Upload newCmd )
+    Viewer vimsg ->
+      let
+        (newModel, newCmd) = Viewer.update vimsg model.viewerModel
+      in ( {model | viewerModel = newModel }, Cmd.map Viewer newCmd )
 
 
--- ================================== Viewer ===================================
-renderModel : Model -> Mesh -> GL.Entity
-renderModel model mesh =
-    let camera = getCamera model
-    in renderMesh camera mesh
+parseUrl : Url.Url -> Maybe Page
+parseUrl = Url.parse route
 
-getCamera : Model -> CameraInfo
-getCamera { mouseDelta, zoom, windowSize } =
-    let
-        ( mx, my ) = ( Vec2.getX mouseDelta, Vec2.getY mouseDelta )
-        aspect   = toFloat windowSize.width / toFloat windowSize.height
-        proj     = M4.makePerspective 45 aspect 0.01 10000
-        position = vec3 (zoom * sin -mx * sin my) (-zoom * cos my + 1) (zoom * cos -mx * sin my)
-        view_    = M4.makeLookAt position (vec3 0 1 0) (vec3 0 1 0)
-    in
-    { projection = proj, view = view_, viewProjection = M4.mul proj view_, position = position }
-
-view : Model -> Html.Html Msg
-view model =
-    div []
-        [ img [ Attr.src "/arche_logo.svg" ] []
-        , selectModel model
-        , case model.mesh of
-            Ok msh ->
-                GL.toHtmlWith [ GL.antialias, GL.depth 1 ]
-                    [ onZoom
-                    , Attr.width model.windowSize.width
-                    , Attr.height model.windowSize.height
-                    ]
-                    [renderModel model msh]
-
-            Err m ->
-                Html.div [] [ Html.text <| "ERROR with mesh: " ++ m ]
-
+route : Url.Parser (Page -> a) a
+route =
+    Url.oneOf
+        [ Url.map HomePage Url.top
+        , Url.map UploadPage (Url.s "upload")
+        , Url.map ViewerPage (Url.s "reconstructions")
         ]
 
-selectModel : Model -> Html Msg
-selectModel model =
-    div [ Attr.style "position" "absolute", Attr.style "z-index" "2", Attr.style "backgroundColor" "white" ]
-        ([ Html.select [ onInput SelectMesh, Attr.value model.currentModel ]
-            (List.map (\t -> Html.option [ Attr.value t ] [ text t ]) [])
-         ]
-        )
-
--- ================================== Subscriptions ===================================
+-- =========== SUBSCRIPTIONS ===========
 subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.batch
-        ((if model.isDown then
-            [ onMouseMove (decodeMouse MouseMove) ]
+subscriptions model = case model.page of
+   Just ViewerPage -> Sub.map Viewer (Viewer.subscriptions model.viewerModel)
+   Just UploadPage -> Sub.map Upload (Upload.subscriptions model.uploadModel)
+   _ -> Sub.none
 
-          else
-            []
-         )
-            ++ [ onMouseUp (JD.succeed MouseUp)
-               , onMouseDown (decodeMouse MouseDown)
-               , onResize ResizeWindow
-               ]
-        )
+-- =========== VIEW ===========
+view : Model -> Browser.Document Msg
+view model =
+  let
+    fixed = 
+      [ sidebar
+      ]
+    page = case model.page of
+      Just HomePage -> [text "home"]
+      Just UploadPage -> [Html.map Upload (Upload.view model.uploadModel)]
+      Just ViewerPage -> [Html.map Viewer (Viewer.view model.viewerModel)]
+      _ -> [text "???"]
+  in
+  { title = "Arche"
+  , body = fixed ++ page
+  }
 
--- ================================== Utils ===================================
-decodeMouse : (Int -> Int -> Msg) -> JD.Decoder Msg
-decodeMouse mapper = JD.map2 mapper
-    (JD.field "clientX" int)
-    (JD.field "clientY" int)
+sidebar : Html a
+sidebar = nav [id "sidebar"]
+  [ div []
+    [ img [ src "/arche_logo.svg" ] [] ]
 
-onZoom : Html.Attribute Msg
-onZoom = on "wheel" (JD.map Zoom (JD.field "deltaY" JD.float))
+  , ul []
+    [ viewLink "home" "/"
+    , viewLink "Submit new EBSD file" "/upload"
+    , viewLink "My reconstructions" "/reconstructions"
+    ]
+  ]
 
-getDelta : Vec2 -> Vec2 -> Vec2 -> Vec2
-getDelta curr lastP delta = vec2
-    ((Vec2.getX curr - Vec2.getX lastP) / 100 + Vec2.getX delta)
-    ((Vec2.getY curr - Vec2.getY lastP) / 100 + Vec2.getY delta |> clamp 0.01 pi)
+
+viewLink : String -> String -> Html msg
+viewLink name path =
+  li [] [ a [ href path ] [ text name ] ]
