@@ -88,6 +88,7 @@ Executable arche-server
     , random                     >= 1.0
     , resourcet                  >= 1.2
     , servant-server             >= 0.10
+    , servant-multipart          >= 0.11
     , text                       >= 1.0
     , unordered-containers       >= 0.2
     , uuid                       >= 1.0

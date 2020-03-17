@@ -6,15 +6,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Handler.SubmitANG
-  ( submitAngHandler 
+  ( uploadEbsdAPI
   ) where
 
 import Control.Lens                 ((&), (.~), (<&>), (?~))
-import Control.Monad                (void)
+import Control.Monad                (void, forM_)
+import Control.Monad.IO.Class       (liftIO)
 import Control.Monad.Trans.Resource (runResourceT)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
 import System.IO                    (stdout)
+import Servant
+import Servant.Multipart (MultipartData, Mem, files, fdPayload, inputs)
 
 import qualified Network.Google           as Google
 import qualified Network.Google.FireStore as FireStore
@@ -29,6 +32,16 @@ import Type.Store
 
 import Util.Hash (calculateHashEBSD)
 import Util.FireStore (toDoc)
+
+uploadEbsdAPI :: Server UploadEbsdAPI
+uploadEbsdAPI = let
+  user = User "ze@gmail.com" (Just "zeze")
+  in \upload -> do
+    liftIO . putStrLn . show $ (inputs upload)
+    forM_ (files upload) $ \file -> do
+      let content = fdPayload file
+      (liftIO $ submitAngHandler user content)
+    return NoContent
 
 submitAngHandler :: User -> BSL.ByteString -> IO ()
 submitAngHandler user bs = do

@@ -5,11 +5,15 @@ import Network.Wai.Handler.Warp
 import Servant
 
 import Handler.ORFit
-import Type.API (API)
+import Handler.SubmitANG
+import Type.API
 import Util.OrphanInstances ()
 
-api :: Proxy API
+api :: Proxy FullAPI
 api = Proxy
 
+wwwServer :: Server Raw
+wwwServer = serveDirectoryWebApp "../app/build"
+
 main :: IO ()
-main = run 8080 . serve api $ orFitAPI
+main = run 8080 . serve api $ (orFitAPI :<|> uploadEbsdAPI) :<|> wwwServer
