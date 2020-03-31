@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeOperators     #-}
 
 module Main where
 
@@ -8,12 +9,19 @@ import Handler.ORFit
 import Handler.SubmitANG
 import Type.API
 import Util.OrphanInstances ()
+import Web.App
 
-api :: Proxy FullAPI
-api = Proxy
 
-wwwServer :: Server Raw
-wwwServer = serveDirectoryWebApp "../app/build"
+type ArcheWeb = API :<|> App
+
+archeWeb :: Proxy ArcheWeb
+archeWeb = Proxy
+
+app :: Server App
+app = appServer "/data/Edgar/arche/app/build"
+
+api :: Server API
+api = orFitAPI :<|> uploadEbsdAPI
 
 main :: IO ()
-main = run 8080 . serve api $ (orFitAPI :<|> uploadEbsdAPI) :<|> wwwServer
+main = run 8080 . serve archeWeb $ api :<|> app

@@ -5,7 +5,6 @@
 
 module Type.API
     ( API
-    , FullAPI
     , ORFitAPI
     , UploadEbsdAPI
     ) where
@@ -19,8 +18,6 @@ import Arche.Strategy.ORFitAll (OREvaluation)
 import qualified Arche.Strategy.ORFitAll as OR
 
 import Type.Storage (HashEBSD)
-
-type FullAPI = API :<|> Raw
 
 type API = "api" :>
   (    ORFitAPI
