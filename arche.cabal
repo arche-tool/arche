@@ -107,6 +107,7 @@ Executable arche-server
     Util.OrphanInstances
     Util.Hash
     Web.App
+    Web.Config
 
 Library
   hs-source-dirs:    src

@@ -12,7 +12,7 @@ import Page.Upload as Upload
 import Page.Draw as Viewer
 
 -- =========== MAIN ===========
-main : Program () Model Msg
+main : Program Flags Model Msg
 main =
   Browser.application
     { init = init
@@ -24,10 +24,15 @@ main =
     }
 
 -- =========== MODEL ===========
+type alias Flags =
+  { logo : String
+  }
+
 type alias Model =
   { key  : Nav.Key
   , url  : Url.Url
   , page : Maybe Page
+  , flags : Flags
   , uploadModel : Upload.Model
   , viewerModel : Viewer.Model
   }
@@ -39,11 +44,11 @@ type Page
     | ViewerPage
 
 
-init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
   let
-    (upModel, _) = Upload.init flags 
-    model = Model key url (parseUrl url) upModel Viewer.init
+    (upModel, _) = Upload.init ()
+    model = Model key url (parseUrl url) flags upModel Viewer.init
   in ( model, Cmd.none )
 
 -- =========== UPDATE ===========
@@ -102,7 +107,7 @@ view : Model -> Browser.Document Msg
 view model =
   let
     fixed = 
-      [ sidebar
+      [ sidebar model
       ]
     page = case model.page of
       Just HomePage -> [text "home"]
@@ -114,10 +119,10 @@ view model =
   , body = fixed ++ page
   }
 
-sidebar : Html a
-sidebar = nav [id "sidebar"]
+sidebar : Model -> Html a
+sidebar model = nav [id "sidebar"]
   [ div []
-    [ img [ src "/arche_logo.svg" ] [] ]
+    [ img [ src model.flags.logo ] [] ]
 
   , ul []
     [ viewLink "home" "/"
