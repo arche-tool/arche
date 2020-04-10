@@ -17,7 +17,7 @@ import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
 import System.IO                    (stdout)
 import Servant
-import Servant.Multipart (MultipartData, Mem, files, fdPayload, inputs)
+import Servant.Multipart            (files, fdPayload, inputs)
 
 import qualified Network.Google           as Google
 import qualified Network.Google.FireStore as FireStore
@@ -72,8 +72,28 @@ writeHashEBSD user (HashEBSD hash)  = do
 
 writePermissionEBSD :: User -> HashEBSD -> Google.Google GCP ()
 writePermissionEBSD user (HashEBSD hash)  = do
-    let path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hash <> "/permisson/" <> email user
-    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc user) path)
+    let
+      db = "projects/apt-muse-269419/databases/(default)"
+      path = db <> "/documents/ebsd/" <> hash
+    
+      fieldTxn :: FireStore.FieldTransform 
+      fieldTxn = FireStore.fieldTransform &
+          FireStore.ftFieldPath ?~ "permission" &
+          FireStore.ftAppendMissingElements ?~ (FireStore.arrayValue & FireStore.avValues .~ [val])
+        where val = FireStore.value & FireStore.vStringValue ?~ (email user) 
+      
+      docTxn :: FireStore.DocumentTransform
+      docTxn = FireStore.documentTransform &
+          FireStore.dtFieldTransforms .~ [fieldTxn] &
+          FireStore.dtDocument ?~ path
+    
+      write :: FireStore.Write
+      write = FireStore.write & FireStore.wTransform ?~ docTxn
+    
+      commitReq :: FireStore.CommitRequest
+      commitReq = FireStore.commitRequest & FireStore.crWrites .~ [write]
+
+    void $ Google.send (FireStore.projectsDatabasesDocumentsCommit db commitReq)
 
 saveEBSD :: StorageBucket -> HashEBSD -> BSL.ByteString -> Google.Google GCP ()
 saveEBSD bucket (HashEBSD angHash) bs = let
