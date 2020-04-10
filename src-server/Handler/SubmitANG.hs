@@ -82,9 +82,14 @@ writePermissionEBSD user (HashEBSD hash)  = do
           FireStore.ftAppendMissingElements ?~ (FireStore.arrayValue & FireStore.avValues .~ [val])
         where val = FireStore.value & FireStore.vStringValue ?~ (email user) 
       
+      markLastUpdate :: FireStore.FieldTransform 
+      markLastUpdate = FireStore.fieldTransform &
+          FireStore.ftFieldPath ?~ "lastUpdate" &
+          FireStore.ftSetToServerValue ?~ FireStore.RequestTime
+
       docTxn :: FireStore.DocumentTransform
       docTxn = FireStore.documentTransform &
-          FireStore.dtFieldTransforms .~ [fieldTxn] &
+          FireStore.dtFieldTransforms .~ [fieldTxn, markLastUpdate] &
           FireStore.dtDocument ?~ path
     
       write :: FireStore.Write
