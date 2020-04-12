@@ -40,7 +40,7 @@ getEBSDsAPI = let
     liftIO $ listUserEBSDs user
     return NoContent
 
-listUserEBSDs :: User -> IO (Maybe User)
+listUserEBSDs :: User -> IO [User]
 listUserEBSDs user = do
   lgr  <- Google.newLogger Google.Info stdout
 
@@ -53,7 +53,7 @@ listUserEBSDs user = do
 
 type GCP = '["https://www.googleapis.com/auth/cloud-platform"]
 
-findReadableEBSDs :: (FromDocument a) => User -> Google.Google GCP (Maybe a)
+findReadableEBSDs :: (FromDocument a) => User -> Google.Google GCP [a]
 findReadableEBSDs user = do
   let
     db = "projects/apt-muse-269419/databases/(default)/documents"
@@ -84,4 +84,4 @@ findReadableEBSDs user = do
     commitReq = FireStore.runQueryRequest & FireStore.rqrStructuredQuery ?~ query
 
   resp <- Google.send (FireStore.projectsDatabasesDocumentsRunQuery db commitReq)
-  return . fmap (either error id . fromDoc) . view FireStore.rDocument $ resp
+  return . mapMaybe (fmap (either error id . fromDoc) . view FireStore.rDocument) $ resp
