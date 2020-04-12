@@ -97,6 +97,7 @@ Executable arche-server
     , vector                     >= 0.12
     , warp                       >= 3.0
   other-modules:
+    Handler.GetEBSD 
     Handler.ORFit 
     Handler.SubmitANG 
     Type.API

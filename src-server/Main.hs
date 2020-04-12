@@ -6,6 +6,7 @@ module Main where
 import Network.Wai.Handler.Warp
 import Servant
 
+import Handler.GetEBSD
 import Handler.ORFit
 import Handler.SubmitANG
 import System.Environment
