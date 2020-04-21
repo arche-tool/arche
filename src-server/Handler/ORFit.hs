@@ -6,8 +6,7 @@
 {-# LANGUAGE TypeOperators       #-}
 
 module Handler.ORFit
-  ( orFitAPI
-  , orFitHandler
+  ( orApi
   ) where
 
 import Control.Lens                 ((&), (.~), (<&>), (?~))
@@ -32,16 +31,19 @@ import Texture.Orientation      (Deg(..))
 
 import Type.API
 import Type.Storage
+import Type.Store
 
-orFitAPI :: Server ORFitAPI
-orFitAPI = let
-  cfg = OR.Cfg  { OR.misoAngle    = Deg 5
-                , OR.optByAvg     = False
-                , OR.predefinedOR = Nothing
-                }
-  in   (return [])
-  :<|> (\angHash -> liftIO $ Right <$> orFitHandler cfg "arche-ang" angHash)
-  :<|> (\_user -> return NoContent)
+--type ORAPI = "ebsd" :> Capture "hash" HashEBSD :> "orfit" :>
+--  (                              Get  '[JSON] [OR]
+--  :<|> Capture "hash" HashOR  :> Get  '[JSON] OR
+--  :<|> ReqBody '[JSON] OR.Cfg :> Post '[JSON] NoContent
+--  )
+
+orApi :: User -> Server ORAPI
+orApi _ = \hashEBSD ->
+       (return [])
+  :<|> (\_ -> return undefined)
+  :<|> (\cfg -> liftIO $ Right <$> orFitHandler cfg "arche-ang" hashEBSD >> return NoContent)
 
 
 orFitHandler :: OR.Cfg -> Text -> HashEBSD -> IO (OREvaluation)

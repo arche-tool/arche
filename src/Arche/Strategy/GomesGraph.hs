@@ -1,5 +1,6 @@
 {-# LANGUAGE
     DataKinds
+  , DeriveGeneric
   , FlexibleInstances
   , RecordWildCards
   , OverloadedStrings
@@ -21,6 +22,7 @@ import Data.Maybe            (mapMaybe, fromMaybe)
 import Data.TDigest          (TDigest)
 import Data.Vector.Unboxed   (Vector)
 import Data.Word             (Word8)
+import GHC.Generics          (Generic)
 import System.FilePath
 import System.IO
 import System.Log.FastLogger (LoggerSet, ToLogStr)
@@ -71,7 +73,7 @@ data Cfg =
   , parentPhaseID          :: Maybe PhaseID
   , outputANGMap           :: Bool
   , outputCTFMap           :: Bool
-  } deriving (Show)
+  } deriving (Show, Generic)
 
 data ProductGrain =
   ProductGrain

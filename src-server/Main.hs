@@ -1,16 +1,17 @@
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE BangPatterns  #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE OverloadedStrings   #-}
 
 module Main where
 
 import Network.Wai.Handler.Warp
 import Servant
 
-import Handler.GetEBSD
 import Handler.ORFit
-import Handler.SubmitANG
+import Handler.EBSDAPI
 import System.Environment
 import Type.API
+import Type.Store (User(..))
 import Util.OrphanInstances ()
 import Web.App
 import Web.Config
@@ -23,6 +24,9 @@ archeWeb = Proxy
 
 main :: IO ()
 main = do
+
+    let user = User "ze@gmail.com" (Just "zeze")
+  
     args <- getArgs
     let
         configErr = error . ("Erro reading config file: \n" <>)
@@ -37,8 +41,11 @@ main = do
 
         app :: Server App
         app = appServer (staticFolder config) elmAssets
+        
+        fake :: Server ArcheAPI
+        fake = undefined
 
         api :: Server API
-        api = orFitAPI :<|> uploadEbsdAPI
+        api = ebsdApi user :<|> orApi user :<|> fake
 
     run 8080 . serve archeWeb $ api :<|> app 

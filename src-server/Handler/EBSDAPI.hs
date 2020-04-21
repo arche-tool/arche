@@ -5,19 +5,20 @@
 {-# LANGUAGE TypeOperators       #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Handler.SubmitANG
-  ( uploadEbsdAPI
+module Handler.EBSDAPI
+  ( ebsdApi
   ) where
 
-import Control.Lens                 ((&), (.~), (<&>), (?~))
+import Control.Lens                 ((&), (.~), (<&>), (?~), view)
 import Control.Monad                (void, forM_)
 import Control.Monad.IO.Class       (liftIO)
 import Control.Monad.Trans.Resource (runResourceT)
+import Data.Maybe                   (mapMaybe)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
 import System.IO                    (stdout)
+import Servant.Multipart            (Mem, MultipartData, files, fdPayload, inputs)
 import Servant
-import Servant.Multipart            (files, fdPayload, inputs)
 
 import qualified Network.Google           as Google
 import qualified Network.Google.FireStore as FireStore
@@ -31,17 +32,76 @@ import Type.Storage
 import Type.Store
 
 import Util.Hash (calculateHashEBSD)
-import Util.FireStore (toDoc)
+import Util.FireStore (FromDocumentFields, fromDoc, toDoc)
 
-uploadEbsdAPI :: Server UploadEbsdAPI
-uploadEbsdAPI = let
-  user = User "ze@gmail.com" (Just "zeze")
-  in \upload -> do
-    liftIO . putStrLn . show $ (inputs upload)
-    forM_ (files upload) $ \file -> do
-      let content = fdPayload file
-      (liftIO $ submitAngHandler user content)
-    return NoContent
+-- type EBSDAPI = "ebsd" :>
+--   (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] NoContent
+--   :<|>                                      Get  '[JSON] [EBSD]
+--   :<|> Capture "hash" HashEBSD           :> Get  '[JSON] EBSD
+--   )
+
+ebsdApi :: User -> Server EBSDAPI
+ebsdApi user = let
+  post = uploadEbsdAPI user
+  gets = liftIO $ listUserEBSDs user
+  get  = \hash   -> return undefined
+  in (post :<|> gets :<|> get)
+
+
+listUserEBSDs :: User -> IO [EBSD]
+listUserEBSDs user = do
+  lgr  <- Google.newLogger Google.Info stdout
+
+  env  <- Google.newEnv <&>
+        (Google.envLogger .~ lgr)
+      . (Google.envScopes .~ FireStore.cloudPlatformScope)
+
+  runResourceT . Google.runGoogle env $ do
+    findReadableEBSDs user
+
+type GCP = '["https://www.googleapis.com/auth/cloud-platform"]
+
+findReadableEBSDs :: (FromDocumentFields a) => User -> Google.Google GCP [a]
+findReadableEBSDs user = do
+  let
+    db = "projects/apt-muse-269419/databases/(default)/documents"
+    
+    query :: FireStore.StructuredQuery
+    query = let
+      from = FireStore.collectionSelector &
+        FireStore.csCollectionId ?~ "ebsd" &
+        FireStore.csAllDescendants ?~ False
+      lastUpdateField = FireStore.fieldReference & FireStore.frFieldPath ?~ "lastUpdate"
+      permissionField = FireStore.fieldReference & FireStore.frFieldPath ?~ "permission"
+      permissionValue = FireStore.value & FireStore.vStringValue ?~ (email user)
+      where' = FireStore.filter' & FireStore.fFieldFilter ?~ (
+        FireStore.fieldFilter
+          & FireStore.ffField ?~ permissionField
+          & FireStore.ffValue ?~ permissionValue
+          & FireStore.ffOp ?~ FireStore.FFOArrayContains
+        )
+      order = FireStore.order
+        & FireStore.oDirection ?~ FireStore.ODDescending
+        & FireStore.oField ?~ lastUpdateField
+      in FireStore.structuredQuery
+        & FireStore.sqFrom .~ [from] 
+        & FireStore.sqWhere ?~ where'
+        & FireStore.sqOrderBy .~ [order]
+    
+    commitReq :: FireStore.RunQueryRequest
+    commitReq = FireStore.runQueryRequest & FireStore.rqrStructuredQuery ?~ query
+
+  resp <- Google.send (FireStore.projectsDatabasesDocumentsRunQuery db commitReq)
+  return . mapMaybe (fmap (either error id . fromDoc) . view FireStore.rDocument) $ resp
+
+
+uploadEbsdAPI :: User -> MultipartData Mem -> Handler NoContent
+uploadEbsdAPI user = \upload -> do
+  liftIO . putStrLn . show $ (inputs upload)
+  forM_ (files upload) $ \file -> do
+    let content = fdPayload file
+    (liftIO $ submitAngHandler user content)
+  return NoContent
 
 submitAngHandler :: User -> BSL.ByteString -> IO ()
 submitAngHandler user bs = do
@@ -62,8 +122,6 @@ submitAngHandler user bs = do
         saveEBSD ebsdBucket ebsdHash bs
     writeHashEBSD user ebsdHash 
     writePermissionEBSD user ebsdHash 
-
-type GCP = '["https://www.googleapis.com/auth/cloud-platform"]
 
 writeHashEBSD :: User -> HashEBSD -> Google.Google GCP ()
 writeHashEBSD user (HashEBSD hash)  = do

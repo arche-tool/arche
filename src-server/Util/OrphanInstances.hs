@@ -9,27 +9,25 @@ import Data.Aeson (ToJSON, FromJSON)
 import Data.Hashable (Hashable, hashWithSalt)
 import Servant (FromHttpApiData(..))
 
-import qualified Arche.OR                as OR
-import qualified Arche.Strategy.ORFitAll as OF
-import qualified File.EBSD               as F
-import qualified File.ANGReader          as F
-import qualified File.CTFReader          as F
-import qualified Texture.Orientation     as TO
-import qualified Linear.Vect             as LV
-
-import qualified Type.Storage            as ST
-
--- ========= FromHttp =========
-instance FromHttpApiData ST.HashEBSD where
-    parseUrlPiece txt = Right $ ST.HashEBSD txt
+import qualified Arche.OR                  as OR
+import qualified Arche.Strategy.GomesGraph as GG
+import qualified Arche.Strategy.ORFitAll   as OF
+import qualified File.EBSD                 as F
+import qualified File.ANGReader            as F
+import qualified File.CTFReader            as F
+import qualified Texture.Orientation       as TO
+import qualified Linear.Vect               as LV
 
 -- ========= to JSON =========
+instance ToJSON GG.Cfg
+
 instance ToJSON OF.Cfg
 instance ToJSON OF.OrientationRelationship
 instance ToJSON OF.KSDeviation
 instance ToJSON OF.OREvaluation
 
 instance ToJSON OR.FitError
+instance ToJSON OR.PhaseID
 instance ToJSON OR.OR
 
 instance ToJSON TO.Deg
@@ -40,11 +38,12 @@ instance (ToJSON a) => ToJSON (LV.Vec2 a)
 instance (ToJSON a) => ToJSON (LV.Vec3 a)
 instance (ToJSON a) => ToJSON (LV.Vec4 a)
 
-instance ToJSON ST.HashEBSD
-instance ToJSON ST.StorageBucket
-
 -- ========= from JSON =========
+instance FromJSON GG.Cfg
+
 instance FromJSON OF.Cfg
+
+instance FromJSON OR.PhaseID
 
 instance FromJSON TO.AxisPair
 instance FromJSON TO.Deg
@@ -52,9 +51,6 @@ instance FromJSON TO.Deg
 instance (FromJSON a) => FromJSON (LV.Vec2 a)
 instance (FromJSON a) => FromJSON (LV.Vec3 a)
 instance (FromJSON a) => FromJSON (LV.Vec4 a)
-
-instance FromJSON ST.HashEBSD
-instance FromJSON ST.StorageBucket
 
 -- ========= hashable =========
 instance Hashable F.EBSDdata

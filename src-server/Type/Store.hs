@@ -1,22 +1,80 @@
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module Type.Store where
 
 import qualified Network.Google.FireStore as FireStore
-import Control.Lens                 ((&), (^.), (^?), (?~), (.~), ix, set)
-import Data.Text                    (Text)
+import Control.Lens ((&), (^.), (^?), (?~), (.~), ix, set)
+import Data.Aeson   (ToJSON, FromJSON)
+import Data.Text    (Text)
+import GHC.Generics
 
+import qualified Arche.Strategy.GomesGraph as GG
+import qualified Arche.Strategy.ORFitAll   as OF
+
+import Type.Storage (HashEBSD(..), HashOR(..), HashArche(..))
 import Util.FireStore
+import Util.OrphanInstances ()
+
+-- ================ EBSD ================
+data EBSD
+    = EBSD
+    { alias     :: Text
+    , hashEBSD  :: HashEBSD
+    , createdBy :: User
+    } deriving (Show, Generic)
+
+instance ToJSON EBSD
+
+instance FromDocumentFields EBSD where
+    fromDocFields fields = do
+        _alias      <- getTextField fields "alias"
+        _hash       <- getTextField fields "hash"
+        _userFields <- getNestedDocumentField fields "user"
+        _user       <- fromDocFields _userFields
+        return $ EBSD
+            { alias = _alias
+            , hashEBSD = HashEBSD _hash
+            , createdBy = _user
+            }
+
+instance ToDocumentFields EBSD where
+    toDocFields ebsd = buildDocFields
+        [ ("alias", toValue (alias ebsd))
+        , ("hash",  toValue (hashEBSD ebsd))
+        , ("user",  toValue (createdBy ebsd))
+        ]
+
+-- ================ OR ================
+data OR
+    = OR
+    { hashOR   :: HashOR
+    , cfgOR    :: OF.Cfg
+    , resultOR :: OF.OREvaluation
+    } deriving (Show, Generic)
+
+instance ToJSON OR
+
+-- ================ Arche ================
+data Arche
+    = Arche
+    { hashArche :: HashArche
+    , cfgArche  :: GG.Cfg
+    } deriving (Show, Generic)
+
+instance ToJSON Arche
 
 -- ================ User ================
 data User
     = User
     { email :: Text
     , name :: Maybe Text
-    } deriving (Show)
+    } deriving (Show, Generic)
 
-instance FromDocument User where
-    fromDoc doc = do
-        fields <- getDocumentFields doc
+instance ToJSON User
+
+instance FromDocumentFields User where
+    fromDocFields fields = do
         _email <- getTextField fields "email"
         _name  <- getMaybeTextField fields "name"
         return $ User
@@ -24,8 +82,11 @@ instance FromDocument User where
             , name = _name
             }
 
-instance ToDocument User where
-    toDoc user = buildDoc
+instance ToDocumentFields User where
+    toDocFields user = buildDocFields
         [ ("email", toValue (email user))
         , ("name",  toValueMaybe (name user))
         ]
+
+instance ToDocValue User where
+    toValue = toValue . toDocFields

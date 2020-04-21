@@ -2,15 +2,22 @@
 module Util.FireStore where
 
 import qualified Network.Google.FireStore as FireStore
-import Control.Lens                 ((&), (^.), (^?), (?~), (.~), ix, set)
+import Control.Lens                 ((&), (^.), (^?), (?~), (.~), ix, _Just)
+import Control.Monad                ((>=>))
 import Data.Text                    (Text)
 import Data.HashMap.Strict as HM
 
-class ToDocument a where
-    toDoc :: a -> FireStore.Document
+toDoc :: ToDocumentFields a => a -> FireStore.Document
+toDoc x = FireStore.document & FireStore.dFields ?~ (toDocFields x)
 
-class FromDocument a where
-    fromDoc :: FireStore.Document -> Either String a
+fromDoc :: FromDocumentFields a => FireStore.Document -> Either String a
+fromDoc = getDocumentFields >=> fromDocFields
+
+class ToDocumentFields a where
+    toDocFields :: a -> FireStore.DocumentFields
+
+class FromDocumentFields a where
+    fromDocFields :: FireStore.DocumentFields -> Either String a
 
 getMaybeTextField :: FireStore.DocumentFields -> Text -> Either String (Maybe Text)
 getMaybeTextField fields key = case fields ^. FireStore.dfAddtional ^? (ix key) of
@@ -50,21 +57,41 @@ getDoubleField fields key = do
         Right
         (value ^. FireStore.vDoubleValue)
 
+getNestedDocumentField :: FireStore.DocumentFields -> Text -> Either String FireStore.DocumentFields
+getNestedDocumentField fields key = do
+    value <- maybe
+        (Left $ "No field '" <> show(key) <> "' available.")
+        Right
+        (fields ^. FireStore.dfAddtional ^? (ix key))
+    maybe
+        (Left $ "Field '" <> show(key) <> "' is not Double.")
+        (Right . FireStore.documentFields)
+        (value ^? FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional)
 
 class ToDocValue a where
     toValueMaybe :: Maybe a -> FireStore.Value
+    toValueMaybe (Just x) = toValue x
+    toValueMaybe _        = FireStore.value
 
     toValue :: a -> FireStore.Value
-    toValue = toValueMaybe . Just
+
+class FromDocValue a where
+    fromValue :: FireStore.Value -> Either String a
 
 instance ToDocValue Text where
     toValueMaybe txt = FireStore.value & FireStore.vStringValue .~ txt
     toValue txt = FireStore.value & FireStore.vStringValue ?~ txt
 
+instance ToDocValue FireStore.DocumentFields where
+    toValue docFields = let
+        mv = FireStore.mapValueFields (docFields ^. FireStore.dfAddtional) 
+        in FireStore.value & FireStore.vMapValue ?~ (FireStore.mapValue & FireStore.mvFields ?~ mv)
+
 buildDoc :: [(Text, FireStore.Value)] -> FireStore.Document
-buildDoc ls = let 
-    hmap = HM.fromList ls
-    in FireStore.document & FireStore.dFields ?~ (FireStore.documentFields hmap)
+buildDoc ls = FireStore.document & FireStore.dFields ?~ (buildDocFields ls)
+
+buildDocFields :: [(Text, FireStore.Value)] -> FireStore.DocumentFields
+buildDocFields = FireStore.documentFields . HM.fromList
 
 getDocumentFields :: FireStore.Document -> Either String FireStore.DocumentFields
 getDocumentFields doc = maybe (Left "Empty document") Right (doc ^. FireStore.dFields)
