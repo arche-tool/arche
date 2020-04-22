@@ -71,6 +71,9 @@ data User
     , name :: Maybe Text
     } deriving (Show, Generic)
 
+instance Eq User where
+    (==) (User e1 _) (User e2 _) = e1 == e2
+
 instance ToJSON User
 
 instance FromDocumentFields User where

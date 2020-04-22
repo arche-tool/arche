@@ -10,9 +10,9 @@ module Handler.EBSDAPI
   ) where
 
 import Control.Lens                 ((&), (.~), (<&>), (?~), view)
-import Control.Monad                (void, forM_)
+import Control.Monad                (void, forM_, when)
 import Control.Monad.IO.Class       (liftIO)
-import Control.Monad.Trans.Resource (runResourceT)
+import Control.Monad.Trans.Resource (runResourceT, throwM)
 import Data.Maybe                   (mapMaybe)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
@@ -39,30 +39,38 @@ import Util.FireStore (FromDocumentFields, fromDoc, toDoc)
 --   :<|>                                      Get  '[JSON] [EBSD]
 --   :<|> Capture "hash" HashEBSD           :> Get  '[JSON] EBSD
 --   )
-
 ebsdApi :: User -> Server EBSDAPI
 ebsdApi user = let
   post = uploadEbsdAPI user
-  gets = liftIO $ listUserEBSDs user
-  get  = \hash   -> return undefined
+  gets = runGCPWith (getEBSDs user)
+  get  = runGCPWith . getEBSD user
   in (post :<|> gets :<|> get)
 
+type GCP = '["https://www.googleapis.com/auth/cloud-platform"]
 
-listUserEBSDs :: User -> IO [EBSD]
-listUserEBSDs user = do
+runGCPWith :: Google.Google GCP a -> Handler a
+runGCPWith gcp = liftIO $ do
   lgr  <- Google.newLogger Google.Info stdout
 
   env  <- Google.newEnv <&>
         (Google.envLogger .~ lgr)
       . (Google.envScopes .~ FireStore.cloudPlatformScope)
 
-  runResourceT . Google.runGoogle env $ do
-    findReadableEBSDs user
+  runResourceT $ Google.runGoogle env gcp
 
-type GCP = '["https://www.googleapis.com/auth/cloud-platform"]
+getEBSD :: User -> HashEBSD -> Google.Google GCP EBSD
+getEBSD user (HashEBSD hash) = do
+  let path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hash
+  resp <- Google.send (FireStore.projectsDatabasesDocumentsGet path)
+  let ebsd = either error id (fromDoc resp)
+  when (createdBy ebsd /= user) $ do
+    throwM $ err404 {
+      errBody = "I still haven't found what I'm looking for ... O_o"
+    } 
+  return ebsd
 
-findReadableEBSDs :: (FromDocumentFields a) => User -> Google.Google GCP [a]
-findReadableEBSDs user = do
+getEBSDs :: (FromDocumentFields a) => User -> Google.Google GCP [a]
+getEBSDs user = do
   let
     db = "projects/apt-muse-269419/databases/(default)/documents"
     
@@ -94,34 +102,26 @@ findReadableEBSDs user = do
   resp <- Google.send (FireStore.projectsDatabasesDocumentsRunQuery db commitReq)
   return . mapMaybe (fmap (either error id . fromDoc) . view FireStore.rDocument) $ resp
 
-
 uploadEbsdAPI :: User -> MultipartData Mem -> Handler NoContent
 uploadEbsdAPI user = \upload -> do
   liftIO . putStrLn . show $ (inputs upload)
   forM_ (files upload) $ \file -> do
     let content = fdPayload file
-    (liftIO $ submitAngHandler user content)
+    (runGCPWith $ submitEbsd user content)
   return NoContent
 
-submitAngHandler :: User -> BSL.ByteString -> IO ()
-submitAngHandler user bs = do
-  lgr  <- Google.newLogger Google.Info stdout
-
-  env  <- Google.newEnv <&>
-        (Google.envLogger .~ lgr)
-      . (Google.envScopes .~ FireStore.cloudPlatformScope)
-
-  runResourceT . Google.runGoogle env $ do
-    let
-      ebsd = either error id (loadEBSD bs)
-      ebsdHash = calculateHashEBSD ebsd 
-    case ebsd of
-      CTF _ -> do
-        saveEBSD ebsdBucket ebsdHash bs
-      ANG _ -> do
-        saveEBSD ebsdBucket ebsdHash bs
-    writeHashEBSD user ebsdHash 
-    writePermissionEBSD user ebsdHash 
+submitEbsd :: User -> BSL.ByteString -> Google.Google GCP ()
+submitEbsd user bs = do
+  let
+    ebsd = either error id (loadEBSD bs)
+    ebsdHash = calculateHashEBSD ebsd 
+  case ebsd of
+    CTF _ -> do
+      saveEBSD ebsdBucket ebsdHash bs
+    ANG _ -> do
+      saveEBSD ebsdBucket ebsdHash bs
+  writeHashEBSD user ebsdHash 
+  writePermissionEBSD user ebsdHash 
 
 writeHashEBSD :: User -> HashEBSD -> Google.Google GCP ()
 writeHashEBSD user (HashEBSD hash)  = do
