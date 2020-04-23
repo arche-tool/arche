@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE TypeOperators       #-}
 
-module Handler.ORFit
+module Handler.ORAPI
   ( orApi
   ) where
 

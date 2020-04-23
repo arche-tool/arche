@@ -113,20 +113,27 @@ uploadEbsdAPI user = \upload -> do
 submitEbsd :: User -> BSL.ByteString -> Google.Google GCP ()
 submitEbsd user bs = do
   let
-    ebsd = either error id (loadEBSD bs)
-    ebsdHash = calculateHashEBSD ebsd 
-  case ebsd of
+    ebsdBlob = either error id (loadEBSD bs)
+    ebsdHash = calculateHashEBSD ebsdBlob 
+  case ebsdBlob of
     CTF _ -> do
       saveEBSD ebsdBucket ebsdHash bs
     ANG _ -> do
       saveEBSD ebsdBucket ebsdHash bs
-  writeHashEBSD user ebsdHash 
+  let ebsd = EBSD
+           { alias     = ""
+           , hashEBSD  = ebsdHash
+           , createdBy = user
+           }
+  writeEBSD ebsd 
   writePermissionEBSD user ebsdHash 
 
-writeHashEBSD :: User -> HashEBSD -> Google.Google GCP ()
-writeHashEBSD user (HashEBSD hash)  = do
-    let path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hash
-    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc user) path)
+writeEBSD :: EBSD -> Google.Google GCP ()
+writeEBSD ebsd  = do
+    let
+      HashEBSD hash = hashEBSD ebsd
+      path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hash
+    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc ebsd) path)
 
 writePermissionEBSD :: User -> HashEBSD -> Google.Google GCP ()
 writePermissionEBSD user (HashEBSD hash)  = do

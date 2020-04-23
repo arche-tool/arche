@@ -7,7 +7,7 @@ module Main where
 import Network.Wai.Handler.Warp
 import Servant
 
-import Handler.ORFit
+import Handler.ORAPI
 import Handler.EBSDAPI
 import System.Environment
 import Type.API
