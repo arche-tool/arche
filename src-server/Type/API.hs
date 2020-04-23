@@ -33,7 +33,7 @@ type API = "api" :>
 -- GET /ebsd [EBSD]
 -- GET /ebsd/hash/{ebsd_hash} EBSD
 type EBSDAPI = "ebsd" :>
-  (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] NoContent
+  (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] [EBSD]
   :<|>                                      Get  '[JSON] [EBSD]
   :<|> Capture "hash" HashEBSD           :> Get  '[JSON] EBSD
   )

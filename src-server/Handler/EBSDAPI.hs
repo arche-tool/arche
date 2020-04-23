@@ -10,7 +10,7 @@ module Handler.EBSDAPI
   ) where
 
 import Control.Lens                 ((&), (.~), (<&>), (?~), view)
-import Control.Monad                (void, forM_, when)
+import Control.Monad                (void, forM, when)
 import Control.Monad.IO.Class       (liftIO)
 import Control.Monad.Trans.Resource (runResourceT, throwM)
 import Data.Maybe                   (mapMaybe)
@@ -35,7 +35,7 @@ import Util.Hash (calculateHashEBSD)
 import Util.FireStore (FromDocumentFields, fromDoc, toDoc)
 
 -- type EBSDAPI = "ebsd" :>
---   (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] NoContent
+--   (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] [EBSD]
 --   :<|>                                      Get  '[JSON] [EBSD]
 --   :<|> Capture "hash" HashEBSD           :> Get  '[JSON] EBSD
 --   )
@@ -102,15 +102,14 @@ getEBSDs user = do
   resp <- Google.send (FireStore.projectsDatabasesDocumentsRunQuery db commitReq)
   return . mapMaybe (fmap (either error id . fromDoc) . view FireStore.rDocument) $ resp
 
-uploadEbsdAPI :: User -> MultipartData Mem -> Handler NoContent
+uploadEbsdAPI :: User -> MultipartData Mem -> Handler [EBSD]
 uploadEbsdAPI user = \upload -> do
   liftIO . putStrLn . show $ (inputs upload)
-  forM_ (files upload) $ \file -> do
+  forM (files upload) $ \file -> do
     let content = fdPayload file
-    (runGCPWith $ submitEbsd user content)
-  return NoContent
+    runGCPWith (submitEbsd user content)
 
-submitEbsd :: User -> BSL.ByteString -> Google.Google GCP ()
+submitEbsd :: User -> BSL.ByteString -> Google.Google GCP EBSD
 submitEbsd user bs = do
   let
     ebsdBlob = either error id (loadEBSD bs)
@@ -127,6 +126,7 @@ submitEbsd user bs = do
            }
   writeEBSD ebsd 
   writePermissionEBSD user ebsdHash 
+  return ebsd
 
 writeEBSD :: EBSD -> Google.Google GCP ()
 writeEBSD ebsd  = do
