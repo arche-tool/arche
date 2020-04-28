@@ -32,7 +32,7 @@ import Type.Storage
 import Type.Store
 
 import Util.Hash (calculateHashEBSD)
-import Util.FireStore (FromDocumentFields, fromDoc, toDoc)
+import Util.FireStore (FromDocumentFields, GCP, fromDoc, toDoc, runGCPWith )
 
 -- type EBSDAPI = "ebsd" :>
 --   (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] [EBSD]
@@ -45,18 +45,6 @@ ebsdApi user = let
   gets = runGCPWith (getEBSDs user)
   get  = runGCPWith . getEBSD user
   in (post :<|> gets :<|> get)
-
-type GCP = '["https://www.googleapis.com/auth/cloud-platform"]
-
-runGCPWith :: Google.Google GCP a -> Handler a
-runGCPWith gcp = liftIO $ do
-  lgr  <- Google.newLogger Google.Info stdout
-
-  env  <- Google.newEnv <&>
-        (Google.envLogger .~ lgr)
-      . (Google.envScopes .~ FireStore.cloudPlatformScope)
-
-  runResourceT $ Google.runGoogle env gcp
 
 getEBSD :: User -> HashEBSD -> Google.Google GCP EBSD
 getEBSD user (HashEBSD hash) = do

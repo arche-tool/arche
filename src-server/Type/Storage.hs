@@ -16,7 +16,7 @@ module Type.Storage
     , ebsdBucket
     ) where
 
-import Control.Lens ((&), (^.), (^?), (?~), (.~), ix, set)
+import Control.Lens ((&), (?~))
 import GHC.Generics
 import Data.Aeson    (ToJSON, FromJSON)
 import Data.Hashable (Hashable, hashWithSalt)
@@ -53,8 +53,10 @@ ebsdBucket = StorageBucket "ebsd"
 -- ============================
 
 -- ========= Document =========
-instance ToDocValue HashEBSD where
-    toValue (HashEBSD txt) = FireStore.value & FireStore.vStringValue ?~ txt
+instance ToDocValue HashEBSD
+instance ToDocValue HashOR
+instance ToDocValue HashArche
+instance ToDocValue StorageBucket
 
 -- ========= FromHttp =========
 instance FromHttpApiData HashEBSD where

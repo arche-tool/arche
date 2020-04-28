@@ -3,9 +3,7 @@
 
 module Type.Store where
 
-import qualified Network.Google.FireStore as FireStore
-import Control.Lens ((&), (^.), (^?), (?~), (.~), ix, set)
-import Data.Aeson   (ToJSON, FromJSON)
+import Data.Aeson   (ToJSON)
 import Data.Text    (Text)
 import GHC.Generics
 
@@ -26,24 +24,7 @@ data EBSD
 
 instance ToJSON EBSD
 
-instance FromDocumentFields EBSD where
-    fromDocFields fields = do
-        _alias      <- getTextField fields "alias"
-        _hash       <- getTextField fields "hash"
-        _userFields <- getNestedDocumentField fields "user"
-        _user       <- fromDocFields _userFields
-        return $ EBSD
-            { alias = _alias
-            , hashEBSD = HashEBSD _hash
-            , createdBy = _user
-            }
-
-instance ToDocumentFields EBSD where
-    toDocFields ebsd = buildDocFields
-        [ ("alias", toValue (alias ebsd))
-        , ("hash",  toValue (hashEBSD ebsd))
-        , ("user",  toValue (createdBy ebsd))
-        ]
+instance ToDocValue EBSD
 
 -- ================ OR ================
 data OR
@@ -54,6 +35,8 @@ data OR
     } deriving (Show, Generic)
 
 instance ToJSON OR
+
+instance ToDocValue OR
 
 -- ================ Arche ================
 data Arche
@@ -76,20 +59,4 @@ instance Eq User where
 
 instance ToJSON User
 
-instance FromDocumentFields User where
-    fromDocFields fields = do
-        _email <- getTextField fields "email"
-        _name  <- getMaybeTextField fields "name"
-        return $ User
-            { email = _email
-            , name = _name
-            }
-
-instance ToDocumentFields User where
-    toDocFields user = buildDocFields
-        [ ("email", toValue (email user))
-        , ("name",  toValueMaybe (name user))
-        ]
-
-instance ToDocValue User where
-    toValue = toValue . toDocFields
+instance ToDocValue User

@@ -3,6 +3,7 @@
 
 module Util.Hash
     ( calculateHashEBSD
+    , calculateHashOR
     ) where
 
 import Data.Hashable (hash)
@@ -12,8 +13,13 @@ import Numeric       (showHex)
 
 import qualified Data.Text as T
 
-import Type.Storage (HashEBSD(..))
+import qualified Arche.Strategy.ORFitAll as OR
+
+import Type.Storage (HashEBSD(..), HashOR(..))
 import Util.OrphanInstances ()
 
 calculateHashEBSD :: EBSDdata -> HashEBSD 
 calculateHashEBSD = HashEBSD . T.pack . (\(x :: Word) -> showHex x "") . fromIntegral . hash
+
+calculateHashOR :: OR.Cfg -> HashOR 
+calculateHashOR = HashOR . T.pack . (\(x :: Word) -> showHex x "") . fromIntegral . hash

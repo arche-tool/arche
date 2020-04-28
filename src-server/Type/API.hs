@@ -13,9 +13,7 @@ module Type.API
 
 import Servant
 import Servant.Multipart
-import qualified Data.ByteString.Lazy     as BSL
 
-import Arche.Strategy.ORFitAll (OREvaluation)
 import qualified Arche.Strategy.GomesGraph as Arche
 import qualified Arche.Strategy.ORFitAll as OR
 
@@ -45,7 +43,7 @@ type EBSDAPI = "ebsd" :>
 type ORAPI = "ebsd" :> Capture "hash" HashEBSD :> "orfit" :>
   (                              Get  '[JSON] [OR]
   :<|> Capture "hash" HashOR  :> Get  '[JSON] OR
-  :<|> ReqBody '[JSON] OR.Cfg :> Post '[JSON] NoContent
+  :<|> ReqBody '[JSON] OR.Cfg :> Post '[JSON] OR
   )
 
 

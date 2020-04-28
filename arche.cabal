@@ -97,14 +97,15 @@ Executable arche-server
     , vector                     >= 0.12
     , warp                       >= 3.0
   other-modules:
-    Handler.GetEBSD 
-    Handler.ORFit 
-    Handler.SubmitANG 
+    Handler.EBSDAPI 
+    Handler.ORAPI 
     Type.API
     Type.Result
     Type.Storage
     Type.Store
     Util.FireStore
+    Util.FireStore.Document
+    Util.FireStore.Value
     Util.OrphanInstances
     Util.Hash
     Web.App

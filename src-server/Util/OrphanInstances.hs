@@ -18,6 +18,8 @@ import qualified File.CTFReader            as F
 import qualified Texture.Orientation       as TO
 import qualified Linear.Vect               as LV
 
+import Util.FireStore.Value
+
 -- ========= to JSON =========
 instance ToJSON GG.Cfg
 
@@ -75,6 +77,8 @@ instance Hashable F.CTFdata where
         , hashWithSalt i phases
         ]
 
+instance Hashable TO.AxisPair
+instance Hashable TO.Deg
 instance Hashable TO.Quaternion
 
 instance (Hashable a) => Hashable (LV.Vec2 a)
@@ -83,3 +87,20 @@ instance (Hashable a) => Hashable (LV.Vec4 a)
 
 instance (Hashable a) => Hashable (Vector a) where
     hashWithSalt i = hashWithSalt i .toList 
+
+instance Hashable OF.Cfg
+
+
+instance ToDocValue OF.Cfg
+instance ToDocValue OF.OREvaluation
+instance ToDocValue OF.OrientationRelationship
+instance ToDocValue OF.KSDeviation
+instance ToDocValue TO.Deg
+instance ToDocValue TO.AxisPair
+instance ToDocValue TO.Quaternion
+instance ToDocValue OR.FitError
+instance ToDocValue OR.OR
+
+instance (ToDocValue a) => ToDocValue (LV.Vec3 a)
+instance (ToDocValue a) => ToDocValue (LV.Vec2 a)
+instance (ToDocValue a) => ToDocValue (LV.Vec4 a)

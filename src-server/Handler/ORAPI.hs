@@ -17,11 +17,11 @@ import Data.Conduit                 (runConduit, (.|))
 import Data.Text                    (Text)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
-import System.IO                    (stdout)
 
-import qualified Data.Conduit.Binary    as Conduit
-import qualified Network.Google         as Google
-import qualified Network.Google.Storage as Storage
+import qualified Data.Conduit.Binary      as Conduit
+import qualified Network.Google           as Google
+import qualified Network.Google.FireStore as FireStore
+import qualified Network.Google.Storage   as Storage
 import Servant
 
 import qualified Arche.Strategy.ORFitAll as OR
@@ -32,6 +32,8 @@ import Texture.Orientation      (Deg(..))
 import Type.API
 import Type.Storage
 import Type.Store
+import Util.FireStore
+import Util.Hash
 
 --type ORAPI = "ebsd" :> Capture "hash" HashEBSD :> "orfit" :>
 --  (                              Get  '[JSON] [OR]
@@ -43,30 +45,37 @@ orApi :: User -> Server ORAPI
 orApi _ = \hashEBSD ->
        (return [])
   :<|> (\_ -> return undefined)
-  :<|> (\cfg -> liftIO $ Right <$> orFitHandler cfg "arche-ang" hashEBSD >> return NoContent)
+  :<|> (\cfg -> runGCPWith $ orFitHandler hashEBSD cfg "arche-ang" )
 
 
-orFitHandler :: OR.Cfg -> Text -> HashEBSD -> IO (OREvaluation)
-orFitHandler cfg bucket (HashEBSD angHash) = do
-  lgr  <- Google.newLogger Google.Info stdout
+orFitHandler :: HashEBSD -> OR.Cfg -> Text -> Google.Google GCP OR
+orFitHandler hashEBSD@(HashEBSD hash) cfg bucket = do
+  stream <- Google.download (Storage.objectsGet bucket hash)
+  ang    <- liftResourceT (runConduit (stream .| Conduit.sinkLbs))
 
-  env  <- Google.newEnv <&>
-        (Google.envLogger .~ lgr)
-      . (Google.envScopes .~ Storage.storageReadWriteScope)
+  -- Force strictness on OR calculation otherwise the data
+  --upload bellow can timeout while awaiting for calculation.
+  (!orEval, vtk) <- liftIO $ OR.processEBSD cfg ang
 
-  runResourceT . Google.runGoogle env $ do
-    stream <- Google.download (Storage.objectsGet bucket angHash)
-    ang    <- liftResourceT (runConduit (stream .| Conduit.sinkLbs))
+  let
+    body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS $ renderUniVTK True vtk)
+    vox_key = hash <> ".vtk"
+  
+  void $ Google.upload (Storage.objectsInsert bucket Storage.object' & Storage.oiName ?~ vox_key) body
 
-    -- Force strictness on OR calculation otherwise the data
-    --upload bellow can timeout while awaiting for calculation.
-    (!orEval, vtk) <- liftIO $ OR.processEBSD cfg ang
+  let or = OR
+         { hashOR   = calculateHashOR cfg
+         , cfgOR    = cfg
+         , resultOR = orEval
+         }
+  
+  writeOR hashEBSD or 
 
+  return or
+
+writeOR :: HashEBSD -> OR -> Google.Google GCP ()
+writeOR (HashEBSD hashE) or  = do
     let
-      body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS $ renderUniVTK True vtk)
-      vox_key = angHash <> ".vtk"
-    
-    void $ Google.upload (Storage.objectsInsert bucket Storage.object' & Storage.oiName ?~ vox_key) body
-
-    return orEval
-
+      HashOR hashO = hashOR or
+      path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hashE <> "/or/" <> hashO
+    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc or) path)
