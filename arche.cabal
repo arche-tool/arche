@@ -66,6 +66,45 @@ Executable arche-server
   hs-source-dirs: src-server
   main-Is:        Main.hs
   build-depends:
+      arche-server-lib
+    , base                       == 4.*
+    , sledge                     >= 0.4
+    , bytestring
+    , gogol
+    , gogol-firestore
+    , gogol-storage
+    , http-conduit
+    , http-media
+    , lens
+    , resourcet
+    , servant-server
+    , servant-blaze
+    , servant-server
+    , servant-multipart
+    , warp
+  other-modules:
+    Handler.EBSDAPI 
+    Handler.ORAPI 
+
+Library arche-server-lib
+  hs-source-dirs: src-server-lib
+  ghc-options:
+    -O2
+    -funbox-strict-fields
+    -Wall
+  exposed-modules:
+    Type.API
+    Type.Result
+    Type.Storage
+    Type.Store
+    Util.FireStore
+    Util.FireStore.Document
+    Util.FireStore.Value
+    Util.OrphanInstances
+    Util.Hash
+    Web.App
+    Web.Config
+  build-depends:
       arche
     , base                       == 4.*
     , hammer                     >= 0.4
@@ -84,7 +123,6 @@ Executable arche-server
     , gogol-storage              >= 0.4
     , hashable                   >= 1.2
     , http-conduit               >= 2.0
-    , http-media                 >= 0.8
     , lens                       >= 4.0
     , random                     >= 1.0
     , resourcet                  >= 1.2
@@ -96,20 +134,6 @@ Executable arche-server
     , uuid                       >= 1.0
     , vector                     >= 0.12
     , warp                       >= 3.0
-  other-modules:
-    Handler.EBSDAPI 
-    Handler.ORAPI 
-    Type.API
-    Type.Result
-    Type.Storage
-    Type.Store
-    Util.FireStore
-    Util.FireStore.Document
-    Util.FireStore.Value
-    Util.OrphanInstances
-    Util.Hash
-    Web.App
-    Web.Config
 
 Library
   hs-source-dirs:    src
@@ -174,17 +198,23 @@ test-suite test
   hs-source-dirs: test
   build-depends:
       arche
+    , arche-server-lib
     , linear-vect
     , sledge
     , base
+    , gogol-firestore
+    , lens
     , QuickCheck
-    , vector
     , random
+    , vector
     , tasty
     , tasty-hunit
     , tasty-quickcheck
+    , text
+    , unordered-containers
   other-modules:
     Arche.TestOR
+    Server.FireStore.Document
     Utils
   ghc-options:
     -O2

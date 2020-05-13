@@ -12,12 +12,10 @@ module Util.FireStore.Value
   , FromDocValue(..)
   ) where
 
-import Control.Applicative ((<|>), liftA2)
+import Control.Applicative ((<|>), liftA2, liftA3)
 import Control.Lens        ((&), (?~), (.~), (^.), (^?), _Just)
 import Data.Text           (Text, pack, unpack)
 import GHC.Generics
-
-import Data.Aeson
 
 import qualified Data.HashMap.Strict      as HM
 import qualified Network.Google.FireStore as FireStore
@@ -38,6 +36,57 @@ instance FromDocValue Text where
 
 instance FromDocValue String where
   fromValue = fmap unpack . fromValue
+
+instance (FromDocValue a) => FromDocValue (Maybe a) where
+  fromValue value = case value ^. FireStore.vNullValue of
+    Just nullVal
+     | nullVal == FireStore.NullValue -> Right Nothing
+     | otherwise                      -> Left "unexpected null value"
+    Nothing -> fromValue value
+
+instance FromDocValue Double where
+  fromValue value = maybe (Left "not a double value") Right (value ^. FireStore.vDoubleValue)
+
+instance FromDocValue Bool where
+  fromValue value = maybe (Left "not a boolean value") Right (value ^. FireStore.vBooleanValue)
+
+instance FromDocValue Int where
+  fromValue value = maybe (Left "not a integer value") (Right . fromEnum) (value ^. FireStore.vIntegerValue)
+
+instance (FromDocValue a, FromDocValue b) => FromDocValue (a, b) where
+  fromValue value = do
+    arr <- maybe (Left "not a tuple") Right (value ^. FireStore.vArrayValue)
+    case arr ^. FireStore.avValues of
+      [a,b] -> liftA2 (,) (fromValue a) (fromValue b)
+      _     -> Left "Unexpected number of tuple elements." 
+
+instance (FromDocValue a, FromDocValue b, FromDocValue c) => FromDocValue (a, b, c) where
+  fromValue value = do
+    arr <- maybe (Left "not a tuple") Right (value ^. FireStore.vArrayValue)
+    case arr ^. FireStore.avValues of
+      [a,b,c] -> liftA3 (,,) (fromValue a) (fromValue b) (fromValue c)
+      _       -> Left "Unexpected number of tuple elements." 
+
+instance (FromDocValue a, FromDocValue b, FromDocValue c, FromDocValue d) => FromDocValue (a, b, c, d) where
+  fromValue value = do
+    arr <- maybe (Left "not a tuple") Right (value ^. FireStore.vArrayValue)
+    case arr ^. FireStore.avValues of
+      [a,b,c,d] -> do
+        va <- fromValue a
+        vb <- fromValue b
+        vc <- fromValue c
+        vd <- fromValue d
+        return (va, vb, vc, vd)
+      _         -> Left "Unexpected number of tuple elements." 
+
+-- instance FromDocValue FireStore.DocumentFields where
+--   fromValue docFields = let
+--     mv = FireStore.mapValueFields (docFields ^. FireStore.dfAddtional) 
+--     in FireStore.value & FireStore.vMapValue ?~ (FireStore.mapValue & FireStore.mvFields ?~ mv)
+
+-- =============================================================
+-- =========== Generic helper class FromDocValue ================= 
+-- =============================================================
 
 class GFromDocumentValue f where
   gfromDocumentFields :: Maybe String -> ValueBuilder -> Either String (f a)
@@ -123,7 +172,7 @@ instance ToDocValue Bool where
   toValue x = FireStore.value & FireStore.vBooleanValue ?~ x
 
 instance ToDocValue Int where
-  toValue x = FireStore.value & FireStore.vIntegerValue ?~ (fromInteger $ toInteger x)
+  toValue x = FireStore.value & FireStore.vIntegerValue ?~ (toEnum x)
 
 instance (ToDocValue a, ToDocValue b) => ToDocValue (a, b) where
   toValue (a, b) = let
@@ -246,75 +295,3 @@ instance GToDocumentValue U1 where
 
 instance GToDocumentValue V1 where
   gtoDocumentFields _ _ _ = Left []
-
-
-
-
-data Test deriving (Generic)
-data Test0 = Test0A | Test0B | Test0C deriving (Generic, Eq, Show)
-data Test1 = Test1A String String | Test1B | Test1C String deriving (Generic, Eq, Show)
-data Test2 = Test2A {test2a :: Text, test2b :: Text} | Test2B deriving (Generic, Eq, Show)
-data Test3 = Test3A {test3a :: Test2, test3b :: Test1} deriving (Generic, Eq, Show)
-data Test4 = Test4A String String deriving (Generic, Eq, Show)
-
-instance ToDocValue Test
-instance ToDocValue Test0
-instance ToDocValue Test1
-instance ToDocValue Test2
-instance ToDocValue Test3
-instance ToDocValue Test4
-
-instance FromDocValue Test
-instance FromDocValue Test0
-instance FromDocValue Test1
-instance FromDocValue Test2
-instance FromDocValue Test3
-instance FromDocValue Test4
-
-instance ToJSON Test
-instance ToJSON Test0
-instance ToJSON Test1
-instance ToJSON Test2
-instance ToJSON Test3
-instance ToJSON Test4
-
-matchStringValue :: FireStore.Value -> String -> Bool
-matchStringValue v s = (v ^. FireStore.vStringValue) == (Just . pack $ s) 
-
-matchArrayValue :: FireStore.Value -> [String] -> Bool
-matchArrayValue v ss = all id $ zipWith matchStringValue vs ss
-  where
-    vs = v ^. FireStore.vArrayValue . _Just . FireStore.avValues
-
-test = let
-  [test4a, test4b] = (toValue $ Test4A "xx" "yy") ^. FireStore.vArrayValue . _Just . FireStore.avValues
-  mapTest1a = (toValue $ Test1A "xx" "yy") ^. FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional
-  mapTest2b = (toValue $ Test2A "xx" "yy") ^. FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional
-  in [
-    matchStringValue (toValue Test0A) (show Test0A),
-    matchStringValue test4a "xx",
-    matchStringValue test4b "yy",
-    matchStringValue (mapTest1a HM.! "__TAG__") "Test1A",
-    matchArrayValue  (mapTest1a HM.! "__VALUES__") ["xx", "yy"],
-    matchStringValue (mapTest2b HM.! "test2a") "xx",
-    matchStringValue (mapTest2b HM.! "test2b") "yy"
-    ]
-
-checkIso :: (ToDocValue a, FromDocValue a, Eq a) => a -> Bool
-checkIso x = let
-  regen = fromValue (toValue x)
-  in case regen of
-    Right v  -> v == x
-    Left err -> error err
-
-testIsomorphism = let
-  test1a = Test1A "ss" "dd"
-  test1b = Test1B
-  test1c = Test1C "ss"
-  test2a = Test2A "ss" "dd"
-  in [
-    checkIso test1a,
-    checkIso test1b,
-    checkIso test1c,
-    checkIso test2a
-    ]

@@ -91,6 +91,7 @@ instance (Hashable a) => Hashable (Vector a) where
 instance Hashable OF.Cfg
 
 
+-- ========= Document =========
 instance ToDocValue OF.Cfg
 instance ToDocValue OF.OREvaluation
 instance ToDocValue OF.OrientationRelationship
@@ -104,3 +105,17 @@ instance ToDocValue OR.OR
 instance (ToDocValue a) => ToDocValue (LV.Vec3 a)
 instance (ToDocValue a) => ToDocValue (LV.Vec2 a)
 instance (ToDocValue a) => ToDocValue (LV.Vec4 a)
+
+instance FromDocValue OF.Cfg
+instance FromDocValue OF.OREvaluation
+instance FromDocValue OF.OrientationRelationship
+instance FromDocValue OF.KSDeviation
+instance FromDocValue TO.Deg
+instance FromDocValue TO.AxisPair
+instance FromDocValue TO.Quaternion
+instance FromDocValue OR.FitError
+instance FromDocValue OR.OR
+
+instance (FromDocValue a) => FromDocValue (LV.Vec3 a)
+instance (FromDocValue a) => FromDocValue (LV.Vec2 a)
+instance (FromDocValue a) => FromDocValue (LV.Vec4 a)

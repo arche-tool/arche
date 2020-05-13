@@ -25,6 +25,7 @@ data EBSD
 instance ToJSON EBSD
 
 instance ToDocValue EBSD
+instance FromDocValue EBSD
 
 -- ================ OR ================
 data OR
@@ -37,6 +38,7 @@ data OR
 instance ToJSON OR
 
 instance ToDocValue OR
+instance FromDocValue OR
 
 -- ================ Arche ================
 data Arche
@@ -60,3 +62,4 @@ instance Eq User where
 instance ToJSON User
 
 instance ToDocValue User
+instance FromDocValue User

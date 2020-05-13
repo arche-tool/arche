@@ -58,6 +58,11 @@ instance ToDocValue HashOR
 instance ToDocValue HashArche
 instance ToDocValue StorageBucket
 
+instance FromDocValue HashEBSD
+instance FromDocValue HashOR
+instance FromDocValue HashArche
+instance FromDocValue StorageBucket
+
 -- ========= FromHttp =========
 instance FromHttpApiData HashEBSD where
     parseUrlPiece txt = Right $ HashEBSD txt

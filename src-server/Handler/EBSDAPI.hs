@@ -32,7 +32,7 @@ import Type.Storage
 import Type.Store
 
 import Util.Hash (calculateHashEBSD)
-import Util.FireStore (FromDocumentFields, GCP, fromDoc, toDoc, runGCPWith )
+import Util.FireStore (FromDocValue, GCP, fromDoc, toDoc, runGCPWith )
 
 -- type EBSDAPI = "ebsd" :>
 --   (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] [EBSD]
@@ -57,7 +57,7 @@ getEBSD user (HashEBSD hash) = do
     } 
   return ebsd
 
-getEBSDs :: (FromDocumentFields a) => User -> Google.Google GCP [a]
+getEBSDs :: (FromDocValue a) => User -> Google.Google GCP [a]
 getEBSDs user = do
   let
     db = "projects/apt-muse-269419/databases/(default)/documents"

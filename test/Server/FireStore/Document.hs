@@ -1,47 +1,84 @@
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE OverloadedStrings    #-}
 module Server.FireStore.Document
   ( test
   ) where
 
+import Control.Lens ((&), (?~), (.~), (^.), (^?), _Just)
+import Control.Monad (zipWithM_)
+import Data.Text (pack)
+import GHC.Generics
 import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import qualified Test.Tasty.QuickCheck as QC
+import qualified Data.HashMap.Strict      as HM
+import qualified Network.Google.FireStore as FireStore
+import qualified Test.Tasty.QuickCheck    as QC
 
 import Util.FireStore.Value
 
 test :: TestTree
-test = testCase "Example test case" $ do
-    -- assertion no. 1 (passes)
-    2 + 2 @?= 4
-    -- assertion no. 2 (fails)
-    assertBool "the list is not empty" $ null [1]
-    -- assertion no. 3 (would have failed, but won't be executed because
-    -- the previous assertion has already failed)
-    "foo" @?= "bar"
+test = testGroup "FireStore Document generic instances"
+  [ testGenericShape
+  , testIsomorphism
+  ]
 
-data Test deriving (Generic)
-data Test0 = Test0A | Test0B deriving (Generic, Show)
-data Test1 = Test1 Text Text deriving (Generic, Show)
-data Test2 = Test2 {test2a :: Text, test2b :: Text} deriving (Generic, Show)
-data Test3 = Test3 {test3a :: Test2, test3b :: Test1} deriving (Generic, Show)
+data Test0 = Test0A | Test0B | Test0C deriving (Generic, Eq, Show)
+data Test1 = Test1A String String | Test1B | Test1C String deriving (Generic, Eq, Show)
+data Test2 = Test2A {test2a :: String, test2b :: String} | Test2B deriving (Generic, Eq, Show)
+data Test3 = Test3A {test3a :: Test2, test3b :: Test1} deriving (Generic, Eq, Show)
+data Test4 = Test4A String String deriving (Generic, Eq, Show)
 
-instance Serialize Test
-instance Serialize Test0
-instance Serialize Test1
-instance Serialize Test2
-instance Serialize Test3
+instance ToDocValue Test0
+instance ToDocValue Test1
+instance ToDocValue Test2
+instance ToDocValue Test3
+instance ToDocValue Test4
 
-matchStringValue :: FireStore.Value -> String -> Bool
-matchStringValue v s = (v ^. FireStore.vStringValue) == (Just . pack $ s) 
+instance FromDocValue Test0
+instance FromDocValue Test1
+instance FromDocValue Test2
+instance FromDocValue Test3
+instance FromDocValue Test4
 
-test = let
-  [test1a, test1b] = (put $ Test1 "xx" "yy") ^. FireStore.vArrayValue . _Just . FireStore.avValues
-  mapTest2 = (put $ Test2 "xx" "yy") ^. FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional
-  in [
-    matchStringValue (put Test0A) (show Test0A),
-    matchStringValue test1a "xx",
-    matchStringValue test1b "yy",
-    matchStringValue (mapTest2 HM.! "test2a") "xx",
-    matchStringValue (mapTest2 HM.! "test2b") "yy"
-    ]
+matchStringValue :: FireStore.Value -> String -> Assertion
+matchStringValue v s = (v ^. FireStore.vStringValue) @?= (Just . pack $ s) 
+
+matchArrayValue :: FireStore.Value -> [String] -> Assertion
+matchArrayValue v ss = zipWithM_ matchStringValue vs ss
+  where
+    vs = v ^. FireStore.vArrayValue . _Just . FireStore.avValues
+
+testGenericShape :: TestTree
+testGenericShape = testCase "Generic encode data shape" $ do
+  let
+    [test4a, test4b] = (toValue $ Test4A "xx" "yy") ^. FireStore.vArrayValue . _Just . FireStore.avValues
+    mapTest1a = (toValue $ Test1A "xx" "yy") ^. FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional
+    mapTest2b = (toValue $ Test2A "xx" "yy") ^. FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional
+  matchStringValue (toValue Test0A) (show Test0A)
+  matchStringValue test4a "xx"
+  matchStringValue test4b "yy"
+  matchStringValue (mapTest1a HM.! "__TAG__") "Test1A"
+  matchArrayValue  (mapTest1a HM.! "__VALUES__") ["xx", "yy"]
+  matchStringValue (mapTest2b HM.! "test2a") "xx"
+  matchStringValue (mapTest2b HM.! "test2b") "yy"
+
+checkIso :: (Show a, ToDocValue a, FromDocValue a, Eq a) => a -> Assertion
+checkIso x = let
+  regen = fromValue (toValue x)
+  in case regen of
+    Right v  -> v @?= x
+    Left err -> error err
+
+testIsomorphism :: TestTree
+testIsomorphism = testCase "Generic isomorphism test" $ do
+  let
+    test1a = Test1A "ss" "dd"
+    test1b = Test1B
+    test1c = Test1C "ss"
+    test2a = Test2A "ss" "dd"
+  checkIso test1a
+  checkIso test1b
+  checkIso test1c
+  checkIso test2a
