@@ -66,10 +66,14 @@ Executable arche-server
   hs-source-dirs: src-server
   main-Is:        Main.hs
   build-depends:
-      arche-server-lib
+      arche
+    , arche-server-lib
     , base                       == 4.*
     , sledge                     >= 0.4
+    , vtk                        >= 0.1
     , bytestring
+    , conduit
+    , conduit-extra
     , gogol
     , gogol-firestore
     , gogol-storage
@@ -81,6 +85,7 @@ Executable arche-server
     , servant-blaze
     , servant-server
     , servant-multipart
+    , text
     , warp
   other-modules:
     Handler.EBSDAPI 
