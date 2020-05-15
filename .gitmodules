@@ -16,3 +16,6 @@
 [submodule "packages/mcl"]
 	path = packages/mcl
 	url = https://github.com/lostbean/mcl.git
+[submodule "packages/gogol"]
+	path = packages/gogol
+	url = git@github.com:arche-tool/gogol.git
