@@ -25,19 +25,6 @@ packages:
       sha256: ab472e169f12b97837cdfca2262b2d6fb569ae17876cbc10e97186944a401866
   original:
     hackage: gogol-0.5.0@sha256:01b38acf97ae0afb2465935fee1bebce03c1b84e629cf0887467be7ae361f0a7,3222
-- completed:
-    subdir: gogol-firestore
-    name: gogol-firestore
-    version: 0.5.0
-    git: git@github.com:arche-tool/gogol.git
-    pantry-tree:
-      size: 3994
-      sha256: b23a4d1d2e25c399e0ca9ae401da8c720c82d13f5159690b08efca7747a9f00d
-    commit: 192cb2e7a0ea47991a03735395c073a023a46c99
-  original:
-    subdir: gogol-firestore
-    git: git@github.com:arche-tool/gogol.git
-    commit: 192cb2e7a0ea47991a03735395c073a023a46c99
 snapshots:
 - completed:
     size: 524996
