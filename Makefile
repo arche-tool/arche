@@ -1,28 +1,43 @@
-GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
 GIT_OK := $(shell ( [ -n '$(git tag --points-at `git rev-parse HEAD`)' ] && [ -z '$(git status -s)' ] ) && echo 1 || echo 0)
 SHARED_VOL := /appdata
-TARGET_OS := linux
 OUTPUT_ROOT_DIR := .output
-BUILD_NAME := $(TARGET_OS)-$(GIT_VERSION)
+
+ifndef HOST_OS
+  ifeq ($(OS),Windows_NT)
+    HOST_OS := Windows
+  else
+    HOST_OS := $(shell uname)
+  endif
+endif
+
+ifndef GIT_VERSION
+  GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
+endif
+
+BUILD_NAME := $(HOST_OS)-$(GIT_VERSION)
 OUTPUT_DIR := $(OUTPUT_ROOT_DIR)/$(BUILD_NAME)
 
 GC_PROJ := apt-muse-269419
 
-ifeq ($(OS),Windows_NT)
-    OS := Windows
-else
-    OS := $(shell uname)
-endif
+STACK_ARGS := --local-bin-path $(OUTPUT_DIR)
+STACK := stack
+BUILD_STACK_IMAGE :=
 
-ifdef local
-	STACK_ARGS := --local-bin-path $(OUTPUT_DIR)
+ifdef CI
+  ifeq ($(CI),true)
+	STACK_ARGS := --system-ghc --local-bin-path $(OUTPUT_DIR)
 	STACK := stack
 	BUILD_STACK_IMAGE :=
-else
+  endif
+endif
+
+ifdef BUILD_ON_DOCKER
+  ifeq ($(CI),true)
 	STACK_ROOT := $(SHARED_VOL)/.stack-root
 	STACK_ARGS := --allow-different-user --stack-root $(STACK_ROOT) --local-bin-path $(OUTPUT_DIR)
 	STACK := docker container run -v $(shell pwd):$(SHARED_VOL):Z arche_stack:latest
 	BUILD_STACK_IMAGE := arche_stack_image
+  endif
 endif
 
 .PHONY: all clean
@@ -43,14 +58,14 @@ cli: arche
 stack.yaml.lock: 
 	$(STACK) freeze
 
-arche: install-deps stack.yaml.lock arche.cabal
+arche: build stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche --flag arche:cli $(STACK_ARGS)
 
-arche-server-$(BUILD_NAME): install-deps stack.yaml.lock arche.cabal
+arche-server-$(BUILD_NAME): build stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche-server --flag arche:server $(STACK_ARGS)
 
-install-deps: $(BUILD_STACK_IMAGE) 
-	$(STACK) build --no-terminal --install-ghc --only-dependencies $(STACK_ARGS)
+build: $(BUILD_STACK_IMAGE) 
+	$(STACK) build --no-terminal --test --bench --no-run-tests --no-run-benchmarks $(STACK_ARGS)
 
 arche_stack_image:
 	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
@@ -61,8 +76,11 @@ docker_server_image-$(BUILD_NAME): arche-server-$(BUILD_NAME)
 run-server: docker_server_image-$(BUILD_NAME)
 	docker container run -p 8888:8080 arche_server-$(BUILD_NAME):latest
 
-run-bench: install-deps stack.yaml.lock arche.cabal
+run-bench: build stack.yaml.lock arche.cabal
 	$(STACK) bench arche:arche-bench $(STACK_ARGS)
+
+run-test: build stack.yaml.lock arche.cabal
+	$(STACK) test arche $(STACK_ARGS)
 
 deploy-server: docker_server_image-$(BUILD_NAME)
 	docker push gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME)

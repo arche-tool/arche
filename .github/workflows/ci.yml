@@ -35,10 +35,37 @@ jobs:
         path: ~/.stack
         key: ${{ runner.os }}-${{ matrix.ghc }}-stack
 
+    - name: Setup env
+      run: |
+        echo ::set-env name=GIT_VERSION::$(git describe --abbrev=4 --dirty --always --tags)
+        echo ::set-env name=HOST_OS::${{ runner.os }}
+
     - name: Build
       run: |
-        stack build --system-ghc --test --bench --no-run-tests --no-run-benchmarks
+        make build
 
     - name: Test
       run: |
-        stack test --system-ghc arche
+        make run-test
+
+    - name: Build cli tool
+      run: |
+        make cli
+
+    - name: Move artifacts
+      run: 
+        - ls -lah ".output/$HOST_OS-$GIT_VERSION/"
+        - |
+        for f in $(find .output/$HOST_OS-$GIT_VERSION/* -maxdepth 0); do
+          filename=$(basename "$f");
+          ext=$([[ "$filename" = *.* ]] && echo ".${filename##*.}" || echo '');
+          mv -v "$f" "$(dirname "$f")/$HOST_OS-$(basename "$f" $ext)-$GIT_VERSION$ext";
+        done
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: .output/$HOST_OS-$GIT_VERSION/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
