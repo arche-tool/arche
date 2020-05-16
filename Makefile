@@ -42,7 +42,7 @@ endif
 
 .PHONY: all clean
 
-all: cli
+all: arche-cli
 
 clean-stack:
 	$(STACK) clean
@@ -52,13 +52,10 @@ clean:
 	docker rmi $(docker images 'arche_server-*' -q) --force
 	docker image prune -f
 
-cli: arche
-	mv $(OUTPUT_DIR)/arche $(OUTPUT_DIR)/arche-$(GIT_VERSION)
-
 stack.yaml.lock: 
 	$(STACK) freeze
 
-arche: build stack.yaml.lock arche.cabal
+arche-cli: build stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche --flag arche:cli $(STACK_ARGS)
 
 arche-server-$(BUILD_NAME): build stack.yaml.lock arche.cabal
@@ -84,3 +81,11 @@ run-test: build stack.yaml.lock arche.cabal
 
 deploy-server: docker_server_image-$(BUILD_NAME)
 	docker push gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME)
+
+rename-binaries:
+	@ls -lah ".output/$(HOST_OS)-$(GIT_VERSION)/"
+	@for f in $$(find .output/$(HOST_OS)-$(GIT_VERSION)/* -maxdepth 0); do \
+		filename=$$(basename "$$f"); \
+		ext=$$([[ "$$filename" = *.* ]] && echo ".$${filename##*.}" || echo ''); \
+		mv -v "$$f" "$$(dirname "$$f")/$(HOST_OS)-$$(basename "$$f" $$ext)-$(GIT_VERSION)$$ext"; \
+	done

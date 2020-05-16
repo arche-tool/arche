@@ -50,17 +50,11 @@ jobs:
 
     - name: Build cli tool
       run: |
-        make cli
+        make arche-cli
 
     - name: Move artifacts
-      run: 
-        - ls -lah ".output/$HOST_OS-$GIT_VERSION/"
-        - |
-        for f in $(find .output/$HOST_OS-$GIT_VERSION/* -maxdepth 0); do
-          filename=$(basename "$f");
-          ext=$([[ "$filename" = *.* ]] && echo ".${filename##*.}" || echo '');
-          mv -v "$f" "$(dirname "$f")/$HOST_OS-$(basename "$f" $ext)-$GIT_VERSION$ext";
-        done
+      run: | 
+        make rename-binaries
 
     - name: Release
       uses: softprops/action-gh-release@v1
