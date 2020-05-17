@@ -19,12 +19,6 @@ jobs:
         ghc: ["8.6.5"]
 
     steps:
-    - uses: actions/checkout@v2
-      ref: $GITHUB_REF
-      if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
-      with:
-        submodules: true
-    - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
     - name: Dump GitHub context
       env:
@@ -36,6 +30,13 @@ jobs:
       env:
         EVENT_JSON_FILENAME: ${{ github.event_path }}
       run: cat "$EVENT_JSON_FILENAME"
+
+    - uses: actions/checkout@v2
+      ref: github.event.ref
+      if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
+      with:
+        submodules: true
+    - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
