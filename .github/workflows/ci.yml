@@ -20,6 +20,11 @@ jobs:
         submodules: true
     - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
+    - name: Dump GitHub context
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+      run: echo "$GITHUB_CONTEXT"
+
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
       with:
@@ -47,7 +52,9 @@ jobs:
       name: Cache ~/.stack
       with:
         path: ~/.stack
-        key: ${{ runner.os }}-${{ matrix.ghc }}-stack
+        key: stack-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('stack.yaml.lock') }}
+        restore-keys: |
+          stack-${{ runner.os }}-${{ matrix.ghc }}-
 
     - name: Build
       run: |
