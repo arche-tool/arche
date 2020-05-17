@@ -21,7 +21,7 @@ jobs:
       if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
       with:
         submodules: true
-    - run: git fetch --tags
+    - run: git fetch --tags --recurse-submodules=on-demand 
 
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
@@ -67,7 +67,7 @@ jobs:
       if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
       with:
         submodules: true
-    - run: git fetch --tags
+    - run: git fetch --tags --recurse-submodules=on-demand 
 
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
@@ -119,7 +119,7 @@ jobs:
       if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
       with:
         submodules: true
-    - run: git fetch --tags
+    - run: git fetch --tags --recurse-submodules=on-demand 
 
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
