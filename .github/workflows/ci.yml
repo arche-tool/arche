@@ -21,9 +21,7 @@ jobs:
       if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
       with:
         submodules: true
-    - run: |
-        git submodule foreach 'git fetch --all' 
-        git fetch --tags
+    - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
