@@ -1,17 +1,12 @@
 GIT_OK := $(shell ( [ -n '$(git tag --points-at `git rev-parse HEAD`)' ] && [ -z '$(git status -s)' ] ) && echo 1 || echo 0)
+GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
 SHARED_VOL := /appdata
 OUTPUT_ROOT_DIR := .output
 
-ifndef HOST_OS
-  ifeq ($(OS),Windows_NT)
-    HOST_OS := Windows
-  else
-    HOST_OS := $(shell uname)
-  endif
-endif
-
-ifndef GIT_VERSION
-  GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
+ifeq ($(OS),Windows_NT)
+  HOST_OS := windows
+else
+  HOST_OS := $(shell uname | tr '[:upper:]' '[:lower:]')
 endif
 
 BUILD_NAME := $(HOST_OS)-$(GIT_VERSION)
@@ -89,3 +84,6 @@ rename-binaries:
 		ext=$$([[ "$$filename" = *.* ]] && echo ".$${filename##*.}" || echo ''); \
 		mv -v "$$f" "$$(dirname "$$f")/$(HOST_OS)-$$(basename "$$f" $$ext)-$(GIT_VERSION)$$ext"; \
 	done
+
+show-output-dir:
+	@echo $(OUTPUT_DIR)

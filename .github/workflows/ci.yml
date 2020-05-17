@@ -38,8 +38,7 @@ jobs:
 
     - name: Setup env
       run: |
-        echo ::set-env name=GIT_VERSION::$(git describe --abbrev=4 --dirty --always --tags)
-        echo ::set-env name=HOST_OS::${{ runner.os }}
+        echo ::set-env name=OUTPUT_DIR::$(make show-output-dir)
 
     - name: Build
       run: |
@@ -61,6 +60,6 @@ jobs:
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: .output/$HOST_OS-$GIT_VERSION/*
+        files: $OUTPUT_DIR/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

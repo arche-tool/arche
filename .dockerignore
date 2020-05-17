@@ -1,5 +1,7 @@
 *
+!app/build
 !.output
 !.credentials.json
+!config-server.json
 !linux.Dockerfile
 !wine.Dockerfile

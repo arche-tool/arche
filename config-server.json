@@ -1,4 +1,4 @@
 {
     "staticFolder": "app/build/static",
-    "assetManifestFile": "/data/Edgar/arche/app/build/asset-manifest.json"
+    "assetManifestFile": "app/build/asset-manifest.json"
 }
