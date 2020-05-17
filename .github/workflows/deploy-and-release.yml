@@ -5,6 +5,8 @@ on:
     branches: [master]
     tag:
       - '*'
+  create:
+    tag: '*'
 
 jobs:
   cli:
@@ -18,10 +20,22 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      ref: $GITHUB_REF
       if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
       with:
         submodules: true
     - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+
+    - name: Dump GitHub context
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+      run: echo "$GITHUB_CONTEXT"
+    - name: Show GitHub ref
+      run: echo "$GITHUB_REF"
+    - name: Dump event JSON
+      env:
+        EVENT_JSON_FILENAME: ${{ github.event_path }}
+      run: cat "$EVENT_JSON_FILENAME"
 
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
