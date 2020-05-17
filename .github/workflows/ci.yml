@@ -144,6 +144,6 @@ jobs:
 
     - name: Deploy application container
       env:
-        GCLOUD_SERVICE_KEY: {{ secrets.GCLOUD_SERVICE_KEY }}
+        GCLOUD_SERVICE_KEY: ${{ secrets.GCLOUD_SERVICE_KEY }}
       run: | 
         make deploy-server
