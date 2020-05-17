@@ -28,6 +28,22 @@ jobs:
         stack-version: ${{ matrix.stack }}
         enable-stack: true
 
+    - name: Setup node
+      uses: actions/setup-node@v1
+      with:
+        node-version: '12'
+
+    - name: Install elm-app
+      run: npm install create-elm-app -g
+        
+    - uses: actions/cache@v1
+      name: Cache ~/.npm
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+    
     - uses: actions/cache@v1
       name: Cache ~/.stack
       with:
@@ -49,6 +65,10 @@ jobs:
     - name: Build server
       run: |
         make arche-server
+
+    - name: Build frontend
+      run: |
+        make build-frontend
 
     - name: Deploy application container
       if: startsWith(github.ref, 'refs/tags/')

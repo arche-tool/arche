@@ -19,12 +19,11 @@ ARCHE_DOCKER_NAME := $(GCR_HOST)/$(GC_PROJ)/arche_server-$(BUILD_NAME)
 STACK_ARGS := --local-bin-path $(OUTPUT_DIR)
 STACK := stack
 BUILD_STACK_IMAGE :=
+ELM_BUILDER := elm-app 
 
 ifdef CI
   ifeq ($(CI),true)
 	STACK_ARGS := --system-ghc --local-bin-path $(OUTPUT_DIR)
-	STACK := stack
-	BUILD_STACK_IMAGE :=
   endif
 endif
 
@@ -61,6 +60,9 @@ arche-server: build stack.yaml.lock arche.cabal
 build: $(BUILD_STACK_IMAGE) 
 	$(STACK) build --no-terminal --test --bench --no-run-tests --no-run-benchmarks $(STACK_ARGS)
 
+build-frontend:
+	cd app && $(ELM_BUILDER) build
+
 arche_stack_image:
 	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
 
@@ -75,12 +77,13 @@ run-test: build stack.yaml.lock arche.cabal
 
 ifdef GCLOUD_SERVICE_KEY
 
-docker_server_image-$(BUILD_NAME): arche-serverdocker build \
-	--build-arg BUILD_NAME=$(BUILD_NAME) \
-	--build-arg GCLOUD_SERVICE_KEY \
-	-t $(ARCHE_DOCKER_NAME) \
-	-t arche_server-$(BUILD_NAME) \
-	-f server.Dockerfile .
+docker_server_image-$(BUILD_NAME): arche-server build-frontend
+	docker build \
+		--build-arg BUILD_NAME=$(BUILD_NAME) \
+		--build-arg GCLOUD_SERVICE_KEY \
+		-t $(ARCHE_DOCKER_NAME) \
+		-t arche_server-$(BUILD_NAME) \
+		-f server.Dockerfile .
 
 deploy-server: docker_server_image-$(BUILD_NAME)
 	@echo $$(echo "$$GCLOUD_SERVICE_KEY" | base64 -d | docker login -u _json_key --password-stdin https://$(GCR_HOST)/)
