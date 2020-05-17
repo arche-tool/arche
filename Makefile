@@ -55,7 +55,7 @@ stack.yaml.lock:
 arche-cli: build stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche --flag arche:cli $(STACK_ARGS)
 
-arche-server-$(BUILD_NAME): build stack.yaml.lock arche.cabal
+arche-server: build stack.yaml.lock arche.cabal
 	$(STACK) install arche:exe:arche-server --flag arche:server $(STACK_ARGS)
 
 build: $(BUILD_STACK_IMAGE) 
@@ -75,14 +75,12 @@ run-test: build stack.yaml.lock arche.cabal
 
 ifdef GCLOUD_SERVICE_KEY
 
-docker_server_image-$(BUILD_NAME): arche-server-$(BUILD_NAME)
-	docker build \
+docker_server_image-$(BUILD_NAME): arche-serverdocker build \
 	--build-arg BUILD_NAME=$(BUILD_NAME) \
 	--build-arg GCLOUD_SERVICE_KEY \
 	-t $(ARCHE_DOCKER_NAME) \
 	-t arche_server-$(BUILD_NAME) \
 	-f server.Dockerfile .
-
 
 deploy-server: docker_server_image-$(BUILD_NAME)
 	@echo $$(echo "$$GCLOUD_SERVICE_KEY" | base64 -d | docker login -u _json_key --password-stdin https://$(GCR_HOST)/)
