@@ -19,21 +19,8 @@ jobs:
         ghc: ["8.6.5"]
 
     steps:
-
-    - name: Dump GitHub context
-      env:
-        GITHUB_CONTEXT: ${{ toJson(github) }}
-      run: echo "$GITHUB_CONTEXT"
-    - name: Show GitHub ref
-      run: echo "$GITHUB_REF"
-    - name: Dump event JSON
-      env:
-        EVENT_JSON_FILENAME: ${{ github.event_path }}
-      run: cat "$EVENT_JSON_FILENAME"
-
+    
     - uses: actions/checkout@v2
-      ref: github.event.ref
-      if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
       with:
         submodules: true
     - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
@@ -85,7 +72,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-      if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
       with:
         submodules: true
     - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
