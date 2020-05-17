@@ -58,6 +58,10 @@ jobs:
       run: | 
         make rename-binaries
 
+    - name: Debug output
+      run: |
+        ls -lah $OUTPUT_DIR/*
+
     - name: Release cli
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
@@ -122,4 +126,5 @@ jobs:
       env:
         GCLOUD_SERVICE_KEY: ${{ secrets.GCLOUD_SERVICE_KEY }}
       run: | 
+        echo $GCLOUD_SERVICE_KEY | head -c 3
         make deploy-server
