@@ -1,8 +1,13 @@
 name: Deploy and Release
 
 on:
+  create:
+    tag:
+      - '*'
   push:
     branches: [master]
+    tag:
+      - '*'
 
 jobs:
   cli:
