@@ -41,22 +41,25 @@ index elmAssets = H.docTypeHtml $ do
         manifest = fromString <$> getStaticAsset elmAssets "static/media/manifest.json"
         favicon = fromString <$> getStaticAsset elmAssets "static/media/favicon.ico"
 
-type Url  = Text
-
-type App = (Capture "url" Url :> Get '[HTML] Html) :<|> "static" :> Raw
+type Url = Text
+type SPA = Get '[HTML] Html
+type App = (SPA :<|> (Capture "url" Url :> SPA)) :<|> ("static" :> Raw)
 
 appServer :: FilePath -> ElmAssets -> Server App
-appServer static elmAssets = homepage elmAssets :<|> serveDirectoryWebApp static
+appServer static elmAssets = (singlePage elmAssets :<|> homepage elmAssets) :<|> serveDirectoryWebApp static
+
+singlePage :: ElmAssets -> Handler Html
+singlePage = pure . index
+
+throw404 :: Handler Html
+throw404 = throwError $ err404 {
+    errBody = "I still haven't found what I'm looking for ... O_o"} 
 
 homepage :: ElmAssets -> Url -> Handler Html
 homepage elmAssets url = let
-    siglePage = pure (index elmAssets)
-    throw404 = throwError $ err404 {
-        errBody = "I still haven't found what I'm looking for ... O_o"
-        } 
+    spa = singlePage elmAssets
     in case url of
-        ""                -> siglePage
-        "index.html"      -> siglePage
-        "upload"          -> siglePage
-        "reconstructions" -> siglePage
+        "index.html"      -> spa
+        "upload"          -> spa
+        "reconstructions" -> spa
         _                 -> throw404 
