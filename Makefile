@@ -13,6 +13,8 @@ BUILD_NAME := $(HOST_OS)-$(GIT_VERSION)
 OUTPUT_DIR := $(OUTPUT_ROOT_DIR)/$(BUILD_NAME)
 
 GC_PROJ := apt-muse-269419
+GCR_HOST := gcr.io
+ARCHE_DOCKER_NAME := $(GCR_HOST)/$(GC_PROJ)/arche_server-$(BUILD_NAME)
 
 STACK_ARGS := --local-bin-path $(OUTPUT_DIR)
 STACK := stack
@@ -62,9 +64,6 @@ build: $(BUILD_STACK_IMAGE)
 arche_stack_image:
 	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
 
-docker_server_image-$(BUILD_NAME): arche-server-$(BUILD_NAME)
-	docker build --build-arg BUILD_NAME=$(BUILD_NAME) -t gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME) -t arche_server-$(BUILD_NAME) -f server.Dockerfile .
-
 run-server: docker_server_image-$(BUILD_NAME)
 	docker container run -p 8888:8080 arche_server-$(BUILD_NAME):latest
 
@@ -74,8 +73,21 @@ run-bench: build stack.yaml.lock arche.cabal
 run-test: build stack.yaml.lock arche.cabal
 	$(STACK) test arche $(STACK_ARGS)
 
+ifdef GCLOUD_SERVICE_KEY
+
+docker_server_image-$(BUILD_NAME): arche-server-$(BUILD_NAME)
+	docker build \
+	--build-arg BUILD_NAME=$(BUILD_NAME) \
+	--build-arg GCLOUD_SERVICE_KEY \
+	-t $(ARCHE_DOCKER_NAME) \
+	-t arche_server-$(BUILD_NAME) \
+	-f server.Dockerfile .
+
+
 deploy-server: docker_server_image-$(BUILD_NAME)
-	docker push gcr.io/$(GC_PROJ)/arche_server-$(BUILD_NAME)
+	@echo $$(echo "$$GCLOUD_SERVICE_KEY" | base64 -d | docker login -u _json_key --password-stdin https://$(GCR_HOST)/)
+	docker push $(ARCHE_DOCKER_NAME)
+endif
 
 rename-binaries:
 	@ls -lah ".output/$(HOST_OS)-$(GIT_VERSION)/"
