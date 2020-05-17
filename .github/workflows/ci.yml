@@ -22,8 +22,8 @@ jobs:
       with:
         submodules: true
     - run: |
-      git submodule foreach 'git fetch --all' 
-      git fetch --tags
+        git submodule foreach 'git fetch --all' 
+        git fetch --tags
 
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
