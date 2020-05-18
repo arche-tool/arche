@@ -2,8 +2,8 @@ name: Deploy and Release
 
 on:
   push:
-    tag:
-      - '**'
+    tags-ignore:
+      - ''
 
 jobs:
   cli:
