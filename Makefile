@@ -100,3 +100,6 @@ rename-binaries:
 
 show-output-dir:
 	@echo $(OUTPUT_DIR)
+
+show-git-version:
+	@echo $(GIT_VERSION)

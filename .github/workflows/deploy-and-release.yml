@@ -11,7 +11,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+        # wating for https://github.com/softprops/action-gh-release/issues/51
+        #os: [ubuntu-latest, macOS-latest, windows-latest]
+        os: [ubuntu-latest, macOS-latest]
         stack: ["latest"]
         ghc: ["8.6.5"]
 
