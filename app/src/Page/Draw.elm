@@ -1,8 +1,8 @@
-module Page.Draw exposing (..)
+module Page.Draw exposing (Model, Msg, main, init, update, subscriptions, view)
 
 import Browser
 import Browser.Events exposing (onMouseDown, onMouseMove, onMouseUp, onResize)
-import Html exposing (Html, div, text, img)
+import Html exposing (Html, div, text)
 import Html.Attributes as Attr
 import Html.Events exposing (on, onInput)
 import Json.Decode as JD exposing (int)
@@ -51,7 +51,10 @@ initCmd : Cmd Msg
 initCmd = Cmd.batch []
 
 -- ================================== Update ===================================
-type alias Size = { width : Int, height : Int }
+type alias Size = {
+    width : Int,
+    height : Int
+    }
 
 type Msg
     = LoadMesh String (Result String Mesh)
@@ -68,10 +71,10 @@ update msg model =
         Zoom dy ->
             ( { model | zoom = max 0.01 (model.zoom + dy / 100) }, Cmd.none )
 
-        SelectMesh url ->
+        SelectMesh _ ->
             ( model, Cmd.none )
 
-        LoadMesh url mesh ->
+        LoadMesh _ _ ->
             ( model , Cmd.none )
 
         MouseDown x y ->
@@ -126,10 +129,10 @@ view model =
 selectModel : Model -> Html Msg
 selectModel model =
     div [ Attr.style "position" "absolute", Attr.style "z-index" "2", Attr.style "backgroundColor" "white" ]
-        ([ Html.select [ onInput SelectMesh, Attr.value model.currentModel ]
+        [ Html.select [ onInput SelectMesh, Attr.value model.currentModel ]
             (List.map (\t -> Html.option [ Attr.value t ] [ text t ]) [])
-         ]
-        )
+        ]
+        
 
 -- ================================== Subscriptions ===================================
 subscriptions : Model -> Sub Msg

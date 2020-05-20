@@ -1,10 +1,10 @@
-module Page.Upload exposing (..)
+module Page.Upload exposing (Model, Msg, main, init, update, subscriptions, view)
 
 import Browser
 import File exposing (File)
-import Html exposing (..)
-import Html.Attributes as A exposing (..)
-import Html.Events exposing (..)
+import Html exposing (Html, div, input, progress, button, h1, text)
+import Html.Attributes as A
+import Html.Events as E
 import Http
 import Json.Decode as D
 
@@ -82,7 +82,7 @@ update msg model =
 
 -- =========== SUBSCRIPTIONS ===========
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
   Http.track "upload" GotProgress
 
 
@@ -92,21 +92,21 @@ view model =
   case model of
     Waiting ->
       input
-        [ type_ "file"
-        , multiple True
-        , on "change" (D.map GotFiles filesDecoder)
+        [ A.type_ "file"
+        , A.multiple True
+        , E.on "change" (D.map GotFiles filesDecoder)
         ]
         []
 
     Uploading fraction ->
       div []
         [ progress
-            [ value (String.fromInt (round (100 * fraction)))
+            [ A.value (String.fromInt (round (100 * fraction)))
             , A.max "100"
-            , style "display" "block"
+            , A.style "display" "block"
             ]
             []
-        , button [ onClick Cancel ] [ text "Cancel" ]
+        , button [ E.onClick Cancel ] [ text "Cancel" ]
         ]
 
     Done ->
