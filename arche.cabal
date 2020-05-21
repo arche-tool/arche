@@ -102,6 +102,7 @@ Library arche-server-lib
     Type.Result
     Type.Storage
     Type.Store
+    Util.Auth
     Util.FireStore
     Util.FireStore.Document
     Util.FireStore.Value
@@ -127,12 +128,16 @@ Library arche-server-lib
     , gogol-firestore            >= 0.4
     , gogol-storage              >= 0.4
     , hashable                   >= 1.2
+    , http-client                >= 0.6
+    , http-client-tls            >= 0.3
     , http-conduit               >= 2.0
     , lens                       >= 4.0
     , random                     >= 1.0
     , resourcet                  >= 1.2
+    , servant                    >= 0.16
     , servant-blaze              >= 0.7
-    , servant-server             >= 0.10
+    , servant-client             >= 0.16
+    , servant-server             >= 0.16
     , servant-multipart          >= 0.11
     , text                       >= 1.0
     , unordered-containers       >= 0.2
