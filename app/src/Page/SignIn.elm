@@ -49,7 +49,7 @@ view model =
         [ case model of
             Just profile ->
                 div []
-                    [ div [] [ Debug.log profile.idToken (text ("Welcome, " ++ profile.name)) ]
+                    [ div [] [ text ("Welcome, " ++ profile.name) ]
                     , div [] [ button [ onClick BeginSignOut ] [ text "Sign Out" ] ]
                     ]
 

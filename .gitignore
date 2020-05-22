@@ -7,4 +7,5 @@
 .stack-work/
 .vscode/
 .credentials.json
+app/.firebase
 profile/
