@@ -12,12 +12,12 @@ import Handler.EBSDAPI
 import System.Environment
 import Type.API
 import Type.Store (User(..))
+import Util.Auth
 import Util.OrphanInstances ()
 import Web.App
 import Web.Config
 
-
-type ArcheWeb = API :<|> App
+type ArcheWeb = AuthIDToken :> (API :<|> App)
 
 archeWeb :: Proxy ArcheWeb
 archeWeb = Proxy
@@ -48,4 +48,7 @@ main = do
         api :: Server API
         api = ebsdApi user :<|> orApi user :<|> fake
 
-    run 8080 . serve archeWeb $ api :<|> app 
+        server :: Server ArcheWeb
+        server = \token -> api :<|> app
+
+    run 8080 $ serveWithContext archeWeb authServerContext server

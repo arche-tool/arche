@@ -144,6 +144,7 @@ Library arche-server-lib
     , uuid                       >= 1.0
     , vector                     >= 0.12
     , warp                       >= 3.0
+    , wai                        >= 3.0
 
 Library
   hs-source-dirs:    src
