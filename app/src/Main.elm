@@ -5,6 +5,8 @@ import Browser.Navigation as Nav
 import Html exposing (Html, a, text, div, li, ul, img, nav)
 import Html.Attributes exposing (href, id, src)
 import Platform.Cmd as Cmd
+import Task
+import Time
 import Url
 import Url.Parser as Url
 
@@ -90,7 +92,16 @@ update msg model =
     Authentication signmsg ->
       let
         (newModel, newCmd) = SignIn.update signmsg model.signinModel
-      in ( {model | signinModel = newModel }, Cmd.map Authentication newCmd )
+        cmds = case newModel of
+          Just profile -> Cmd.batch [
+            Task.perform (\_ -> Upload (Upload.SetToken profile.idToken)) Time.now,
+            Cmd.map Authentication newCmd
+            ]
+          _ -> Cmd.batch [
+            Task.perform (\_ -> Upload Upload.ResetToken) Time.now,
+            Cmd.map Authentication newCmd
+            ]
+      in ( {model | signinModel = newModel }, cmds )
 
 
 parseUrl : Url.Url -> Maybe Page

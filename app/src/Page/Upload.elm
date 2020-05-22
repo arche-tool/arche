@@ -1,4 +1,4 @@
-module Page.Upload exposing (Model, Msg, main, init, update, subscriptions, view)
+module Page.Upload exposing (Model, Msg(..), main, init, update, subscriptions, view)
 
 import Browser
 import File exposing (File)
@@ -21,7 +21,12 @@ main =
 
 
 -- =========== MODEL ===========
-type Model
+type alias Model =
+  { token: Maybe String
+  , state: UploadState
+  }
+
+type UploadState
   = Waiting
   | Uploading Float
   | Done
@@ -30,14 +35,16 @@ type Model
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  ( Waiting
+  ( {token = Nothing, state = Waiting}
   , Cmd.none
   )
 
 
 -- =========== UPDATE ===========
 type Msg
-  = GotFiles (List File)
+  = SetToken String
+  | ResetToken
+  | GotFiles (List File)
   | GotProgress Http.Progress
   | Uploaded (Result Http.Error ())
   | Cancel
@@ -47,11 +54,15 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     GotFiles files ->
-      ( Uploading 0
-      , Http.request
+      let
+        hs = case model.token of
+          Just tk -> [Http.header "Authorization" ("Bearer " ++ tk)]
+          _       -> []
+      in ( {model | state = Uploading 0}
+         , Http.request
           { method = "POST"
           , url = "/api/upload"
-          , headers = []
+          , headers = hs
           , body = Http.multipartBody (List.map (Http.filePart "files[]") files)
           , expect = Http.expectWhatever Uploaded
           , timeout = Nothing
@@ -62,7 +73,7 @@ update msg model =
     GotProgress progress ->
       case progress of
         Http.Sending p ->
-          (Uploading (Http.fractionSent p), Cmd.none)
+          ({model | state = Uploading (Http.fractionSent p)}, Cmd.none)
 
         Http.Receiving _ ->
           (model, Cmd.none)
@@ -70,13 +81,17 @@ update msg model =
     Uploaded result ->
       case result of
         Ok _ ->
-          (Done, Cmd.none)
+          ({model | state = Done}, Cmd.none)
 
         Err _ ->
-          (Fail, Cmd.none)
+          ({model | state = Fail}, Cmd.none)
 
     Cancel ->
-      (Waiting, Http.cancel "upload")
+      ({model | state = Waiting}, Http.cancel "upload")
+
+    SetToken tk -> ({model | token = Just tk}, Cmd.none)
+    
+    ResetToken -> ({model | token = Nothing}, Cmd.none)
 
 
 
@@ -89,7 +104,13 @@ subscriptions _ =
 -- =========== VIEW ===========
 view : Model -> Html Msg
 view model =
-  case model of
+  case model.token of
+    Nothing -> div [] [text "Please Sign-in"]
+    Just _ -> renderState model.state
+
+renderState : UploadState -> Html Msg
+renderState state =
+  case state of
     Waiting ->
       input
         [ A.type_ "file"
