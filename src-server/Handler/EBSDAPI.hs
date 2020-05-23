@@ -69,7 +69,7 @@ getEBSDs user = do
         FireStore.csAllDescendants ?~ False
       lastUpdateField = FireStore.fieldReference & FireStore.frFieldPath ?~ "lastUpdate"
       permissionField = FireStore.fieldReference & FireStore.frFieldPath ?~ "permission"
-      permissionValue = FireStore.value & FireStore.vStringValue ?~ (email user)
+      permissionValue = FireStore.value & FireStore.vStringValue ?~ (id_number user)
       where' = FireStore.filter' & FireStore.fFieldFilter ?~ (
         FireStore.fieldFilter
           & FireStore.ffField ?~ permissionField
@@ -133,7 +133,7 @@ writePermissionEBSD user (HashEBSD hash)  = do
       fieldTxn = FireStore.fieldTransform &
           FireStore.ftFieldPath ?~ "permission" &
           FireStore.ftAppendMissingElements ?~ (FireStore.arrayValue & FireStore.avValues .~ [val])
-        where val = FireStore.value & FireStore.vStringValue ?~ (email user) 
+        where val = FireStore.value & FireStore.vStringValue ?~ (id_number user) 
       
       markLastUpdate :: FireStore.FieldTransform 
       markLastUpdate = FireStore.fieldTransform &
@@ -162,7 +162,7 @@ saveEBSD bucket (HashEBSD angHash) bs = let
   
 writeUser :: User -> Google.Google GCP ()
 writeUser user = do
-    let path = "projects/apt-muse-269419/databases/(default)/documents/users/" <> email user
+    let path = "projects/apt-muse-269419/databases/(default)/documents/users/" <> id_number user
     void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc user) path)
 
 writeNewUser :: User -> Google.Google GCP ()

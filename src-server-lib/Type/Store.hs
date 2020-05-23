@@ -52,12 +52,13 @@ instance ToJSON Arche
 -- ================ User ================
 data User
     = User
-    { email :: Text
+    { id_number :: Text
+    , email :: Maybe Text
     , name :: Maybe Text
     } deriving (Show, Generic)
 
 instance Eq User where
-    (==) (User e1 _) (User e2 _) = e1 == e2
+    (==) e1 e2 = id_number e1 == id_number e2
 
 instance ToJSON User
 
