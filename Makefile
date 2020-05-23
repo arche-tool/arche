@@ -77,7 +77,7 @@ run-test: build stack.yaml.lock arche.cabal
 
 ifdef GCLOUD_SERVICE_KEY
 
-docker_server_image-$(BUILD_NAME): arche-server build-frontend
+docker_server_image-$(BUILD_NAME): arche-server
 	docker build \
 		--build-arg BUILD_NAME=$(BUILD_NAME) \
 		--build-arg GCLOUD_SERVICE_KEY \
