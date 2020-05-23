@@ -29,6 +29,7 @@ main =
 -- =========== MODEL ===========
 type alias Flags =
   { logo : String
+  , oauth_azp : String
   }
 
 type alias Model =
@@ -52,7 +53,17 @@ init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
   let
     (upModel, _) = Upload.init ()
-    model = Model key url (parseUrl url) flags upModel Viewer.init Nothing
+    (signModel, _) = SignIn.init () flags.oauth_azp
+    viewerModel = Viewer.init
+    model =
+      { key = key
+      , url = url
+      , page = parseUrl url
+      , flags = flags
+      , uploadModel = upModel
+      , viewerModel = viewerModel
+      , signinModel = signModel
+      }
   in ( model, Cmd.none )
 
 -- =========== UPDATE ===========
@@ -92,7 +103,7 @@ update msg model =
     Authentication signmsg ->
       let
         (newModel, newCmd) = SignIn.update signmsg model.signinModel
-        cmds = case newModel of
+        cmds = case newModel.profile of
           Just profile -> Cmd.batch [
             Task.perform (\_ -> Upload (Upload.SetToken profile.idToken)) Time.now,
             Cmd.map Authentication newCmd

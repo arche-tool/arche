@@ -118,6 +118,8 @@ jobs:
         make build
 
     - name: Build frontend
+      env:
+        ELM_APP_OAUTH_AZP: ${{ secrets.OAUTH_AZP }}
       run: |
         make build-frontend
 
@@ -136,5 +138,6 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       env:
         FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        ELM_APP_OAUTH_AZP: ${{ secrets.OAUTH_AZP }}
       run: | 
         make deploy-frontend

@@ -76,6 +76,8 @@ jobs:
         make arche-server
 
     - name: Build frontend
+      env:
+        ELM_APP_OAUTH_AZP: ${{ secrets.OAUTH_AZP }}
       run: |
         make build-frontend
 

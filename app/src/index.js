@@ -8,11 +8,14 @@ import manifest from '../public/manifest.json';
 
 let googleSignOutComplete = new EventTarget();
 
-let app = Elm.Main.init({
-  node: document.getElementById('root'),
-  flags: {
-    logo: logoPath,
-    signOutComplete: googleSignOutComplete}
+let app = Elm.Main.init(
+  {
+    node: document.getElementById('root'),
+    flags: {
+      logo: logoPath,
+      signOutComplete: googleSignOutComplete,
+      oauth_azp: process.env.ELM_APP_OAUTH_AZP
+    }
   }
 );
 
