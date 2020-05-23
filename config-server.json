@@ -1,4 +1,3 @@
 {
-    "staticFolder": "app/build/static",
-    "assetManifestFile": "app/build/asset-manifest.json"
+    "oauthContext": ""
 }

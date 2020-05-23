@@ -12,7 +12,6 @@ RUN mkdir -p /root/.config/gcloud/
 ENV GCLOUD_SERVICE_KEY=${GCLOUD_SERVICE_KEY}
 RUN echo $(echo "$GCLOUD_SERVICE_KEY" | base64 -d) > /root/.config/gcloud/application_default_credentials.json
 COPY .output/${BUILD_NAME}/arche-server /usr/arche/arche-server
-COPY app/build /usr/arche/app/build
 COPY config-server.json /usr/arche/config-server.json
 
 # Service must listen to $PORT environment variable.

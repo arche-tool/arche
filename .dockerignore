@@ -1,5 +1,4 @@
 *
-!app/build
 !.output
 !.credentials.json
 !config-server.json
