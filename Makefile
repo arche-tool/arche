@@ -88,6 +88,18 @@ docker_server_image-$(BUILD_NAME): arche-server build-frontend
 deploy-server: docker_server_image-$(BUILD_NAME)
 	@echo $$(echo "$$GCLOUD_SERVICE_KEY" | base64 -d | docker login -u _json_key --password-stdin https://$(GCR_HOST)/)
 	docker push $(ARCHE_DOCKER_NAME)
+
+endif
+
+
+ifdef FIREBASE_TOKEN
+
+deploy-frontend: build-frontend
+	cd app && firebase deploy \
+    	-m $(GIT_VERSION) \
+    	--only hosting \
+		--token $$(echo "$$FIREBASE_TOKEN" | base64 -d)
+
 endif
 
 rename-binaries:

@@ -94,8 +94,8 @@ jobs:
       with:
         node-version: '12'
     
-    - name: Install elm-app
-      run: npm install create-elm-app -g
+    - name: Install elm-app & firebase-tools
+      run: npm install -g create-elm-app firebase-tools
 
     - uses: actions/cache@v1
       name: Cache ~/.npm
@@ -131,3 +131,10 @@ jobs:
         GCLOUD_SERVICE_KEY: ${{ secrets.GCLOUD_SERVICE_KEY }}
       run: | 
         make deploy-server
+
+    - name: Deploy web app
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      run: | 
+        make deploy-frontend
