@@ -106,9 +106,9 @@ jobs:
       name: Cache ~/.stack
       with:
         path: ~/.stack
-        key: stack-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('stack.yaml.lock') }}
+        key: stack-${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
         restore-keys: |
-          stack-${{ runner.os }}-${{ matrix.ghc }}-
+          stack-${{ runner.os }}-
 
     - name: Build
       run: |
