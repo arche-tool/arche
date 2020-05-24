@@ -159,10 +159,13 @@ authHandler expected_azp = mkAuthHandler $ \req -> do
     throw401 "Account without verified email. Please, verify it first."
   unless (matchAZP tokenInfo) $
     throw401 ("Client ID mismatch: " <> (unpack . raw_azp $ azp tokenInfo))
+  unless (matchIssuer tokenInfo) $
+    throw401 ("Unexpected issuer: " <> (unpack $ iss tokenInfo))
   return tokenInfo
   where
-    isEmailVerified info = email_verified info == Just True
     matchAZP info = azp info == expected_azp 
+    matchIssuer info = (iss info == "https://accounts.google.com") || (iss info == "accounts.google.com")
+    isEmailVerified info = email_verified info == Just True
     throw401 msg = throwError $ err401 { errBody = fromString msg }
 
 authServerContext :: OAuthAZP -> Context '[AuthHandler Request TokenInfoV3]
