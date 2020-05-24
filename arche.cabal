@@ -81,6 +81,7 @@ Executable arche-server
     , http-conduit
     , http-media
     , lens
+    , optparse-applicative
     , resourcet
     , servant-server
     , servant-multipart

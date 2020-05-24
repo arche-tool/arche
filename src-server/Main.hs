@@ -6,7 +6,6 @@ module Main where
 
 import Network.Wai.Handler.Warp
 import Servant
-import System.Environment
 
 import Type.API
 import Util.Auth            (AuthIDToken, authServerContext)
@@ -26,15 +25,10 @@ proxyServer = Proxy
 main :: IO ()
 main = do
   
-    args <- getArgs
-    let
-        configErr = error . ("Erro reading config file: \n" <>)
-    config <- case args of
-        [configFile] -> do
-            either configErr id <$> readArcherServerConfig configFile
-        _ -> error "One and just one argument is necessary: the filepath to the configuration file."
-    let
+    config <- loadConfig
+    putStrLn . show $ config
 
+    let
         fake :: Server ArcheAPI
         fake = undefined
 
@@ -48,4 +42,4 @@ main = do
             , Store.name      = Auth.name token
             }
 
-    run 8080 $ serveWithContext proxyServer authServerContext server
+    run (port config) $ serveWithContext proxyServer authServerContext server
