@@ -21,5 +21,6 @@ COPY .output/${BUILD_NAME}/arche-server /usr/arche/arche-server
 ENV PORT 8080
 ENV PATH="/usr/arche:${PATH}"
 
-# Run the web service on container startup. Needs external arg to set RunMode.
-CMD ["arche-server", "--port ${PORT}" "--oauth-client-id ${OAUTH_CLIENT_ID}", "full-api"]
+# Run the web service on container startup.
+ENTRYPOINT ["arche-server", "--port ${PORT}" "--oauth-client-id ${OAUTH_CLIENT_ID}"]
+CMD ["full-api"]
