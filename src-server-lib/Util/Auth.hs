@@ -13,9 +13,9 @@ module Util.Auth
     ( userInfo
     , authHandler
     , authServerContext
-    , mkOAuthAZP
+    , mkOAuthClientID
     , AuthIDToken
-    , OAuthAZP
+    , OAuthClientID
     , TokenInfoV3
       ( iss
       , sub
@@ -60,17 +60,17 @@ type instance AuthServerData AuthIDToken = TokenInfoV3
 
 type IDToken = Text
 
-newtype OAuthAZP = OAuthAZP { raw_azp :: Text } deriving (Show, Eq, Generic)
+newtype OAuthClientID = OAuthClientID { raw_client_id :: Text } deriving (Show, Eq, Generic)
 
-instance FromJSON OAuthAZP where
-  parseJSON = fmap OAuthAZP . parseJSON 
+instance FromJSON OAuthClientID where
+  parseJSON = fmap OAuthClientID . parseJSON 
 
 data TokenInfoV3
   = TokenInfoV3
   -- These six fields are included in all Google ID Tokens.
   { iss :: Text 
   , sub :: Text 
-  , azp :: OAuthAZP 
+  , azp :: OAuthClientID 
   , aud :: Text 
   , iat :: Int 
   , expire :: Int 
@@ -145,20 +145,20 @@ parseIDToken req = do
   where
     maybeToEither e = maybe (Left e) Right
 
-mkOAuthAZP :: Text -> OAuthAZP
-mkOAuthAZP txt
-  | suffix `isSuffixOf` txt = OAuthAZP txt
-  | otherwise               = OAuthAZP (txt <> suffix) 
+mkOAuthClientID :: Text -> OAuthClientID
+mkOAuthClientID txt
+  | suffix `isSuffixOf` txt = OAuthClientID txt
+  | otherwise               = OAuthClientID (txt <> suffix) 
   where suffix = ".apps.googleusercontent.com"
 
-authHandler :: OAuthAZP -> AuthHandler Request TokenInfoV3
+authHandler :: OAuthClientID -> AuthHandler Request TokenInfoV3
 authHandler expected_azp = mkAuthHandler $ \req -> do
   idToken   <- either throw401 return $ parseIDToken req
   tokenInfo <- either throw401 return =<< (liftIO $ userInfo idToken)
   unless (isEmailVerified tokenInfo) $
     throw401 "Account without verified email. Please, verify it first."
   unless (matchAZP tokenInfo) $
-    throw401 ("Client ID mismatch: " <> (unpack . raw_azp $ azp tokenInfo))
+    throw401 ("Client ID mismatch: " <> (unpack . raw_client_id $ azp tokenInfo))
   unless (matchIssuer tokenInfo) $
     throw401 ("Unexpected issuer: " <> (unpack $ iss tokenInfo))
   return tokenInfo
@@ -168,5 +168,5 @@ authHandler expected_azp = mkAuthHandler $ \req -> do
     isEmailVerified info = email_verified info == Just True
     throw401 msg = throwError $ err401 { errBody = fromString msg }
 
-authServerContext :: OAuthAZP -> Context '[AuthHandler Request TokenInfoV3]
+authServerContext :: OAuthClientID -> Context '[AuthHandler Request TokenInfoV3]
 authServerContext expected_azp = authHandler expected_azp :. EmptyContext

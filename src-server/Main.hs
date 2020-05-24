@@ -29,7 +29,7 @@ main = do
     putStrLn . show $ config
 
     let
-        oauthAZP = Auth.mkOAuthAZP (oauth_azp config)
+        OAuthClientID = Auth.mkOAuthClientID (oauth_client_id config)
 
         fake :: Server ArcheAPI
         fake = undefined
@@ -45,4 +45,4 @@ main = do
             }
 
     run (port config) $
-        serveWithContext proxyServer (authServerContext oauthAZP) server
+        serveWithContext proxyServer (authServerContext OAuthClientID) server

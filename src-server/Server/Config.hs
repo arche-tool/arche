@@ -5,7 +5,7 @@
 
 module Server.Config
   ( ArcheServerConfig
-    ( oauth_azp
+    ( oauth_client_id
     , run_mode
     , port
     )
@@ -34,7 +34,7 @@ data RunMode
 
 data ArcheServerConfig
     = ArcheServerConfig
-    { oauth_azp :: Text
+    { oauth_client_id :: Text
     , run_mode :: RunMode
     , port :: Int
     } deriving (Show, Generic)
@@ -59,7 +59,7 @@ parseRunMode = subparser
 
 parseConfig :: Parser ArcheServerConfig
 parseConfig = ArcheServerConfig
-  <$> parseOAuthAZP
+  <$> parseOAuthClientID
   <*> parseRunMode
   <*> parsePort
 
@@ -83,16 +83,16 @@ loadConfig = do
     opts = info (helper <*> parseEitherConfigOrPath)
            ( fullDesc
            <> progDesc "Arche Server exposes an API to perform parent phase reconstruction on metals."
-           <> header "Arche Builder" )
+           <> header "Arche Builder")
 
 -- ======================================= Common tools ==================================
 
-parseOAuthAZP :: Parser Text
-parseOAuthAZP = pack <$> strOption
-   (  long "oauth-azp"
-   <> short 'a'
-   <> metavar "OAUTH_AZP"
-   <> help "OAuth client id used to verify signed users." )
+parseOAuthClientID :: Parser Text
+parseOAuthClientID = pack <$> strOption
+   (  long "oauth-client-id"
+   <> short 'o'
+   <> metavar "OAUTH_CLIENT_ID"
+   <> help "OAuth client id used to verify signed users.")
 
 parsePort :: Parser Int
 parsePort = option auto
