@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
@@ -12,14 +13,16 @@ module Util.Auth
     ( userInfo
     , authHandler
     , authServerContext
+    , mkOAuthAZP
     , AuthIDToken
+    , OAuthAZP
     , TokenInfoV3
       ( iss
       , sub
       , azp
       , aud
       , iat
-      , exp
+      , expire
       , email
       , email_verified
       , name
@@ -30,12 +33,14 @@ module Util.Auth
       )
     ) where
 
+import Control.Monad                    (unless)
 import Control.Monad.IO.Class           (liftIO)
-import Data.Aeson                       (FromJSON)
+import Data.Aeson                       (FromJSON(..), withObject, (.:), (.:?))
 import Data.Proxy                       (Proxy (Proxy))
 import Data.String                      (fromString)
-import Data.Text                        (Text, strip)
+import Data.Text                        (Text, strip, isSuffixOf, unpack)
 import Data.Text.Encoding               (decodeUtf8)
+import Data.Text.Read
 import GHC.Generics                     (Generic)
 import Network.HTTP.Client              (newManager)
 import Network.HTTP.Client.TLS          (tlsManagerSettings)
@@ -44,28 +49,34 @@ import Servant                          (throwError)
 import Servant.API                      ((:>), Get, JSON, QueryParam)
 import Servant.API.Experimental.Auth    (AuthProtect)
 import Servant.Client
-import Servant.Server                   (Context ((:.), EmptyContext), err401, errBody, Handler)
+import Servant.Server                   (Context ((:.), EmptyContext), err401, errBody)
 import Servant.Server.Experimental.Auth (AuthHandler, AuthServerData, mkAuthHandler)
 
-import qualified Data.ByteString  as BS
+import qualified Data.ByteString as BS
+import qualified Data.Text       as T
 
 type AuthIDToken = AuthProtect "google-id-token"
 type instance AuthServerData AuthIDToken = TokenInfoV3
 
 type IDToken = Text
 
+newtype OAuthAZP = OAuthAZP { raw_azp :: Text } deriving (Show, Eq, Generic)
+
+instance FromJSON OAuthAZP where
+  parseJSON = fmap OAuthAZP . parseJSON 
+
 data TokenInfoV3
   = TokenInfoV3
   -- These six fields are included in all Google ID Tokens.
   { iss :: Text 
   , sub :: Text 
-  , azp :: Text 
+  , azp :: OAuthAZP 
   , aud :: Text 
-  , iat :: Text 
-  , exp :: Text 
+  , iat :: Int 
+  , expire :: Int 
   -- These seven fields are only included when the user has granted the "profile" and "email" OAuth scopes to the application.
   , email :: Maybe Text
-  , email_verified :: Maybe Text
+  , email_verified :: Maybe Bool
   , name :: Maybe Text
   , picture :: Maybe Text
   , given_name :: Maybe Text
@@ -73,7 +84,37 @@ data TokenInfoV3
   , locale :: Maybe Text
   } deriving (Show, Generic)
 
-instance FromJSON TokenInfoV3
+instance FromJSON TokenInfoV3 where
+  parseJSON = withObject "TokenInfoV3" $ \o -> do
+    iss <- o .: "iss"
+    sub <- o .: "sub"
+    azp <- o .: "azp"
+    aud <- o .: "aud"
+    iat <- o .: "iat" >>= readInt
+    expire <- o .: "exp" >>= readInt
+    email <- o .:? "email"
+    email_verified <- o .:? "email_verified" >>= maybe (pure Nothing) (fmap Just . readBool)
+    name <- o .:? "name"
+    picture <- o .:? "picture"
+    given_name <- o .:? "given_name"
+    family_name <- o .:? "family_name"
+    locale <- o .:? "locale"
+    return TokenInfoV3{..}
+
+readInt :: (Monad m, Integral a) => Text -> m a
+readInt s = case decimal s of
+  Left err     -> fail err
+  Right (x, r)
+    | T.length r == 0 -> return x
+    | otherwise       -> fail "Not totaly a number."
+
+readBool :: (Monad m) => Text -> m Bool
+readBool s
+  | norm == "true"  = return True 
+  | norm == "false" = return True 
+  | otherwise       = fail "Not a boolean value"
+  where
+    norm = T.toLower s
 
 userInfo :: IDToken -> IO (Either String TokenInfoV3)
 userInfo idToken = do
@@ -104,13 +145,25 @@ parseIDToken req = do
   where
     maybeToEither e = maybe (Left e) Right
 
-authHandler :: AuthHandler Request TokenInfoV3
-authHandler = mkAuthHandler handler
-  where
-  throw401 msg = throwError $ err401 { errBody = fromString msg }
-  verifyIdToken :: IDToken -> Handler TokenInfoV3
-  verifyIdToken tk = (liftIO $ userInfo tk) >>= either throw401 return
-  handler = either throw401 verifyIdToken . parseIDToken
+mkOAuthAZP :: Text -> OAuthAZP
+mkOAuthAZP txt
+  | suffix `isSuffixOf` txt = OAuthAZP txt
+  | otherwise               = OAuthAZP (txt <> suffix) 
+  where suffix = ".apps.googleusercontent.com"
 
-authServerContext :: Context '[AuthHandler Request TokenInfoV3]
-authServerContext = authHandler :. EmptyContext
+authHandler :: OAuthAZP -> AuthHandler Request TokenInfoV3
+authHandler expected_azp = mkAuthHandler $ \req -> do
+  idToken   <- either throw401 return $ parseIDToken req
+  tokenInfo <- either throw401 return =<< (liftIO $ userInfo idToken)
+  unless (isEmailVerified tokenInfo) $
+    throw401 "Account without verified email. Please, verify it first."
+  unless (matchAZP tokenInfo) $
+    throw401 ("Client ID mismatch: " <> (unpack . raw_azp $ azp tokenInfo))
+  return tokenInfo
+  where
+    isEmailVerified info = email_verified info == Just True
+    matchAZP info = azp info == expected_azp 
+    throw401 msg = throwError $ err401 { errBody = fromString msg }
+
+authServerContext :: OAuthAZP -> Context '[AuthHandler Request TokenInfoV3]
+authServerContext expected_azp = authHandler expected_azp :. EmptyContext

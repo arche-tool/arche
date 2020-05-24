@@ -29,6 +29,8 @@ main = do
     putStrLn . show $ config
 
     let
+        oauthAZP = Auth.mkOAuthAZP (oauth_azp config)
+
         fake :: Server ArcheAPI
         fake = undefined
 
@@ -42,4 +44,5 @@ main = do
             , Store.name      = Auth.name token
             }
 
-    run (port config) $ serveWithContext proxyServer authServerContext server
+    run (port config) $
+        serveWithContext proxyServer (authServerContext oauthAZP) server
