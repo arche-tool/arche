@@ -29,7 +29,7 @@ main = do
     putStrLn . show $ config
 
     let
-        OAuthClientID = Auth.mkOAuthClientID (oauth_client_id config)
+        oauthClientID = Auth.mkOAuthClientID (oauth_client_id config)
 
         fake :: Server ArcheAPI
         fake = undefined
@@ -45,4 +45,4 @@ main = do
             }
 
     run (port config) $
-        serveWithContext proxyServer (authServerContext OAuthClientID) server
+        serveWithContext proxyServer (authServerContext oauthClientID) server
