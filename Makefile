@@ -75,7 +75,12 @@ run-bench: build stack.yaml.lock arche.cabal
 run-test: build stack.yaml.lock arche.cabal
 	$(STACK) test arche $(STACK_ARGS)
 
-ifdef GCLOUD_SERVICE_KEY && OAUTH_CLIENT_ID
+## ------- deploy backend actions --------
+ifndef GCLOUD_SERVICE_KEY
+	echo "Missing env GCLOUD_SERVICE_KEY"
+else ifndef OAUTH_CLIENT_ID
+	echo "Missing env OAUTH_CLIENT_ID"
+else
 
 docker_server_image-$(BUILD_NAME): arche-server
 	docker build \
@@ -93,6 +98,7 @@ deploy-server: docker_server_image-$(BUILD_NAME)
 endif
 
 
+## ------- deploy frontend actions --------
 ifdef FIREBASE_TOKEN
 
 deploy-frontend: build-frontend
