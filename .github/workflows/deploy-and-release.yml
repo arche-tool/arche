@@ -24,11 +24,6 @@ jobs:
         submodules: true
     - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
-    - name: Dump GitHub context
-      env:
-        GITHUB_CONTEXT: ${{ toJson(github) }}
-      run: echo "$GITHUB_CONTEXT"
-
     - uses: actions/setup-haskell@v1.1
       name: Setup Haskell Stack
       with:
