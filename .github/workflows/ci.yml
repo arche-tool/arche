@@ -42,9 +42,6 @@ jobs:
 
     - name: Install elm-app
       run: make setup-frontend-dev-env
-
-    - uses: actions/cache@v1
-      name: Cache ~/.
         
     - uses: actions/cache@v1
       name: Cache ~/.npm
