@@ -66,9 +66,6 @@ build-frontend:
 arche_stack_image:
 	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
 
-run-server: docker_server_image-$(BUILD_NAME)
-	docker container run -p 8888:8080 arche_server-$(BUILD_NAME):latest
-
 run-bench: build stack.yaml.lock arche.cabal
 	$(STACK) bench arche:arche-bench $(STACK_ARGS)
 
@@ -82,7 +79,7 @@ else ifndef OAUTH_CLIENT_ID
 	echo "Missing env OAUTH_CLIENT_ID"
 else
 
-docker_server_image-$(BUILD_NAME): arche-server
+docker_server_image: arche-server
 	docker build \
 		--build-arg BUILD_NAME=$(BUILD_NAME) \
 		--build-arg GCLOUD_SERVICE_KEY \
@@ -91,7 +88,10 @@ docker_server_image-$(BUILD_NAME): arche-server
 		-t arche_server-$(BUILD_NAME) \
 		-f server.Dockerfile .
 
-deploy-server: docker_server_image-$(BUILD_NAME)
+run-server: docker_server_image
+	docker container run -p 8888:8080 arche_server-$(BUILD_NAME):latest
+
+deploy-server: docker_server_image
 	@echo $$(echo "$$GCLOUD_SERVICE_KEY" | base64 -d | docker login -u _json_key --password-stdin https://$(GCR_HOST)/)
 	docker push $(ARCHE_DOCKER_NAME)
 

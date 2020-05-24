@@ -9,9 +9,11 @@ ARG GCLOUD_SERVICE_KEY
 ARG OAUTH_CLIENT_ID
 WORKDIR /usr/arche
 
+ENV GCLOUD_SERVICE_KEY=${GCLOUD_SERVICE_KEY}
+ENV OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
+
 # Set GCP credentials
 RUN mkdir -p /root/.config/gcloud/
-ENV GCLOUD_SERVICE_KEY=${GCLOUD_SERVICE_KEY}
 RUN echo $(echo "$GCLOUD_SERVICE_KEY" | base64 -d) > /root/.config/gcloud/application_default_credentials.json
 
 # Copy server bin
@@ -21,6 +23,11 @@ COPY .output/${BUILD_NAME}/arche-server /usr/arche/arche-server
 ENV PORT 8080
 ENV PATH="/usr/arche:${PATH}"
 
+RUN echo '#!/bin/bash' > run.sh
+RUN echo "/usr/arche/arche-server --port=$PORT --oauth-client-id=$OAUTH_CLIENT_ID \"\$@\" " >> run.sh
+RUN chmod +x run.sh
+
 # Run the web service on container startup.
-ENTRYPOINT ["arche-server", "--port ${PORT}" "--oauth-client-id ${OAUTH_CLIENT_ID}"]
+#ENTRYPOINT bash
+ENTRYPOINT ["run.sh"]
 CMD ["full-api"]
