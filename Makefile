@@ -61,7 +61,7 @@ build: $(BUILD_STACK_IMAGE)
 	$(STACK) build --no-terminal --test --bench --no-run-tests --no-run-benchmarks $(STACK_ARGS)
 
 build-frontend:
-	cd app && $(ELM_BUILDER) build
+	cd app && $(MAKE) build
 
 arche_stack_image:
 	docker build --build-arg USERID=$(shell id -u) -t arche_stack -f linux.Dockerfile .
@@ -117,4 +117,4 @@ show-git-version:
 	@echo $(GIT_VERSION)
 
 setup-frontend-dev-env:
-	cd app && npm install -g
+	cd app && $(MAKE) setup-dev-env
