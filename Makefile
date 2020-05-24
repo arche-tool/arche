@@ -75,12 +75,13 @@ run-bench: build stack.yaml.lock arche.cabal
 run-test: build stack.yaml.lock arche.cabal
 	$(STACK) test arche $(STACK_ARGS)
 
-ifdef GCLOUD_SERVICE_KEY
+ifdef GCLOUD_SERVICE_KEY && OAUTH_CLIENT_ID
 
 docker_server_image-$(BUILD_NAME): arche-server
 	docker build \
 		--build-arg BUILD_NAME=$(BUILD_NAME) \
 		--build-arg GCLOUD_SERVICE_KEY \
+		--build-arg OAUTH_CLIENT_ID \
 		-t $(ARCHE_DOCKER_NAME) \
 		-t arche_server-$(BUILD_NAME) \
 		-f server.Dockerfile .
