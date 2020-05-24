@@ -41,7 +41,10 @@ jobs:
         node-version: '12'
 
     - name: Install elm-app
-      run: npm install create-elm-app -g
+      run: make setup-frontend-dev-env
+
+    - uses: actions/cache@v1
+      name: Cache ~/.
         
     - uses: actions/cache@v1
       name: Cache ~/.npm

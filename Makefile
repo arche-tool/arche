@@ -115,3 +115,6 @@ show-output-dir:
 
 show-git-version:
 	@echo $(GIT_VERSION)
+
+setup-frontend-dev-env:
+	cd app && npm install -g

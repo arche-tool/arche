@@ -95,7 +95,9 @@ jobs:
         node-version: '12'
     
     - name: Install elm-app & firebase-tools
-      run: npm install -g create-elm-app firebase-tools
+      run: |
+        make setup-frontend-dev-env
+        npm install -g firebase-tools
 
     - uses: actions/cache@v1
       name: Cache ~/.npm
