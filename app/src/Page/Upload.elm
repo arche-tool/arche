@@ -61,7 +61,7 @@ update msg model =
       in ( {model | state = Uploading 0}
          , Http.request
           { method = "POST"
-          , url = "/compute.api/ebsd"
+          , url = "/api/ebsd"
           , headers = hs
           , body = Http.multipartBody (List.map (Http.filePart "files[]") files)
           , expect = Http.expectWhatever Uploaded

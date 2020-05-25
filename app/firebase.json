@@ -5,6 +5,22 @@
     ],
     "rewrites": [
       {
+        "source": "compute-api/**",
+        "run": {
+          "serviceId": "high-load-api",
+          "region": "us-central1"
+        }
+      },
+
+      {
+        "source": "api/**",
+        "run": {
+          "serviceId": "lightweight-api",
+          "region": "us-central1"
+        }
+      },
+
+      {
         "source": "**",
         "destination": "/index.html"
       }
