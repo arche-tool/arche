@@ -26,7 +26,7 @@ main :: IO ()
 main = do
   
     config <- loadConfig
-    putStrLn . show $ config
+    putStrLn $ "Starting server with the following configuration: " ++ show config
 
     let
         oauthClientID = Auth.mkOAuthClientID (oauth_client_id config)

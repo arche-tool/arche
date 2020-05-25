@@ -5,13 +5,18 @@ module Util.FireStore
     , runGCPWith
     , toDoc
     , fromDoc
+    , logGoogle
+    , logInfo
+    , logError
     , module Util.FireStore.Value
     , module Util.FireStore.Document
     ) where
 
-import Control.Lens                 ((.~), (<&>))
+import Control.Lens                 ((.~), (<&>), view)
 import Control.Monad.IO.Class       (liftIO)
+import Control.Monad.Representable.Reader (reader)
 import Control.Monad.Trans.Resource (runResourceT)
+import Data.Binary.Builder          (putStringUtf8)
 import System.IO                    (stdout)
 import Servant                      (Handler)
 
@@ -33,6 +38,17 @@ runGCPWith gcp = liftIO $ do
       . (Google.envScopes .~ FireStore.cloudPlatformScope)
 
   runResourceT $ Google.runGoogle env gcp
+
+logGoogle :: Show a => Google.LogLevel -> a -> Google.Google s ()
+logGoogle level x = do
+  logger <- reader (view Google.envLogger)
+  liftIO $ logger level (putStringUtf8 . show $ x)
+
+logInfo :: Show a => a -> Google.Google s ()
+logInfo = logGoogle Google.Info
+
+logError :: Show a => a -> Google.Google s ()
+logError = logGoogle Google.Error
 
 -- ============== Document store ================
 toDoc :: ToDocValue a => a -> FireStore.Document
