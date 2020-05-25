@@ -6,5 +6,8 @@ ELM_BUILDER := $(NPM_BIN_PATH)/elm-app
 build:
 	$(ELM_BUILDER) build
 
+run-local:
+	$(ELM_BUILDER) start
+
 setup-dev-env:
 	npm install --only=dev
