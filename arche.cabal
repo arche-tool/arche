@@ -107,6 +107,7 @@ Library arche-server-lib
     Util.FireStore
     Util.FireStore.Document
     Util.FireStore.Value
+    Util.Logger
     Util.OrphanInstances
     Util.Hash
   build-depends:
@@ -138,6 +139,7 @@ Library arche-server-lib
     , servant-server             >= 0.16
     , servant-multipart          >= 0.11
     , text                       >= 1.0
+    , time                       >= 1.8
     , unordered-containers       >= 0.2
     , uuid                       >= 1.0
     , vector                     >= 0.12

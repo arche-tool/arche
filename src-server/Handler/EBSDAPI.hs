@@ -32,7 +32,8 @@ import Type.Storage
 import Type.Store
 
 import Util.Hash (calculateHashEBSD)
-import Util.FireStore (FromDocValue, GCP, fromDoc, toDoc, runGCPWith, logInfo)
+import Util.FireStore (FromDocValue, GCP, fromDoc, toDoc, runGCPWith)
+import Util.Logger (logGGInfo, logMsg)
 
 -- type EBSDAPI = "ebsd" :>
 --   (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] [EBSD]
@@ -92,7 +93,6 @@ getEBSDs user = do
 
 uploadEbsdAPI :: User -> MultipartData Mem -> Handler [EBSD]
 uploadEbsdAPI user = \upload -> do
-  liftIO . putStrLn . show $ (inputs upload)
   forM (files upload) $ \file -> do
     let content = fdPayload file
     runGCPWith (submitEbsd user content)
@@ -101,7 +101,7 @@ submitEbsd :: User -> BSL.ByteString -> Google.Google GCP EBSD
 submitEbsd user bs = do
   ebsdBlob <- either shout400 return (loadEBSD bs)
   let ebsdHash = calculateHashEBSD ebsdBlob 
-  logInfo $ "Submiting EBSD map with hash " ++ show ebsdHash
+  logGGInfo $ logMsg ("Submiting EBSD map with hash" :: String) ebsdHash
   case ebsdBlob of
     CTF _ -> do
       saveEBSD ebsdBucket ebsdHash bs
@@ -123,7 +123,7 @@ writeEBSD ebsd  = let
   HashEBSD hash = hashEBSD ebsd
   path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hash
   in do
-    logInfo $ "Saving EBSD metadata with hash " ++ show hash
+    logGGInfo $ logMsg ("Saving EBSD metadata with hash" :: String) hash
     void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc ebsd) path)
 
 writePermissionEBSD :: User -> HashEBSD -> Google.Google GCP ()
@@ -154,7 +154,7 @@ writePermissionEBSD user (HashEBSD hash)  = let
   commitReq = FireStore.commitRequest & FireStore.crWrites .~ [write]
 
   in do
-    logInfo $ "Setting permission on EBSD with hash " ++ show hash
+    logGGInfo $ logMsg ("Setting permission on EBSD with hash" :: String) hash
     void $ Google.send (FireStore.projectsDatabasesDocumentsCommit db commitReq)
 
 saveEBSD :: StorageBucket -> HashEBSD -> BSL.ByteString -> Google.Google GCP ()
@@ -163,9 +163,9 @@ saveEBSD bucket (HashEBSD ebsdHash) bs = let
   vox_key = ebsdHash
   objIns = Storage.objectsInsert (bktText bucket) Storage.object' & Storage.oiName ?~ vox_key
   in do
-    logInfo $ "Saving EBSD blob with hash " ++ show ebsdHash
+    logGGInfo $ logMsg ("Saving EBSD blob with hash" :: String) ebsdHash
     void $ Google.upload objIns body
-    logInfo $ "Saved EBSD blob with hash " ++ show ebsdHash
+    logGGInfo $ logMsg ("Saved EBSD blob with hash" :: String) ebsdHash
   
 writeUser :: User -> Google.Google GCP ()
 writeUser user = do
