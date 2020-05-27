@@ -33,7 +33,7 @@ import Type.Store
 
 import Util.Hash (calculateHashEBSD)
 import Util.FireStore (FromDocValue, GCP, fromDoc, toDoc, runGCPWith)
-import Util.Logger (logGGInfo, logMsg)
+import Util.Logger (logGGInfo, logMsg, printLog, LogLevel(..))
 
 -- type EBSDAPI = "ebsd" :>
 --   (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] [EBSD]
@@ -93,6 +93,7 @@ getEBSDs user = do
 
 uploadEbsdAPI :: User -> MultipartData Mem -> Handler [EBSD]
 uploadEbsdAPI user = \upload -> do
+  liftIO . printLog INFO $ logMsg ("Starting to recieve upload from user" :: String) (id_number user)
   forM (files upload) $ \file -> do
     let content = fdPayload file
     runGCPWith (submitEbsd user content)

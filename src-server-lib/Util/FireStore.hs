@@ -1,5 +1,7 @@
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Util.FireStore
     ( GCP
     , runGCPWith
@@ -9,32 +11,44 @@ module Util.FireStore
     , module Util.FireStore.Document
     ) where
 
-import Control.Lens                 ((.~), (<&>), view)
+import Control.Lens                 ((.~), (<&>))
 import Control.Monad.IO.Class       (liftIO)
-import Control.Monad.Representable.Reader (reader)
 import Control.Monad.Trans.Resource (runResourceT)
-import Data.Binary.Builder          (putStringUtf8)
 import System.IO                    (stdout)
-import Servant                      (Handler)
+import Servant                      (Handler, throwError, ServerError(..))
 
 import qualified Network.Google           as Google
 import qualified Network.Google.FireStore as FireStore
 
 import Util.FireStore.Document
 import Util.FireStore.Value
+import Util.Logger
+
+
+import Control.Exception (try)
 
 -- ============== Google Cloud ================
 type GCP = '["https://www.googleapis.com/auth/cloud-platform"]
 
-runGCPWith :: Google.Google GCP a -> Handler a
-runGCPWith gcp = liftIO $ do
-  lgr  <- Google.newLogger Google.Info stdout
 
-  env  <- Google.newEnv <&>
-        (Google.envLogger .~ lgr)
-      . (Google.envScopes .~ FireStore.cloudPlatformScope)
+runGCPWith :: Google.Google GCP a -> Servant.Handler a
+runGCPWith gcp = do
+  result <- liftIO (try action)
+  either handleServerError return result
+  where
+    handleServerError :: ServerError -> Servant.Handler a 
+    handleServerError err = do
+      liftIO . printLog ERROR $ logMsg ("exited with" :: String) (errHTTPCode err) (errBody err)
+      throwError err
+    
+    action = do
+      lgr  <- Google.newLogger Google.Info stdout
 
-  runResourceT $ Google.runGoogle env gcp
+      env  <- Google.newEnv <&>
+            (Google.envLogger .~ lgr)
+          . (Google.envScopes .~ FireStore.cloudPlatformScope)
+
+      runResourceT $ Google.runGoogle env gcp
 
 -- ============== Document store ================
 toDoc :: ToDocValue a => a -> FireStore.Document

@@ -28,6 +28,8 @@ import GHC.Generics
 import qualified Data.Aeson                   as A
 import qualified Data.Aeson.Encoding.Internal as A
 import qualified Data.Binary.Builder          as B
+import qualified Data.ByteString              as BS
+import qualified Data.ByteString.Lazy         as BSL
 import qualified Data.ByteString.Lazy.Char8   as BSC
 import qualified Network.Google               as Google
 
@@ -43,6 +45,12 @@ instance {-# OVERLAPPING #-} ToLogMessage LogMessage where
   toLogMsg = id
 
 instance ToJSON a => ToLogMessage a
+
+instance {-# OVERLAPPING #-} ToLogMessage BS.ByteString where
+  toLogMsg = LogMessage . B.fromByteString
+
+instance {-# OVERLAPPING #-} ToLogMessage BSL.ByteString where
+  toLogMsg = LogMessage . B.fromLazyByteString
 
 newtype LogMessage = LogMessage {logMsgBuilder :: Builder}
 
