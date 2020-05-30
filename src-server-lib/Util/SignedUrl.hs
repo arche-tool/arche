@@ -21,6 +21,7 @@ import Data.ByteString                  (ByteString)
 import Data.ByteString.Char8            (pack, unpack)
 import Data.ByteArray                   (convert)
 import Data.Char                        (toLower)
+import Data.List                        (sortOn)
 import Data.Time                        (UTCTime)
 import Data.X509                        (PrivKey(..))
 
@@ -121,13 +122,14 @@ sanitizeResourcePath req = slash <> assemble (resourcePath req)
         slash = pack "/"
 
 renderQueryStrings :: [(String, String)] -> ByteString
-renderQueryStrings = HTTP.renderSimpleQuery False . map (\(k, v) -> (pack k, pack v))
+renderQueryStrings = HTTP.renderSimpleQuery False . map (\(k, v) -> (pack k, pack v)) . sortOn fst
 
 renderHeaders :: SignRequest -> (ByteString, ByteString)
 renderHeaders req = let
     renderHeader (k, v) = pack $ k <> ":" <> v
-    headerStr = BS.map toLower . BS.unlines . map renderHeader . headers $ req
-    signedHeaderStr = BS.map toLower . BS.intercalate (pack ";") . map (pack . fst) .headers $ req
+    orderedHeaders = sortOn fst (headers req)
+    headerStr = BS.map toLower . BS.unlines . map renderHeader $ orderedHeaders
+    signedHeaderStr = BS.map toLower . BS.intercalate (pack ";") . map (pack . fst) $ orderedHeaders
     in (headerStr, signedHeaderStr)
 
 parsePrivateKey :: String -> Either String PrivateKey
