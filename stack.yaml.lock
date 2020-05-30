@@ -25,6 +25,20 @@ packages:
       sha256: ab472e169f12b97837cdfca2262b2d6fb569ae17876cbc10e97186944a401866
   original:
     hackage: gogol-0.5.0@sha256:01b38acf97ae0afb2465935fee1bebce03c1b84e629cf0887467be7ae361f0a7,3222
+- completed:
+    hackage: cryptostore-0.2.1.0@sha256:9896e2984f36a1c8790f057fd5ce3da4cbcaf8aa73eb2d9277916886978c5b19,3881
+    pantry-tree:
+      size: 8596
+      sha256: e392f8dded050690140636b81433fb350bd87dd21643dde9a2f0aa344cf038e5
+  original:
+    hackage: cryptostore-0.2.1.0@sha256:9896e2984f36a1c8790f057fd5ce3da4cbcaf8aa73eb2d9277916886978c5b19,3881
+- completed:
+    hackage: cryptonite-0.26@sha256:43c722f3770c31f4c5376e7aa42645b104834103312e217aa7fe79316416d6df,17352
+    pantry-tree:
+      size: 22455
+      sha256: cbec4c7bd57508339510f18df64827dbd65eb7ede00db07a463a36aecdda077c
+  original:
+    hackage: cryptonite-0.26@sha256:43c722f3770c31f4c5376e7aa42645b104834103312e217aa7fe79316416d6df
 snapshots:
 - completed:
     size: 524996
