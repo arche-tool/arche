@@ -9,9 +9,9 @@ module Handler.ORAPI
   ( orApi
   ) where
 
-import Control.Lens                 ((&), (.~), (<&>), (?~))
+import Control.Lens                 ((&), (?~))
 import Control.Monad                (void)
-import Control.Monad.Trans.Resource (liftResourceT, runResourceT)
+import Control.Monad.Trans.Resource (liftResourceT)
 import Control.Monad.IO.Class       (liftIO)
 import Data.Conduit                 (runConduit, (.|))
 import Data.Text                    (Text)
@@ -24,10 +24,9 @@ import qualified Network.Google.FireStore as FireStore
 import qualified Network.Google.Storage   as Storage
 import Servant
 
+import Data.VTK (renderUniVTK)
+
 import qualified Arche.Strategy.ORFitAll as OR
-import Arche.Strategy.ORFitAll  (OREvaluation)
-import Data.VTK                 (renderUniVTK)
-import Texture.Orientation      (Deg(..))
 
 import Type.API
 import Type.Storage
@@ -42,14 +41,14 @@ import Util.Hash
 --  )
 
 orApi :: User -> Server ORAPI
-orApi _ = \hashEBSD ->
+orApi _ = \hashebsd ->
        (return [])
   :<|> (\_ -> return undefined)
-  :<|> (\cfg -> runGCPWith $ orFitHandler hashEBSD cfg "arche-ang" )
+  :<|> (\cfg -> runGCPWith $ orFitHandler hashebsd cfg "arche-ang" )
 
 
 orFitHandler :: HashEBSD -> OR.Cfg -> Text -> Google.Google GCP OR
-orFitHandler hashEBSD@(HashEBSD hash) cfg bucket = do
+orFitHandler hashebsd@(HashEBSD hash) cfg bucket = do
   stream <- Google.download (Storage.objectsGet bucket hash)
   ang    <- liftResourceT (runConduit (stream .| Conduit.sinkLbs))
 
@@ -63,15 +62,15 @@ orFitHandler hashEBSD@(HashEBSD hash) cfg bucket = do
   
   void $ Google.upload (Storage.objectsInsert bucket Storage.object' & Storage.oiName ?~ vox_key) body
 
-  let or = OR
+  let orship = OR
          { hashOR   = calculateHashOR cfg
          , cfgOR    = cfg
          , resultOR = orEval
          }
   
-  writeOR hashEBSD or 
+  writeOR hashebsd orship 
 
-  return or
+  return orship
 
 writeOR :: HashEBSD -> OR -> Google.Google GCP ()
 writeOR (HashEBSD hashE) or  = do

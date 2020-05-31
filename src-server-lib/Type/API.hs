@@ -10,14 +10,12 @@ module Type.API
     , ArcheAPI
     ) where
 
-
 import Servant
-import Servant.Multipart
 
 import qualified Arche.Strategy.GomesGraph as Arche
 import qualified Arche.Strategy.ORFitAll as OR
 
-import Type.Storage (HashEBSD, HashOR, HashArche)
+import Type.Storage (HashEBSD, HashOR, HashArche, StorageLink, StorageObjectName)
 import Type.Store (Arche, EBSD, OR)
 
 type API = "api" :>
@@ -27,13 +25,15 @@ type API = "api" :>
   )
 
 -- ==<< EBSD handling >>==
--- POST /ebsd MultipartFile EBSD
+-- POST /ebsd ObjectName EBSD
 -- GET /ebsd [EBSD]
 -- GET /ebsd/hash/{ebsd_hash} EBSD
+-- GET /ebsd/upload-link StorageLink
 type EBSDAPI = "ebsd" :>
-  (MultipartForm Mem (MultipartData Mem) :> Post '[JSON] [EBSD]
+  ( ReqBody '[JSON] StorageObjectName    :> Post '[JSON] EBSD
   :<|>                                      Get  '[JSON] [EBSD]
   :<|> Capture "hash" HashEBSD           :> Get  '[JSON] EBSD
+  :<|> "upload-link"                     :> Get  '[JSON] StorageLink
   )
 
 -- ==<< Orientation relationship handling >>==

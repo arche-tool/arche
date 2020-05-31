@@ -10,6 +10,7 @@ module Type.Storage
     , HashArche(..)
     , StorageBucket(bktText)
     , StorageLink(..)
+    , StorageObjectName(..)
     , voxelBucket
     , facesBucket
     , edgesBucket
@@ -53,9 +54,11 @@ ebsdBucket = StorageBucket "ebsd"
 landingZoneBucket :: StorageBucket
 landingZoneBucket = StorageBucket "arche-landing-zone"
 
+newtype StorageObjectName = StorageObjectName {objText :: Text} deriving (Show, Generic, Eq)
+
 data StorageLink
     = StorageLink
-    { objectPath :: Text
+    { objectName :: Text
     , signedLink :: Text
     } deriving (Generic, Show)
 
@@ -86,6 +89,9 @@ instance FromHttpApiData HashOR where
 instance FromHttpApiData HashArche where
     parseUrlPiece txt = Right $ HashArche txt
 
+instance FromHttpApiData StorageObjectName where
+    parseUrlPiece txt = Right $ StorageObjectName txt
+
 -- ========= JSON =========
 instance ToJSON HashEBSD
 instance FromJSON HashEBSD
@@ -98,3 +104,6 @@ instance FromJSON HashArche
 
 instance ToJSON StorageBucket
 instance FromJSON StorageBucket
+
+instance ToJSON StorageObjectName
+instance FromJSON StorageObjectName

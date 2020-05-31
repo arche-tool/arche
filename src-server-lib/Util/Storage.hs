@@ -2,7 +2,6 @@ module Util.Storage
     ( StorageLink(..)
     , StorageLinkBuilder(..)
     , EncodedServiceAccountJson
-    , Object
     , loadStorageSigner
     ) where
 
@@ -24,12 +23,11 @@ import Type.Storage
 import Type.Store (User(..))
 
 type EncodedServiceAccountJson = T.Text
-type Object = String
 
 data StorageLinkBuilder
     = StorageLinkBuilder
-    { readLinkBuilder  :: Object -> StorageBucket -> Int -> IO StorageLink
-    , writeLinkBuilder :: User   -> StorageBucket -> Int -> IO StorageLink
+    { readLinkBuilder  :: StorageObjectName -> StorageBucket -> Int -> IO StorageLink
+    , writeLinkBuilder :: User              -> StorageBucket -> Int -> IO StorageLink
     }
 
 loadServiceAccoutFromDefaultLocation :: IO ServiceAccount
@@ -53,19 +51,19 @@ loadStorageSigner mAccount = do
         , writeLinkBuilder = loadWriteLinkBuider account
         }
 
-loadReadLinkBuider :: ServiceAccount -> Object -> StorageBucket -> Int -> IO StorageLink
+loadReadLinkBuider :: ServiceAccount -> StorageObjectName -> StorageBucket -> Int -> IO StorageLink
 loadReadLinkBuider account obj bucket expSecs = do
     let req = SignRequest               
             { httpVerb     = GET
             , bucketName   = T.unpack (bktText bucket)
-            , resourcePath = [obj]
+            , resourcePath = [T.unpack $ objText obj]
             , queryStrings = []
             , headers      = []
             , expires      = expSecs
             }
     url <- either fail pure =<< generateSignedURL account req
     return $ StorageLink
-        { objectPath = T.pack obj 
+        { objectName = objText obj 
         , signedLink = T.decodeUtf8 url
         }
 
@@ -94,7 +92,7 @@ loadWriteLinkBuider account user bucket expSecs = do
             }
     url <- either fail pure =<< generateSignedURL account req
     return $ StorageLink
-        { objectPath = obj
+        { objectName = obj
         , signedLink = T.decodeUtf8 url
         }
             

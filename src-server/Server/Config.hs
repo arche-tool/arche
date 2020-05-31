@@ -8,6 +8,7 @@ module Server.Config
     ( oauth_client_id
     , run_mode
     , port
+    , signerEncodedCredentials
     )
   , RunMode(..)
   , loadConfig
@@ -34,9 +35,10 @@ data RunMode
 
 data ArcheServerConfig
     = ArcheServerConfig
-    { oauth_client_id :: Text
-    , run_mode :: RunMode
-    , port :: Int
+    { oauth_client_id          :: Text
+    , run_mode                 :: RunMode
+    , port                     :: Int
+    , signerEncodedCredentials :: Maybe Text
     } deriving (Show, Generic)
 
 instance FromJSON RunMode
@@ -62,6 +64,7 @@ parseConfig = ArcheServerConfig
   <$> parseOAuthClientID
   <*> parseRunMode
   <*> parsePort
+  <*> parseSignerEncodedCredentials
 
 parseConfigFilepath :: Parser FilePath
 parseConfigFilepath = strOption
@@ -101,3 +104,10 @@ parsePort = option auto
    <> metavar "port"
    <> value 8080
    <> help "Service port.")
+
+parseSignerEncodedCredentials :: Parser (Maybe Text)
+parseSignerEncodedCredentials = fmap pack <$> (optional . strOption)
+   (  long "signer-credentials"
+   <> short 's'
+   <> metavar "signer-credentials"
+   <> help "GCS service account for signing URLs in JSON format en encode in base64.")

@@ -9,6 +9,7 @@ import Servant
 
 import Type.API
 import Util.Auth            (AuthIDToken, authServerContext)
+import Util.Storage         (loadStorageSigner)
 import Util.OrphanInstances ()
 import qualified Type.Store as Store
 import qualified Util.Auth  as Auth
@@ -28,6 +29,8 @@ main = do
     config <- loadConfig
     putStrLn $ "Starting server with the following configuration: " ++ show config
 
+    storageSigner <- loadStorageSigner (signerEncodedCredentials config)
+
     let
         oauthClientID = Auth.mkOAuthClientID (oauth_client_id config)
 
@@ -35,7 +38,7 @@ main = do
         fake = undefined
 
         api :: Store.User -> Server API
-        api user = ebsdApi user :<|> orApi user :<|> fake
+        api user = ebsdApi storageSigner user :<|> orApi user :<|> fake
 
         server :: Server ArcheServer
         server = \token -> api $ Store.User
