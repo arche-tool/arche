@@ -110,6 +110,7 @@ Library arche-server-lib
     Util.Logger
     Util.OrphanInstances
     Util.SignedUrl
+    Util.Storage
     Util.Hash
   build-depends:
       arche
@@ -120,6 +121,7 @@ Library arche-server-lib
     , vtk                        >= 0.1
     , adjunctions                >= 4.4
     , aeson                      >= 1.0
+    , base64-bytestring          >= 1.0
     , binary                     >= 0.8
     , bytestring                 >= 0.10
     , conduit                    >= 1.3

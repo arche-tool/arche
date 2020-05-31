@@ -9,11 +9,13 @@ module Type.Storage
     , HashOR(..)
     , HashArche(..)
     , StorageBucket(bktText)
+    , StorageLink(..)
     , voxelBucket
     , facesBucket
     , edgesBucket
     , vertexBucket
     , ebsdBucket
+    , landingZoneBucket
     ) where
 
 import Control.Lens ((&), (?~))
@@ -47,6 +49,17 @@ vertexBucket = StorageBucket "vertex"
 
 ebsdBucket :: StorageBucket
 ebsdBucket = StorageBucket "ebsd"
+
+landingZoneBucket :: StorageBucket
+landingZoneBucket = StorageBucket "arche-landing-zone"
+
+data StorageLink
+    = StorageLink
+    { objectPath :: Text
+    , signedLink :: Text
+    } deriving (Generic, Show)
+
+instance ToJSON StorageLink
 
 -- ============================
 -- ======== Instances =========

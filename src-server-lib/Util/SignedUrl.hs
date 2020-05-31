@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedStrings #-}
 {--
 Google Cloud Storage V4 Signing mechanism to sign URLs
 https://cloud.google.com/storage/docs/access-control/signing-urls-manually
@@ -9,7 +10,9 @@ https://cloud.google.com/storage/docs/authentication/signatures
 module Util.SignedUrl
     ( generateSignedURL
     , HttpVerb(..)
+    , ServiceAccount(..)
     , SignRequest(..)
+    , toHex
     ) where
 
 import Crypto.Hash.Algorithms
@@ -17,14 +20,17 @@ import Crypto.Hash                      (hash, Digest)
 import Crypto.PubKey.RSA                (PrivateKey)
 import Crypto.Store.PKCS8               (OptProtected(..), readKeyFileFromMemory)
 import Crypto.PubKey.RSA.PKCS15         (signSafer)
+import Data.Aeson                       (FromJSON, (.:))
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Char8            (pack, unpack)
 import Data.ByteArray                   (convert)
 import Data.Char                        (toLower)
 import Data.List                        (sortOn)
+import Data.Text.Encoding               (encodeUtf8)
 import Data.Time                        (UTCTime)
 import Data.X509                        (PrivKey(..))
 
+import qualified Data.Aeson              as A
 import qualified Data.ByteString.Char8   as BS
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy    as BL
@@ -42,8 +48,15 @@ data HttpVerb
 data ServiceAccount
     = ServiceAccount
     { serviceAccountEmail :: String
-    , serviceAccountKey   :: String
+    , serviceAccountKey   :: PrivateKey
     }
+
+instance FromJSON ServiceAccount where
+    parseJSON = A.withObject "service_account" $ \obj -> do
+        pk <- (parsePrivateKey . encodeUtf8) <$> obj .: "private_key"
+        ServiceAccount
+            <$> obj .: "client_email"
+            <*> pk
 
 data SignRequest    
     = SignRequest               
@@ -69,22 +82,21 @@ data CanonicalRequest
     }
 
 generateSignedURL :: ServiceAccount -> SignRequest -> IO (Either String ByteString)
-generateSignedURL serviceAccount signReq = let
-    eKey = parsePrivateKey (serviceAccountKey serviceAccount)
-    in case eKey of
-        Left  err -> return $ Left err
-        Right key -> do
-            now <- T.getCurrentTime 
-            let
-                req = buildCanonicalReq signReq serviceAccount now
-            eSign <- signCanonicalRequest req key
-            return $ case eSign of
-                Left err   -> Left err
-                Right sign -> let
-                    queries = canonicalQueryString req <> pack "&" <> renderQueryStrings [("X-Goog-Signature", unpack sign)]
-                    hostname = pack $ "https://" <> bucketName signReq <> ".storage.googleapis.com"
-                    url = hostname <> canonicalResource req <> pack "?" <> queries
-                    in Right url 
+generateSignedURL account signReq = do
+    now <- T.getCurrentTime 
+    let
+        req = buildCanonicalReq signReq account now
+    eSign <- signCanonicalRequest req (serviceAccountKey account)
+    return $ case eSign of
+        Left err   -> Left err
+        Right sign -> let
+            queries = canonicalQueryString req <> "&" <> renderQueryStrings [("X-Goog-Signature", unpack sign)]
+            hostname = pack $ "https://" <> getHostname signReq 
+            url = hostname <> canonicalResource req <> "?" <> queries
+            in Right url 
+
+getHostname :: SignRequest -> String
+getHostname req = bucketName req <> ".storage.googleapis.com"
 
 buildCanonicalReq :: SignRequest -> ServiceAccount -> UTCTime -> CanonicalRequest
 buildCanonicalReq req ServiceAccount{..} timestamp = let
@@ -92,7 +104,8 @@ buildCanonicalReq req ServiceAccount{..} timestamp = let
     requestTimestamp = T.formatTime T.defaultTimeLocale "%Y%m%dT%H%M%SZ" timestamp
     credentialScope  = datestamp <> "/auto/storage/goog4_request" 
     credential       = serviceAccountEmail <> "/" <> credentialScope
-    (headerStr, signedHeaderStr) = renderHeaders req
+    hostHeader       = ("Host", getHostname req)
+    (headerStr, signedHeaderStr) = renderHeaders $ headers req <> [hostHeader]
     extraQS =
         [ ("X-Goog-Algorithm",    "GOOG4-RSA-SHA256")
         , ("X-Goog-Credential",    credential)
@@ -119,28 +132,28 @@ sanitizeResourcePath :: SignRequest -> ByteString
 sanitizeResourcePath req = slash <> assemble (resourcePath req)
     where
         assemble = BS.intercalate slash . map (HTTP.urlEncode True . pack)
-        slash = pack "/"
+        slash = "/"
 
 renderQueryStrings :: [(String, String)] -> ByteString
 renderQueryStrings = HTTP.renderSimpleQuery False . map (\(k, v) -> (pack k, pack v)) . sortOn fst
 
-renderHeaders :: SignRequest -> (ByteString, ByteString)
-renderHeaders req = let
+renderHeaders :: [(String, String)] -> (ByteString, ByteString)
+renderHeaders hs = let
     renderHeader (k, v) = pack $ k <> ":" <> v
-    orderedHeaders = sortOn fst (headers req)
+    orderedHeaders = sortOn fst hs
     headerStr = BS.map toLower . BS.unlines . map renderHeader $ orderedHeaders
-    signedHeaderStr = BS.map toLower . BS.intercalate (pack ";") . map (pack . fst) $ orderedHeaders
+    signedHeaderStr = BS.map toLower . BS.intercalate ";" . map (pack . fst) $ orderedHeaders
     in (headerStr, signedHeaderStr)
 
-parsePrivateKey :: String -> Either String PrivateKey
+parsePrivateKey :: (Monad m) => ByteString -> m PrivateKey
 parsePrivateKey raw = let
-    pk = readKeyFileFromMemory . pack $ raw
+    pk = readKeyFileFromMemory raw
     in case pk of
-        [Unprotected (PrivKeyRSA rsa)] -> Right rsa
-        [Unprotected _]                -> Left "Provided private key is not of RSA type"
-        [Protected   _]                -> Left "Provided key is protected by password"
-        []                             -> Left "No key was found"
-        _                              -> Left "More than one key was found"
+        [Unprotected (PrivKeyRSA rsa)] -> pure rsa
+        [Unprotected _]                -> fail "Provided private key is not of RSA type"
+        [Protected   _]                -> fail "Provided key is protected by password"
+        []                             -> fail "No key was found"
+        _                              -> fail "More than one key was found"
 
 toHex :: ByteString -> ByteString
 toHex = BL.toStrict . BB.toLazyByteString . BB.byteStringHex
@@ -162,13 +175,13 @@ encodeCanonicalRequest CanonicalRequest{..} = let
         , canonicalQueryString
         , canonicalHeaders
         , canonicalSignedHeaders
-        , maybe (pack "UNSIGNED-PAYLOAD") id canonicalPayload
+        , maybe "UNSIGNED-PAYLOAD" id canonicalPayload
         ]
     in str
 
 stringToSign :: CanonicalRequest -> ByteString
 stringToSign req = unlinesNoTrailing
-    [ pack "GOOG4-RSA-SHA256"
+    [ "GOOG4-RSA-SHA256"
     , pack (time req)
     , pack (scope req)
     , sha256sum (encodeCanonicalRequest req)
