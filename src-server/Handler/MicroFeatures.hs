@@ -62,5 +62,5 @@ saveVTK :: (VTK.RenderElemVTK a) => StorageBucket -> HashEBSD -> Text -> VTK a
 saveVTK bucket (HashEBSD angHash) extension vtk = let
     body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS $ renderUniVTK True vtk)
     vox_key = angHash <> extension
-    objIns = Storage.objectsInsert (bktText bucket) Storage.object' & Storage.oiName ?~ vox_key
+    objIns = Storage.objectsInsert (bktName bucket) Storage.object' & Storage.oiName ?~ vox_key
     in void $ Google.upload objIns body

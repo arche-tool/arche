@@ -7,6 +7,7 @@ import Html.Attributes as A
 import Html.Events as E
 import Http
 import Json.Decode as D
+import Json.Encode as JE
 
 
 -- =========== MAIN ===========
@@ -45,8 +46,10 @@ type Msg
   = SetToken String
   | ResetToken
   | GotFiles (List File)
+  | UploadLink File (Result Http.Error StorageLink)
   | GotProgress Http.Progress
-  | Uploaded (Result Http.Error ())
+  | Uploaded String (Result Http.Error ())
+  | Inserted (Result Http.Error ())
   | Cancel
 
 
@@ -54,21 +57,44 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     GotFiles files ->
-      let
-        hs = case model.token of
-          Just tk -> [Http.header "Authorization" ("Bearer " ++ tk)]
-          _       -> []
-      in ( {model | state = Uploading 0}
-         , Http.request
-          { method = "POST"
-          , url = "/api/ebsd"
-          , headers = hs
-          , body = Http.multipartBody (List.map (Http.filePart "files[]") files)
-          , expect = Http.expectWhatever Uploaded
-          , timeout = Nothing
-          , tracker = Just "upload"
-          }
-      )
+     case List.head files of
+      Nothing -> (model, Cmd.none)
+      Just file ->
+        let
+          hs = case model.token of
+            Just tk -> [Http.header "Authorization" ("Bearer " ++ tk)]
+            _       -> []
+        in ( {model | state = Uploading 0}
+          , Http.request
+            { method = "GET"
+            , url = "/api/ebsd/upload-link"
+            , headers = hs
+            , body = Http.emptyBody
+            , expect = Http.expectJson (UploadLink file) storageLinkDecoder
+            , timeout = Nothing
+            , tracker = Just "upload-link"
+            }
+        )
+
+    UploadLink file result ->
+      case result of
+        Err _    -> ({model | state = Fail}, Cmd.none)
+        Ok  link -> 
+          let
+            hs = case model.token of
+              Just tk -> [Http.header "Authorization" ("Bearer " ++ tk)]
+              _       -> []
+          in ( {model | state = Uploading 0}
+            , Http.request
+              { method = "PUT"
+              , url = link.signedLink
+              , headers = hs
+              , body = Http.fileBody file
+              , expect = Http.expectWhatever (Uploaded link.objectName)
+              , timeout = Nothing
+              , tracker = Just "upload"
+              }
+          )
 
     GotProgress progress ->
       case progress of
@@ -78,7 +104,27 @@ update msg model =
         Http.Receiving _ ->
           (model, Cmd.none)
 
-    Uploaded result ->
+    Uploaded objectNane result ->
+      case result of
+        Err _    -> ({model | state = Fail}, Cmd.none)
+        Ok  _ -> 
+          let
+            hs = case model.token of
+              Just tk -> [Http.header "Authorization" ("Bearer " ++ tk)]
+              _       -> []
+          in ( {model | state = Uploading 0}
+            , Http.request
+              { method = "POST"
+              , url = "/api/ebsd"
+              , headers = hs
+              , body = Http.jsonBody (JE.object [("objName", JE.string objectNane)])
+              , expect = Http.expectWhatever Inserted
+              , timeout = Nothing
+              , tracker = Just "upload-link"
+              }
+          )
+    
+    Inserted result ->
       case result of
         Ok _ ->
           ({model | state = Done}, Cmd.none)
@@ -114,7 +160,7 @@ renderState state =
     Waiting ->
       input
         [ A.type_ "file"
-        , A.multiple True
+        , A.multiple False
         , E.on "change" (D.map GotFiles filesDecoder)
         ]
         []
@@ -138,4 +184,15 @@ renderState state =
 
 filesDecoder : D.Decoder (List File)
 filesDecoder =
-  D.at ["target","files"] (D.list File.decoder)
+  D.at ["target", "files"] (D.list File.decoder)
+
+type alias StorageLink =
+  { objectName : String
+  , signedLink : String
+  }
+
+storageLinkDecoder : D.Decoder StorageLink
+storageLinkDecoder =
+    D.map2 StorageLink
+      (D.field "objectName" D.string)
+      (D.field "signedLink" D.string)

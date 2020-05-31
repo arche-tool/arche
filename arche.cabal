@@ -145,7 +145,6 @@ Library arche-server-lib
     , servant                    >= 0.16
     , servant-client             >= 0.16
     , servant-server             >= 0.16
-    , servant-multipart          >= 0.11
     , text                       >= 1.0
     , time                       >= 1.8
     , unordered-containers       >= 0.2

@@ -7,7 +7,6 @@ import Data.Vector (Vector, toList)
 
 import Data.Aeson (ToJSON, FromJSON)
 import Data.Hashable (Hashable, hashWithSalt)
-import Servant (FromHttpApiData(..))
 
 import qualified Arche.OR                  as OR
 import qualified Arche.Strategy.GomesGraph as GG

@@ -55,15 +55,15 @@ loadReadLinkBuider :: ServiceAccount -> StorageObjectName -> StorageBucket -> In
 loadReadLinkBuider account obj bucket expSecs = do
     let req = SignRequest               
             { httpVerb     = GET
-            , bucketName   = T.unpack (bktText bucket)
-            , resourcePath = [T.unpack $ objText obj]
+            , bucketName   = T.unpack (bktName bucket)
+            , resourcePath = [T.unpack $ objName obj]
             , queryStrings = []
             , headers      = []
             , expires      = expSecs
             }
     url <- either fail pure =<< generateSignedURL account req
     return $ StorageLink
-        { objectName = objText obj 
+        { objectName = objName obj 
         , signedLink = T.decodeUtf8 url
         }
 
@@ -72,7 +72,7 @@ getUniqueObjectName user bucket = do
     timestamp <- floor . (1e9 *) <$> getPOSIXTime
     let
         uid  = T.encodeUtf8 $ id_number user
-        bkt  = T.encodeUtf8 $ bktText bucket
+        bkt  = T.encodeUtf8 $ bktName bucket
         salt = BL.toStrict . BB.toLazyByteString . BB.int64HexFixed $ timestamp
         dig  = hashFinalize $ hashInitWith SHA1 `hashUpdate` uid `hashUpdate` bkt `hashUpdate` salt 
         hex  = T.decodeUtf8 . toHex . convert $ dig
@@ -84,7 +84,7 @@ loadWriteLinkBuider account user bucket expSecs = do
     let 
         req = SignRequest               
             { httpVerb     = PUT
-            , bucketName   = T.unpack (bktText bucket)
+            , bucketName   = T.unpack (bktName bucket)
             , resourcePath = [T.unpack obj]
             , queryStrings = []
             , headers      = []

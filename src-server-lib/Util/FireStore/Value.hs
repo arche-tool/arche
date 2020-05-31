@@ -13,7 +13,7 @@ module Util.FireStore.Value
   ) where
 
 import Control.Applicative ((<|>), liftA2, liftA3)
-import Control.Lens        ((&), (?~), (.~), (^.), (^?), _Just)
+import Control.Lens        ((&), (?~), (.~), (^.))
 import Data.Text           (Text, pack, unpack)
 import GHC.Generics
 

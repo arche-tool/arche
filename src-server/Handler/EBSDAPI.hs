@@ -1,8 +1,5 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE KindSignatures      #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Handler.EBSDAPI
@@ -40,19 +37,20 @@ import Util.Storage   (StorageLinkBuilder(..))
 
 -- type EBSDAPI = "ebsd" :>
 --  ( ReqBody '[JSON] Text                 :> Post '[JSON] EBSD
---  :<|>                                      Get  '[JSON] [EBSD]
 --  :<|> Capture "hash" HashEBSD           :> Get  '[JSON] EBSD
 --  :<|> "upload-link"                     :> Get  '[JSON] StorageLink
+--  :<|>                                      Get  '[JSON] [EBSD]
 --  )
 ebsdApi :: StorageLinkBuilder -> User -> Server EBSDAPI
 ebsdApi linkBuilder user = let
   post = uploadEbsdAPI user
   gets = runGCPWith (getEBSDs user)
   get  = runGCPWith . getEBSD user
-  in (post :<|> gets :<|> get :<|> genUploadLink linkBuilder user)
+  in (post :<|> get :<|> genUploadLink linkBuilder user :<|> gets)
 
 getEBSD :: User -> HashEBSD -> Google.Google GCP EBSD
 getEBSD user (HashEBSD hash) = do
+  logGGInfo $ logMsg ("Retriving EBSD" :: String) hash ("for user" :: String) (id_number user)
   let path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hash
   resp <- Google.send (FireStore.projectsDatabasesDocumentsGet path)
   let ebsd = either error id (fromDoc resp)
@@ -161,16 +159,16 @@ saveEBSD :: StorageBucket -> HashEBSD -> BSL.ByteString -> Google.Google GCP ()
 saveEBSD bucket (HashEBSD ebsdHash) bs = let
   body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS bs)
   vox_key = ebsdHash
-  objIns = Storage.objectsInsert (bktText bucket) Storage.object' & Storage.oiName ?~ vox_key
+  objIns = Storage.objectsInsert (bktName bucket) Storage.object' & Storage.oiName ?~ vox_key
   in do
     logGGInfo $ logMsg ("Saving EBSD blob with hash" :: String) ebsdHash
     void $ Google.upload objIns body
     logGGInfo $ logMsg ("Saved EBSD blob with hash" :: String) ebsdHash
 
 readEBSD :: StorageBucket -> StorageObjectName -> Google.Google GCP BSL.ByteString
-readEBSD bucket (StorageObjectName objName) = do
+readEBSD bucket StorageObjectName{objName} = do
     logGGInfo $ logMsg ("Reading object" :: String) objName ("from" :: String) bucket
-    stream <- Google.download $ Storage.objectsGet (bktText bucket) objName
+    stream <- Google.download $ Storage.objectsGet (bktName bucket) objName
     liftResourceT (runConduit (stream .| Conduit.sinkLbs))
 
 genUploadLink :: StorageLinkBuilder -> User -> Handler StorageLink
