@@ -6,10 +6,12 @@ RUN apt-get update && apt-get install -y ca-certificates libgmp10 libc6
 USER root
 ARG BUILD_NAME
 ARG GCLOUD_SERVICE_KEY
+ARG SIGNER_SERVICE_KEY
 ARG OAUTH_CLIENT_ID
 WORKDIR /usr/arche
 
 ENV GCLOUD_SERVICE_KEY=${GCLOUD_SERVICE_KEY}
+ENV SIGNER_SERVICE_KEY=${SIGNER_SERVICE_KEY}
 ENV OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
 
 # Set GCP credentials
@@ -24,7 +26,7 @@ ENV PORT 8080
 ENV PATH="/usr/arche:${PATH}"
 
 RUN echo '#!/bin/bash' > run.sh
-RUN echo "/usr/arche/arche-server --port=$PORT --oauth-client-id=$OAUTH_CLIENT_ID \"\$@\" " >> run.sh
+RUN echo "/usr/arche/arche-server --port=$PORT --oauth-client-id=$OAUTH_CLIENT_ID --signer-credentials=$SIGNER_SERVICE_KEY \"\$@\" " >> run.sh
 RUN chmod +x run.sh
 
 # Run the web service on container startup.

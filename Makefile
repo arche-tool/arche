@@ -77,12 +77,15 @@ ifndef GCLOUD_SERVICE_KEY
 	echo "Missing env GCLOUD_SERVICE_KEY"
 else ifndef OAUTH_CLIENT_ID
 	echo "Missing env OAUTH_CLIENT_ID"
+else ifndef SIGNER_SERVICE_KEY 
+	echo "Missing env SIGNER_SERVICE_KEY"
 else
 
 docker_server_image: arche-server
 	docker build \
 		--build-arg BUILD_NAME=$(BUILD_NAME) \
 		--build-arg GCLOUD_SERVICE_KEY \
+		--build-arg SIGNER_SERVICE_KEY \
 		--build-arg OAUTH_CLIENT_ID \
 		-t $(ARCHE_DOCKER_NAME) \
 		-t arche_server-$(BUILD_NAME) \
