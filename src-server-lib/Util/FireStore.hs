@@ -55,4 +55,4 @@ toDoc :: ToDocValue a => a -> FireStore.Document
 toDoc = buildDocFromValue . toValue
 
 fromDoc :: FromDocValue a => FireStore.Document -> Either String a
-fromDoc = undefined
+fromDoc doc = buildValueFromDoc doc >>= fromValue 
