@@ -13,6 +13,7 @@ import Url.Parser as Url
 import Page.Draw as Viewer
 import Page.SignIn as SignIn
 import Page.Upload as Upload
+import Page.Navegate as Navegate
 
 -- =========== MAIN ===========
 main : Program Flags Model Msg
@@ -38,6 +39,7 @@ type alias Model =
   , page : Maybe Page
   , flags : Flags
   , uploadModel : Upload.Model
+  , navegateModel : Navegate.Model
   , viewerModel : Viewer.Model
   , signinModel : SignIn.Model
   }
@@ -47,12 +49,14 @@ type Page
     = HomePage 
     | UploadPage
     | ViewerPage
+    | NavegatePage
 
 
 init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
   let
     (upModel, _) = Upload.init ()
+    (navModel, _) = Navegate.init ()
     (signModel, _) = SignIn.init () flags.oauth_azp
     viewerModel = Viewer.init
     model =
@@ -61,6 +65,7 @@ init flags url key =
       , page = parseUrl url
       , flags = flags
       , uploadModel = upModel
+      , navegateModel = navModel
       , viewerModel = viewerModel
       , signinModel = signModel
       }
@@ -71,6 +76,7 @@ type Msg
   = LinkClicked Browser.UrlRequest
   | UrlChanged Url.Url
   | Upload Upload.Msg
+  | Navegate Navegate.Msg
   | Viewer Viewer.Msg
   | Authentication SignIn.Msg
 
@@ -95,6 +101,11 @@ update msg model =
         (newModel, newCmd) = Upload.update upmsg model.uploadModel
       in ( {model | uploadModel = newModel }, Cmd.map Upload newCmd )
     
+    Navegate navmsg ->
+      let
+        (newModel, newCmd) = Navegate.update navmsg model.navegateModel
+      in ( {model | navegateModel = newModel }, Cmd.map Navegate newCmd )
+
     Viewer vimsg ->
       let
         (newModel, newCmd) = Viewer.update vimsg model.viewerModel
@@ -106,10 +117,12 @@ update msg model =
         cmds = case newModel.profile of
           Just profile -> Cmd.batch [
             Task.perform (\_ -> Upload (Upload.SetToken profile.idToken)) Time.now,
+            Task.perform (\_ -> Navegate (Navegate.SetToken profile.idToken)) Time.now,
             Cmd.map Authentication newCmd
             ]
           _ -> Cmd.batch [
             Task.perform (\_ -> Upload Upload.ResetToken) Time.now,
+            Task.perform (\_ -> Navegate Navegate.ResetToken) Time.now,
             Cmd.map Authentication newCmd
             ]
       in ( {model | signinModel = newModel }, cmds )
@@ -123,7 +136,8 @@ route =
     Url.oneOf
         [ Url.map HomePage Url.top
         , Url.map UploadPage (Url.s "upload")
-        , Url.map ViewerPage (Url.s "reconstructions")
+        , Url.map NavegatePage (Url.s "reconstructions")
+        , Url.map ViewerPage (Url.s "3d-viewer")
         ]
 
 -- =========== SUBSCRIPTIONS ===========
@@ -131,6 +145,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model = case model.page of
    Just ViewerPage -> Sub.map Viewer (Viewer.subscriptions model.viewerModel)
    Just UploadPage -> Sub.map Upload (Upload.subscriptions model.uploadModel)
+   Just NavegatePage -> Sub.map Navegate (Navegate.subscriptions model.navegateModel)
    _ -> Sub.none
 
 -- =========== VIEW ===========
@@ -145,6 +160,7 @@ view model =
         ]
       Just UploadPage -> [Html.map Upload (Upload.view model.uploadModel)]
       Just ViewerPage -> [Html.map Viewer (Viewer.view model.viewerModel)]
+      Just NavegatePage -> [Html.map Navegate (Navegate.view model.navegateModel)]
       _ -> [text "???"]
   in
   { title = "Arche"
@@ -160,6 +176,7 @@ sidebar model = nav [id "sidebar"]
       [ viewLink "home" "/"
       , viewLink "Submit new EBSD file" "/upload"
       , viewLink "Reconstructions" "/reconstructions"
+      , viewLink "3D Viewer" "/3d-viewer"
       ]
   ]
 
