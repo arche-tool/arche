@@ -2,8 +2,10 @@ module Main exposing (main)
 
 import Browser
 import Browser.Navigation as Nav
-import Html exposing (Html, a, text, div, li, ul, img, nav)
-import Html.Attributes exposing (href, id, src)
+import Element exposing (..)
+import Element.Background as Background
+import Element.Font as Font
+import Html as Html
 import Platform.Cmd as Cmd
 import Task
 import Time
@@ -143,8 +145,8 @@ route =
 -- =========== SUBSCRIPTIONS ===========
 subscriptions : Model -> Sub Msg
 subscriptions model = case model.page of
-   Just ViewerPage -> Sub.map Viewer (Viewer.subscriptions model.viewerModel)
-   Just UploadPage -> Sub.map Upload (Upload.subscriptions model.uploadModel)
+   Just ViewerPage   -> Sub.map Viewer (Viewer.subscriptions model.viewerModel)
+   Just UploadPage   -> Sub.map Upload (Upload.subscriptions model.uploadModel)
    Just NavegatePage -> Sub.map Navegate (Navegate.subscriptions model.navegateModel)
    _ -> Sub.none
 
@@ -152,35 +154,61 @@ subscriptions model = case model.page of
 view : Model -> Browser.Document Msg
 view model =
   let
-    fixed = 
-      [ sidebar model
-      ]
     page = case model.page of
-      Just HomePage -> [text "home"
-        ]
-      Just UploadPage -> [Html.map Upload (Upload.view model.uploadModel)]
-      Just ViewerPage -> [Html.map Viewer (Viewer.view model.viewerModel)]
-      Just NavegatePage -> [Html.map Navegate (Navegate.view model.navegateModel)]
-      _ -> [text "???"]
+      Just HomePage     -> text "home"
+      Just UploadPage   -> Element.html <| Html.map Upload (Upload.view model.uploadModel)
+      Just ViewerPage   -> Element.html <| Html.map Viewer (Viewer.view model.viewerModel)
+      Just NavegatePage -> Element.map Navegate (Navegate.view model.navegateModel)
+      _                 -> text "???"
+    links = 
+      [ {label = "home", url = "/", page = HomePage}
+      , {label = "Submit new EBSD file", url = "/upload", page = UploadPage}
+      , {label = "Reconstructions", url = "/reconstructions", page = NavegatePage}
+      , {label = "3D Viewer", url = "/3d-viewer", page = ViewerPage}
+      ]
   in
   { title = "Arche"
-  , body = fixed ++ page
+  , body = [
+      layout [ height fill ] <|
+        row [ height fill, width fill ]
+            [ sidePanel model links
+            , page
+            ]
+    ]
   }
 
-sidebar : Model -> Html Msg
-sidebar model = nav [id "sidebar"]
-  [ div []
-    [ img [ src model.flags.logo ] [] ]
-    , Html.map Authentication (SignIn.view model.signinModel)
-    , ul []
-      [ viewLink "home" "/"
-      , viewLink "Submit new EBSD file" "/upload"
-      , viewLink "Reconstructions" "/reconstructions"
-      , viewLink "3D Viewer" "/3d-viewer"
-      ]
-  ]
+sidePanel : Model -> List PageLink -> Element Msg
+sidePanel model channels =
+    let
+      activeChannelAttrs = [ Background.color <| rgb255 117 179 201, Font.bold ]
+      channelAttrs = [ Element.paddingXY 15 5, width fill ]
 
+      channelEl channel = el (
+        if channel.page == Maybe.withDefault HomePage model.page
+        then activeChannelAttrs ++ channelAttrs
+        else channelAttrs
+        ) <| link []
+          { url = channel.url
+          , label = text channel.label
+          }
+    
+      logo = image []
+        { src = model.flags.logo
+        , description = "logo"
+        }
+      signIn = Element.map Authentication (SignIn.view model.signinModel)      
+    in
+    column
+        [ height fill
+        , width (px 300)
+        , paddingXY 0 10
+        , scrollbars
+        , Background.color <| rgb255 92 99 118
+        , Font.color <| rgb255 255 255 255
+        ] <| [logo, signIn] ++ List.map channelEl channels
 
-viewLink : String -> String -> Html msg
-viewLink name path =
-  li [] [ a [ href path ] [ text name ] ]
+type alias PageLink =
+  { url: String
+  , label: String
+  , page: Page
+  } 

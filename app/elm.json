@@ -19,6 +19,7 @@
             "elm-explorations/linear-algebra": "1.0.3",
             "elm-explorations/webgl": "1.0.1",
             "elm-toulouse/cbor": "1.0.0",
+            "mdgriffith/elm-ui": "1.1.7",
             "pilatch/flip": "1.0.0"
         },
         "indirect": {

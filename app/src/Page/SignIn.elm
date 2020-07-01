@@ -1,7 +1,8 @@
 port module Page.SignIn exposing (Model, Msg, init, update, subscriptions, view)
 
 import GoogleSignIn
-import Html exposing (Html, button, div, text)
+import Element exposing (Element, column, html, text)
+import Html
 import Html.Events exposing (onClick)
 import Json.Encode as E
 
@@ -42,22 +43,17 @@ subscriptions : Model -> Sub Msg
 subscriptions _ = googleSignOutComplete (\_ -> SignOutComplete)
 
 -- VIEW
-view : Model -> Html Msg
-view model =
-    div []
-        [ case model.profile of
-            Just profile ->
-                div []
-                    [ div [] [ text ("Welcome, " ++ profile.name) ]
-                    , div [] [ button [ onClick BeginSignOut ] [ text "Sign Out" ] ]
-                    ]
+view : Model -> Element Msg
+view model = case model.profile of
+    Just profile -> column []
+        [ text profile.name
+        , html <| Html.button [ onClick BeginSignOut ] [ Html.text "Sign Out" ] 
+        ]
 
-            Nothing ->
-                div []
-                    [ text "Sign-in here"
-                    , GoogleSignIn.view
-                        [ GoogleSignIn.onSignIn SignIn
-                        , GoogleSignIn.idAttr model.client_id
-                        ]
-                    ]
+    Nothing -> column []
+        [ text "Sign-in here"
+        , html <| GoogleSignIn.view
+            [ GoogleSignIn.onSignIn SignIn
+            , GoogleSignIn.idAttr model.client_id
+            ]
         ]

@@ -1,12 +1,15 @@
 module Page.Navegate exposing (Model, Msg(..), main, init, update, subscriptions, view)
 
 import Browser
-import Html exposing (Html, div, input, progress, button, h1, text)
-import Html.Attributes as A
-import Html.Events as E
+import Element exposing (Element, column, text, layout, rgb255)
+import Element.Border
+import Element.Events
+import Element.Background as BG
+import Html.Attributes
 import Http
+import Task
+import Time
 import Json.Decode as D
-import Json.Encode as JE
 
 
 -- =========== MAIN ===========
@@ -14,7 +17,7 @@ main : Program () Model Msg
 main =
   Browser.element
     { init = init
-    , view = view
+    , view = layout [] << view
     , update = update
     , subscriptions = subscriptions
     }
@@ -78,7 +81,9 @@ update msg model =
         Err _    -> (model, Cmd.none)
         Ok  ebsds -> ( {model | ebsds = ebsds}, Cmd.none )
 
-    SetToken tk -> ({model | token = Just tk}, Cmd.none)
+    SetToken tk -> (
+      {model | token = Just tk},
+      Cmd.batch [Task.perform (\_ -> GetEBSDs) Time.now])
     
     ResetToken -> ({model | token = Nothing}, Cmd.none)
 
@@ -90,35 +95,45 @@ subscriptions _ = Sub.none
 
 
 -- =========== VIEW ===========
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
   case model.token of
-    Nothing -> div [] [text "Please Sign-in"]
+    Nothing -> text "Please Sign-in"
     Just _ -> renderEbsds model.ebsds
 
-renderEbsds : List EBSD -> Html Msg
-renderEbsds ebsds = div []
-    [ button [ E.onClick GetEBSDs ] [ text "Refresh" ]
-    , div [] (List.map renderEbsd ebsds)
+renderEbsds : List EBSD -> Element Msg
+renderEbsds ebsds =
+  let
+    cols = List.map renderEbsd ebsds
+  in column
+    [ Element.spacing 10
+    , Element.padding 5
+    ] cols
+
+
+insurelloBlue : Element.Color
+insurelloBlue = rgb255 59 139 186
+
+renderEbsd : EBSD -> Element Msg
+renderEbsd ebsd = column
+  [ Element.Events.onClick GetEBSDs
+  , Element.Border.rounded 3
+  , Element.padding 3
+  , Element.pointer
+  , BG.color (rgb255 200 100 100)
+  , Element.htmlAttribute
+    (Html.Attributes.style "user-select" "none")
+  , Element.mouseOver
+    [ Element.Border.color insurelloBlue
+    , Element.Border.glow insurelloBlue 1
+    , Element.Border.innerGlow insurelloBlue 1
     ]
-
-renderEbsd : EBSD -> Html Msg
-renderEbsd ebsd = div []
-  [ Html.text ebsd.alias
-  , Html.text ebsd.hashEBSD
-  , Html.text (Maybe.withDefault "" ebsd.createdBy.name)
+  , Element.mouseDown [ Element.alpha 0.6 ]
   ]
-
-type alias StorageLink =
-  { objectName : String
-  , signedLink : String
-  }
-
-storageLinkDecoder : D.Decoder StorageLink
-storageLinkDecoder =
-    D.map2 StorageLink
-      (D.field "objectName" D.string)
-      (D.field "signedLink" D.string)
+  [ text ebsd.alias
+  , text ebsd.hashEBSD
+  , text (Maybe.withDefault "" ebsd.createdBy.name)
+  ]
 
 userDecoder : D.Decoder User
 userDecoder =
