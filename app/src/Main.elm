@@ -169,7 +169,16 @@ view model =
   in
   { title = "Arche"
   , body = [
-      layout [ height fill ] <|
+      layout
+        [ Font.color (Element.rgb 0 0 1)
+        , Font.size 18
+        , Font.family
+            [ Font.external
+                { name = "MuseoModerno"
+                , url = "https://fonts.googleapis.com/css?family=MuseoModerno"
+                }
+            ]
+        , height fill ] <|
         row [ height fill, width fill ]
             [ sidePanel model links
             , page
