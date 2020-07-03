@@ -44,7 +44,7 @@ orApi :: User -> Server ORAPI
 orApi _ = \hashebsd ->
        (return [])
   :<|> (\_ -> return undefined)
-  :<|> (\cfg -> runGCPWith $ orFitHandler hashebsd cfg "arche-ang" )
+  :<|> (\cfg -> runGCPWith $ orFitHandler hashebsd cfg "ebsd" )
 
 
 orFitHandler :: HashEBSD -> OR.Cfg -> Text -> Google.Google GCP OR
