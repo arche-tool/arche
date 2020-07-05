@@ -13,13 +13,16 @@ import qualified Network.Google.FireStore as FireStore
 import Util.FireStore.Value (toMapValue)
 
 -- ============== Document store ================
+singleDocInternalKey :: Text
+singleDocInternalKey = "__DOC__VALUE__"
+
 buildDocFromValue :: FireStore.Value -> FireStore.Document
 buildDocFromValue v = case mapValue of
     Just m -> let
         hm = m ^. FireStore.mvFields . _Just . FireStore.mvfAddtional
         df = FireStore.documentFields hm
         in FireStore.document & FireStore.dFields ?~ df
-    _ -> buildDoc [("value", v)]
+    _ -> buildDoc [(singleDocInternalKey, v)]
     where
         mapValue = v ^. FireStore.vMapValue 
 
@@ -35,4 +38,7 @@ getDocumentFields doc = maybe (Left "Empty document") Right (doc ^. FireStore.dF
 buildValueFromDoc :: FireStore.Document -> Either String FireStore.Value
 buildValueFromDoc doc = do
     fields <- getDocumentFields doc
-    return . toMapValue $ fields ^. FireStore.dfAddtional
+    let hm = fields ^. FireStore.dfAddtional
+    case HM.lookup singleDocInternalKey hm of
+        Just v -> return v
+        _      ->  return (toMapValue hm) 
