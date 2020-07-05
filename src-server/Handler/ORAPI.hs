@@ -9,7 +9,7 @@ module Handler.ORAPI
   ( orApi
   ) where
 
-import Control.Lens                 ((&), (?~))
+import Control.Lens                 ((&), (.~), (?~), view)
 import Control.Monad                (void)
 import Control.Monad.Trans.Resource (liftResourceT)
 import Control.Monad.IO.Class       (liftIO)
@@ -33,6 +33,7 @@ import Type.Storage
 import Type.Store
 import Util.FireStore
 import Util.Hash
+import Util.Logger    (logGGInfo, logMsg)
 
 --type ORAPI = "ebsd" :> Capture "hash" HashEBSD :> "orfit" :>
 --  (                              Get  '[JSON] [OR]
@@ -41,9 +42,9 @@ import Util.Hash
 --  )
 
 orApi :: User -> Server ORAPI
-orApi _ = \hashebsd ->
-       (return [])
-  :<|> (\_ -> return undefined)
+orApi user = \hashebsd ->
+       (runGCPWith $ getORs hashebsd)
+  :<|> (runGCPWith . getOR user hashebsd)
   :<|> (\cfg -> runGCPWith $ orFitHandler hashebsd cfg "ebsd" )
 
 
@@ -73,8 +74,36 @@ orFitHandler hashebsd@(HashEBSD hash) cfg bucket = do
   return orship
 
 writeOR :: HashEBSD -> OR -> Google.Google GCP ()
-writeOR (HashEBSD hashE) or  = do
+writeOR (HashEBSD hashE) orValue  = do
     let
-      HashOR hashO = hashOR or
+      HashOR hashO = hashOR orValue
       path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hashE <> "/or/" <> hashO
-    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc or) path)
+    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc orValue) path)
+
+getOR :: User -> HashEBSD -> HashOR -> Google.Google GCP OR
+getOR user (HashEBSD hashEbsd) (HashOR hashOr) = do
+  logGGInfo $ logMsg ("Retriving OR" :: String) hashOr ("for user" :: String) (id_number user)
+  let path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hashEbsd <> "/or/" <> hashOr
+  resp <- Google.send (FireStore.projectsDatabasesDocumentsGet path)
+  let orDoc = either error id (fromDoc resp)
+  return orDoc
+
+getORs :: (FromDocValue a) => HashEBSD -> Google.Google GCP [a]
+getORs (HashEBSD hashE) = do
+  let
+    db = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hashE
+    
+    query :: FireStore.StructuredQuery
+    query = let
+      from = FireStore.collectionSelector &
+        FireStore.csCollectionId ?~ "or" &
+        FireStore.csAllDescendants ?~ False
+      in FireStore.structuredQuery
+        & FireStore.sqFrom .~ [from] 
+    
+    commitReq :: FireStore.RunQueryRequest
+    commitReq = FireStore.runQueryRequest & FireStore.rqrStructuredQuery ?~ query
+
+  logGGInfo $ logMsg ("Retriving ORs for EBSD" :: String) hashE
+  resp <- Google.send (FireStore.projectsDatabasesDocumentsRunQuery db commitReq)
+  return . mapMaybe (fmap (either error id . fromDoc) . view FireStore.rDocument) $ resp
