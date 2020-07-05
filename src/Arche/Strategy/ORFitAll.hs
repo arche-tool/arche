@@ -24,6 +24,7 @@ module Arche.Strategy.ORFitAll
     , ksDeviation
     , misfitError
     )
+  , evaluateOR
   ) where
 
 import Control.Arrow       ((&&&))

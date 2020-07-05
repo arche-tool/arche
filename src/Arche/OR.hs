@@ -152,17 +152,24 @@ evalMisoOR ors (qa, pa) (qb, pb)
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
 faceerrorfunc :: Vector ((Quaternion, Int), (Quaternion, Int)) -> Vector OR -> FitError
-faceerrorfunc ms ors = let
-  n     = fromIntegral (G.length ms)
-  errs  = G.map (uncurry (evalMisoOR ors)) ms
-  avg   = G.sum errs / n
-  diff  = G.map ((\x->x*x) . (-) avg) errs
-  dev   = sqrt (G.sum diff / n)
-  in FitError
-     { avgError = toAngle avg
-     , devError = toAngle dev
-     , maxError = toAngle (G.maximum errs)
-     }
+faceerrorfunc ms ors
+  | n == 0 = FitError
+    { avgError = toAngle 0.0
+    , devError = toAngle 0.0
+    , maxError = toAngle 0.0
+    }
+  | otherwise = let
+    errs  = G.map (uncurry (evalMisoOR ors)) ms
+    avg   = G.sum errs / n
+    diff  = G.map ((\x->x*x) . (-) avg) errs
+    dev   = sqrt (G.sum diff / n)
+    in FitError
+      { avgError = toAngle avg
+      , devError = toAngle dev
+      , maxError = toAngle (G.maximum errs)
+      }
+  where
+    n = fromIntegral (G.length ms)
 
 deltaVec3 :: (Vec3D -> Double) -> Vec3D -> (Double, Vec3D)
 deltaVec3 func v = let
