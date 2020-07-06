@@ -17,7 +17,9 @@ import Control.Applicative ((<|>), liftA2, liftA3)
 import Control.Lens        ((&), (?~), (.~), (^.))
 import Data.Text           (Text, pack, unpack)
 import GHC.Generics
+import GHC.Base            (MonadPlus(..), Alternative(..))
 
+import qualified Control.Monad.Fail       as MF
 import qualified Data.HashMap.Strict      as HM
 import qualified Network.Google.FireStore as FireStore
 
@@ -295,3 +297,168 @@ instance GToDocumentValue U1 where
 
 instance GToDocumentValue V1 where
   gtoDocumentFields _ _ _ = Left []
+
+
+-- =========================== Parser =======================
+
+newtype Parser a = P (FireStore.Value -> Either String (a, FireStore.Value))
+
+instance Functor Parser where
+  fmap h (P f) = P $ \k -> case (f k) of
+    Right (x, v) -> Right (h x, v)
+    Left err     -> Left err
+
+instance Applicative Parser where
+  pure x = P (\k -> pure (x, k))
+  (<*>) (P fab) (P pa) = P $ \k -> do
+    (f, v) <- fab k
+    (a, t) <- pa v
+    pure (f a, t) 
+
+instance Monad Parser where
+  fail e    = P (\_ -> Left e)
+  P m >>= f = P $ \k -> case m k of
+    Right (x, v) -> let P h = (f x) in h v
+    Left err     -> Left err 
+
+instance MF.MonadFail Parser where
+  fail e = P (\_ -> Left e)
+
+instance Alternative Parser where
+  empty = P (\_ -> Left "Empty parser")
+  (<|>) (P a) (P b) = P $ \k -> case a k of
+    Left _ -> b k
+    done   -> done 
+
+instance MonadPlus Parser
+
+parseEnd :: Parser FireStore.Value
+parseEnd = P $ \value -> pure (value, value)
+
+runParser :: Parser a -> FireStore.Value -> Either String a
+runParser (P parser) value = fst <$> parser value
+
+genRawParser :: (FireStore.Value -> Maybe a) -> String -> FireStore.Value -> Parser a
+genRawParser foo errMsg = \value -> case foo value of
+  Just v -> pure v
+  _      -> fail errMsg
+
+genRawMaybeParser :: (FireStore.Value -> Maybe a) -> FireStore.Value -> Parser (Maybe a)
+genRawMaybeParser foo = \value -> case foo value of
+  Just v -> pure (Just v)
+  _      -> pure Nothing
+
+
+optional :: Parser a -> Parser (Maybe a)
+optional innerParser = do
+  maybeNull <- parseEnd >>= genRawMaybeParser (^. FireStore.vNullValue)
+  case maybeNull of
+    Just nullVal
+      | nullVal == FireStore.NullValue -> pure Nothing
+      | otherwise                      -> fail "unexpected null value"
+    Nothing -> (fmap Just innerParser)
+
+class FromValue2 a where
+  fromValue2 :: FireStore.Value -> Parser a
+
+instance FromValue2 Text where
+  fromValue2 = genRawParser (^. FireStore.vStringValue) "not a string value"
+
+instance FromValue2 String where
+  fromValue2 = fmap unpack . fromValue2
+
+instance FromValue2 Double where
+  fromValue2 = genRawParser (^. FireStore.vDoubleValue) "not a double value"
+
+instance FromValue2 Bool where
+  fromValue2 = genRawParser (^. FireStore.vBooleanValue) "not a boolean value"
+
+instance FromValue2 Int where
+  fromValue2 = genRawParser (fmap fromEnum . (^. FireStore.vIntegerValue)) "not a integer value"
+
+instance FromValue2 (HM.HashMap Text FireStore.Value) where
+  fromValue2 = genRawParser fromMapValue "Value is not a map"
+
+instance FromValue2 [FireStore.Value] where
+  fromValue2 = genRawParser fromArrayVaule "Value is not an array"
+
+instance {-# OVERLAPPABLE #-} (FromValue2 a) => FromValue2 [a] where
+  fromValue2 v = do
+    vs <- fromValue2 v
+    mapM fromValue2 vs
+
+parse :: (FromValue2 a) => Parser a
+parse = parseEnd >>= fromValue2 
+
+withObject :: (HM.HashMap Text FireStore.Value -> Parser a) -> Parser a
+withObject foo = parseEnd >>= fromValue2 >>= foo
+
+(.:) :: (FromValue2 a) => HM.HashMap Text FireStore.Value -> Text -> Parser a
+(.:) hm key = case HM.lookup key hm of
+  Just v -> fromValue2 v
+  _      -> fail $ "Object does not contain key \"" ++ unpack key ++ "\""
+
+-- =========================== Parser =======================
+class ToValue2 a where
+  toValue2 :: a -> FireStore.Value
+
+instance (ToValue2 a) => ToValue2 (Maybe a) where
+  toValue2 (Just x) = toValue2 x
+  toValue2 _        = FireStore.value & FireStore.vNullValue ?~ FireStore.NullValue
+
+instance ToValue2 Text where
+  toValue2 txt = FireStore.value & FireStore.vStringValue ?~ txt
+
+instance ToValue2 String where
+  toValue2 = toValue2 . pack
+
+instance ToValue2 Double where
+  toValue2 x = FireStore.value & FireStore.vDoubleValue ?~ x
+
+instance ToValue2 Bool where
+  toValue2 x = FireStore.value & FireStore.vBooleanValue ?~ x
+
+instance ToValue2 Int where
+  toValue2 x = FireStore.value & FireStore.vIntegerValue ?~ (toEnum x)
+  
+instance ToValue2 [FireStore.Value] where
+  toValue2 vs = FireStore.value & FireStore.vArrayValue ?~ (FireStore.arrayValue & FireStore.avValues .~ vs)
+
+instance {-# OVERLAPPABLE #-} (ToValue2 a) => ToValue2 [a] where
+  toValue2 = toValue2 . map toValue2 
+
+instance ToValue2 (HM.HashMap Text FireStore.Value) where
+  toValue2 vs = let
+    mv = FireStore.mapValueFields vs
+    in FireStore.value & FireStore.vMapValue ?~ (FireStore.mapValue & FireStore.mvFields ?~ mv)
+
+instance {-# OVERLAPPABLE #-} (ToValue2 a) => ToValue2 (HM.HashMap Text a) where
+  toValue2 = toValue2 . HM.map toValue2  
+
+instance (ToValue2 a, ToValue2 b) => ToValue2 (a, b) where
+  toValue2 (a, b) = toValue2 [toValue2 a, toValue2 b]
+
+instance (ToValue2 a, ToValue2 b, ToValue2 c) => ToValue2 (a, b, c) where
+  toValue2 (a, b, c) = toValue2 [toValue2 a, toValue2 b, toValue2 c]
+
+instance (ToValue2 a, ToValue2 b, ToValue2 c, ToValue2 d) => ToValue2 (a, b, c, d) where
+  toValue2 (a, b, c, d) = toValue2 [toValue2 a, toValue2 b, toValue2 c, toValue2 d]
+
+instance ToValue2 FireStore.DocumentFields where
+  toValue2 docFields = let
+    mv = FireStore.mapValueFields (docFields ^. FireStore.dfAddtional) 
+    in FireStore.value & FireStore.vMapValue ?~ (FireStore.mapValue & FireStore.mvFields ?~ mv)
+
+-- === test
+data T = T Int String deriving Show
+
+instance ToValue2 T where
+  toValue2 (T a b) = toValue2 [toValue2 a, toValue2 b]
+
+pp = do
+  [a, b] <- parse
+  T <$> fromValue2 a <*> fromValue2 b 
+test :: Parser (Int, String)
+test = withObject $ \v -> (,)
+        <$> v .: "x"
+        <*> v .: "y"
