@@ -11,10 +11,19 @@ module Util.FireStore.Value
   ( ToDocValue(..)
   , FromDocValue(..)
   , toMapValue
+  -- Parse Value
+  , Parser
+  , parse
+  , runParser
+  , optional
+  , preserveContext
+  , setParserContext
+  , (.:)
+  , parseArrayHeadWith
   ) where
 
-import Control.Applicative ((<|>), liftA2, liftA3)
-import Control.Lens        ((&), (?~), (.~), (^.))
+import Control.Applicative ((<|>))
+import Control.Lens        ((&), (?~), (.~), (^.), (^?), _Just)
 import Data.Bits           (unsafeShiftR)
 import Data.Text           (Text, pack, unpack)
 import GHC.Generics
@@ -60,16 +69,23 @@ class GFromDocumentValue f where
 
 instance (GFromDocumentValue a, GFromDocumentValue b) => GFromDocumentValue (a :*: b) where
   gfromDocumentFields hasTag k = do
-    vs <- parse
-    let
-      len  = length vs
-      lenL = len `unsafeShiftR` 1
-      rewrap ls = case ls of
-        [x] -> x
-        xs  -> toArrayVaule xs
-    a <- eitherFailPure $ runParser (gfromDocumentFields hasTag k) (rewrap $ take lenL vs)
-    b <- eitherFailPure $ runParser (gfromDocumentFields hasTag k) (rewrap $ drop lenL vs)
-    return (a :*: b)
+    es :: Either [FireStore.Value] (HM.HashMap Text FireStore.Value) <- (Right <$> parse) <|> (Left <$> parse)
+    case es of
+      Left vs -> let 
+        len  = length vs
+        lenL = len `unsafeShiftR` 1
+        rewrap ls = case ls of
+          [x] -> x
+          xs  -> toArrayVaule xs
+        in do
+          a <- setParserContext (rewrap $ take lenL vs) >> gfromDocumentFields hasTag k 
+          b <- setParserContext (rewrap $ drop lenL vs) >> gfromDocumentFields hasTag k 
+          return (a :*: b)
+      Right hm -> do
+        let rehm = toMapValue hm
+        a <- setParserContext rehm >> gfromDocumentFields hasTag k 
+        b <- setParserContext rehm >> gfromDocumentFields hasTag k 
+        return (a :*: b)
 
 instance (GFromDocumentValue a, GFromDocumentValue b) => GFromDocumentValue (a :+: b) where
   gfromDocumentFields _ k = 
@@ -80,19 +96,19 @@ instance (GFromDocumentValue a, Datatype c) => GFromDocumentValue (D1 c a) where
 
 instance (GFromDocumentValue a, Constructor c) => GFromDocumentValue (C1 c a) where
   gfromDocumentFields hasTag _ = M1 <$> case hasTag of
-    True -> getTag cname >> gfromDocumentFields False Nothing
+    True -> getTag cname >>= setParserContext >> gfromDocumentFields False Nothing
     _    -> gfromDocumentFields False Nothing
     where
       cname = conName (undefined :: M1 _i c _f _p)
 
 instance (GFromDocumentValue a, Selector c) => GFromDocumentValue (S1 c a) where
   gfromDocumentFields hasTag _ = M1 <$> case fieldName of
-    "" -> gfromDocumentFields hasTag Nothing
-    _  -> gfromDocumentFields hasTag (Just fieldName)
+    ""  -> gfromDocumentFields hasTag Nothing
+    tag -> getTag tag >>= setParserContext >> gfromDocumentFields hasTag (Just fieldName)
     where fieldName = selName (undefined :: M1 _i c _f _p)
 
 instance (FromDocValue a) => GFromDocumentValue (K1 i a) where
-  gfromDocumentFields _ k = K1 <$> parse
+  gfromDocumentFields _ _ = K1 <$> parse
 
 instance GFromDocumentValue U1 where
   gfromDocumentFields _ (Just cname) = do
@@ -122,9 +138,7 @@ toArrayVaule :: [FireStore.Value] -> FireStore.Value
 toArrayVaule vs = FireStore.value & FireStore.vArrayValue ?~ (FireStore.arrayValue & FireStore.avValues .~ vs)
 
 fromArrayVaule :: FireStore.Value -> Maybe [FireStore.Value]
-fromArrayVaule vl = do
-  arr <- vl ^. FireStore.vArrayValue
-  return $ arr ^. FireStore.avValues
+fromArrayVaule vl = vl ^? FireStore.vArrayValue . _Just . FireStore.avValues
 
 toMapValue :: HM.HashMap Text FireStore.Value -> FireStore.Value
 toMapValue vs = let
@@ -132,37 +146,29 @@ toMapValue vs = let
   in FireStore.value & FireStore.vMapValue ?~ (FireStore.mapValue & FireStore.mvFields ?~ mv)
 
 fromMapValue :: FireStore.Value -> Maybe (HM.HashMap Text FireStore.Value)
-fromMapValue vl = do
-  mv <- vl ^. FireStore.vMapValue
-  mf <- mv ^. FireStore.mvFields
-  return $ mf ^. FireStore.mvfAddtional
+fromMapValue vl = vl ^? FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional
 
 toArrayOrMapOrValue :: ValueBuilder -> FireStore.Value
 toArrayOrMapOrValue x = case x of
-  Right fs -> toMapValue fs
+  Right fs -> toMapValue (HM.fromList fs)
   Left [v] -> v
   Left  vs -> toArrayVaule vs
 
-fromArrayOrMapOrValue :: FireStore.Value -> ValueBuilder
-fromArrayOrMapOrValue v = case (fromMapValue v, fromArrayVaule v) of
-  (Just hm, Nothing)    -> Right hm
-  (Nothing, Just arr)   -> Left arr
-  _                     -> Left [v]
+getTag :: String -> Parser FireStore.Value
+getTag tag = do
+  hm <- parse
+  maybe (fail $ "Could not find tag " ++ tag) pure . HM.lookup (pack tag) $ hm
 
-getTag :: String -> Parser Bool
-getTag tag = undefined 
-
-type ValueBuilder = Either [FireStore.Value] (HM.HashMap Text FireStore.Value)
+type ValueBuilder = Either [FireStore.Value] [(Text, FireStore.Value)]
 
 class GToDocumentValue f where
   gtoDocumentFields :: Bool -> Maybe String -> f a -> ValueBuilder
 
 instance (GToDocumentValue a, GToDocumentValue b) => GToDocumentValue (a :*: b) where
   gtoDocumentFields hasTag k (x :*: y) = case (a, b) of
-    (Right xs, Right ys) -> Left [toMapValue xs, toMapValue ys]
-    (Left  xs, Left  ys) -> Left $ xs ++ ys
-    (Right xs, Left  ys) -> Left $ (toMapValue xs):ys
-    (Left  xs, Right ys) -> Left $ xs ++ [toMapValue ys]
+    (Right xs, Right ys) -> Right $ xs ++ ys
+    (Left  xs, Left  ys) -> Left  $ xs ++ ys
+    _                    -> error "Oops! Did not expected tagged/untagged to coexist."
     where
       a = gtoDocumentFields hasTag k x
       b = gtoDocumentFields hasTag k y
@@ -176,8 +182,8 @@ instance (GToDocumentValue a, Datatype c) => GToDocumentValue (D1 c a) where
 
 instance (GToDocumentValue a, Constructor c) => GToDocumentValue (C1 c a) where
   gtoDocumentFields hasTag _ m1@(M1 x)
-    | hasTag && conIsRecord m1 = Right $ HM.singleton (pack cname) (toArrayOrMapOrValue unwrap)
-    | otherwise                = unwrap
+    | hasTag    = Right [(pack cname, toArrayOrMapOrValue unwrap)]
+    | otherwise = unwrap
     where
       unwrap = gtoDocumentFields hasTag (Just cname) x
       cname = conName m1
@@ -189,19 +195,19 @@ instance (GToDocumentValue a, Selector c) => GToDocumentValue (S1 c a) where
       where fieldName = selName m1
 
 instance (ToDocValue a) => GToDocumentValue (K1 i a) where
-  gtoDocumentFields _ (Just k) (K1 x) = Right $ HM.singleton (pack k) (toValue x)
+  gtoDocumentFields _ (Just k) (K1 x) = Right [(pack k, toValue x)]
   gtoDocumentFields _ _        (K1 x) = Left [toValue x]
 
 instance GToDocumentValue U1 where
-  gtoDocumentFields False (Just v) _ = Left [toValue v]
-  gtoDocumentFields _     _        _ = Left []
+  gtoDocumentFields _ (Just v) _ = Left [toValue v]
+  gtoDocumentFields _ _        _ = Left []
 
 instance GToDocumentValue V1 where
   gtoDocumentFields _ _ _ = Left []
 
 -- =========================== Parser =======================
 
-newtype Parser a = P (FireStore.Value -> Either String (a, FireStore.Value))
+newtype Parser a = P (Maybe FireStore.Value -> Either String (a, Maybe FireStore.Value))
 
 instance Functor Parser where
   fmap h (P f) = P $ \k -> case (f k) of
@@ -232,34 +238,47 @@ instance Alternative Parser where
 
 instance MonadPlus Parser
 
-parseEnd :: Parser FireStore.Value
-parseEnd = P $ \value -> pure (value, value)
+failNoContext :: (Monad m) => m a 
+failNoContext = fail "No context left, it was consumed."
 
 runParser :: Parser a -> FireStore.Value -> Either String a
-runParser (P parser) value = fst <$> parser value
+runParser p = fmap fst . evalParser p
+
+evalParser :: Parser a -> FireStore.Value -> Either String (a, Maybe FireStore.Value)
+evalParser (P p) = p . Just
 
 eitherFailPure :: Either String a -> Parser a
 eitherFailPure = either fail pure
 
 optional :: Parser a -> Parser (Maybe a)
 optional innerParser = do
-  maybeNull <- parseEnd >>= eitherFailPure . genRawMaybeParser (^. FireStore.vNullValue)
-  case maybeNull of
+  value <- parse
+  case value ^. FireStore.vNullValue of
     Just nullVal
       | nullVal == FireStore.NullValue -> pure Nothing
       | otherwise                      -> fail "unexpected null value"
-    Nothing -> (fmap Just innerParser)
+    -- Put context back for inner parser
+    Nothing -> setParserContext value >> fmap Just innerParser
 
 parse :: (FromDocValue a) => Parser a
-parse = P $ \v -> fmap (\a -> (a, v)) (fromValue v)
-
-withObject :: (HM.HashMap Text FireStore.Value -> Parser a) -> Parser a
-withObject foo = parse >>= foo
+parse = P $ \v -> fmap (\a -> (a, Nothing)) (maybe failNoContext fromValue v)
 
 (.:) :: (FromDocValue a) => HM.HashMap Text FireStore.Value -> Text -> Parser a
 (.:) hm key = case HM.lookup key hm of
-  Just v -> parse
+  Just v -> eitherFailPure $ fromValue v
   _      -> fail $ "Object does not contain key \"" ++ unpack key ++ "\""
+
+-- Needs to import Debug.Trace
+--traceContext :: Parser ()
+--traceContext = P $ \v -> pure ((), trace (show v) v)
+
+preserveContext :: Parser a -> Parser a
+preserveContext (P p) = P $ \c -> case p c of
+  Right (x, _) -> Right (x, c)
+  Left err     -> Left err
+
+setParserContext :: FireStore.Value -> Parser ()
+setParserContext v = P $ \_ -> pure ((), Just v)
 
 parseArrayHeadWith :: Parser a -> Parser a
 parseArrayHeadWith p = do
@@ -267,19 +286,18 @@ parseArrayHeadWith p = do
   case xs of
     (v:vs) -> case runParser p v of
       Left err -> fail err
-      Right a  -> P $ \_ -> pure (a, toArrayVaule vs)
+      Right a  -> setParserContext (toArrayVaule vs) >> pure a
+    _     -> fail "Empty array"
 
 -- ========================= FromValue Base Instances =======================
 
 genRawParser :: (FireStore.Value -> Maybe a) -> String -> FireStore.Value -> Either String a
 genRawParser foo errMsg = \value -> case foo value of
-  Just v -> pure v
-  _      -> fail errMsg
+  Just v -> Right v
+  _      -> Left errMsg
 
-genRawMaybeParser :: (FireStore.Value -> Maybe a) -> FireStore.Value -> Either String (Maybe a)
-genRawMaybeParser foo = \value -> case foo value of
-  Just v -> pure (Just v)
-  _      -> pure Nothing
+instance FromDocValue FireStore.Value where
+  fromValue = pure
 
 instance FromDocValue Text where
   fromValue = genRawParser (^. FireStore.vStringValue) "not a string value"
@@ -306,6 +324,28 @@ instance {-# OVERLAPPABLE #-} (FromDocValue a) => FromDocValue [a] where
   fromValue v = do
     vs <- fromValue v
     mapM fromValue vs
+
+instance (FromDocValue a, FromDocValue b) => FromDocValue (a, b) where
+  fromValue v = case fromValue v of
+    Right [a, b] -> (,) <$> fromValue a <*> fromValue b
+    Right _      -> Left "Unexpected number of values in the tuple."
+    Left err     -> Left err
+
+instance (FromDocValue a, FromDocValue b, FromDocValue c) => FromDocValue (a, b, c) where
+  fromValue v = case fromValue v of
+    Right [a, b, c] -> (,,) <$> fromValue a <*> fromValue b <*> fromValue c
+    Right _         -> Left "Unexpected number of values in the tuple."
+    Left err        -> Left err
+
+instance (FromDocValue a, FromDocValue b, FromDocValue c, FromDocValue d) => 
+  FromDocValue (a, b, c, d) where
+  fromValue v = case fromValue v of
+    Right [a, b, c, d] -> (,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d
+    Right _            -> Left "Unexpected number of values in the tuple."
+    Left err           -> Left err
+
+instance (FromDocValue a) => FromDocValue (Maybe a) where
+  fromValue = runParser (optional parse)
 
 -- ========================= ToDocValue Base Instances =======================
 instance (ToDocValue a) => ToDocValue (Maybe a) where
@@ -354,30 +394,3 @@ instance ToDocValue FireStore.DocumentFields where
   toValue docFields = let
     mv = FireStore.mapValueFields (docFields ^. FireStore.dfAddtional) 
     in FireStore.value & FireStore.vMapValue ?~ (FireStore.mapValue & FireStore.mvFields ?~ mv)
-
--- === test
-data T = T Int String String deriving (Show, Generic)
-
---instance ToDocValue T where
---  toValue (T a b) = toValue [toValue a, toValue b]
-
-instance ToDocValue T
-instance FromDocValue T
-
-tdoc = toValue (T 0 "asd" "rew")
-
-doct :: Either String T
-doct = fromValue tdoc
-
-pp = do
-  a <- parseArrayHeadWith parse
-  b <- parseArrayHeadWith parse
-  c <- parseArrayHeadWith parse
-  return $ T a b c
-
-doct2 = runParser pp tdoc
--- 
--- test :: Parser (Int, String)
--- test = withObject $ \v -> (,)
---         <$> v .: "x"
---         <*> v .: "y"

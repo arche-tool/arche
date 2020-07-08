@@ -4,15 +4,9 @@ module Server.FireStore.Document
   ( test
   ) where
 
-import Control.Lens ((^.), _Just)
-import Control.Monad (zipWithM_)
-import Data.Text (pack)
 import GHC.Generics
 import Test.Tasty
 import Test.Tasty.HUnit
-
-import qualified Data.HashMap.Strict      as HM
-import qualified Network.Google.FireStore as FireStore
 
 import Util.FireStore.Value
 
@@ -24,43 +18,60 @@ test = testGroup "FireStore Document generic instances"
 
 data Test0 = Test0A | Test0B | Test0C deriving (Generic, Eq, Show)
 data Test1 = Test1A String String | Test1B | Test1C String deriving (Generic, Eq, Show)
-data Test2 = Test2A {test2a :: String, test2b :: String} | Test2B deriving (Generic, Eq, Show)
+data Test2 = Test2A {test2a :: String, test2b :: String} | Test2B | Test2C deriving (Generic, Eq, Show)
 data Test3 = Test3A {test3a :: Maybe Test2, test3b :: Test1} deriving (Generic, Eq, Show)
 data Test4 = Test4A String String deriving (Generic, Eq, Show)
+data Test5 = Test5A String String String String deriving (Show, Eq, Generic)
+data Test6 = Test6A String String String String String deriving (Show, Eq, Generic)
+newtype Test7 = Test7A Test5 deriving (Show, Eq, Generic)
 
 instance ToDocValue Test0
 instance ToDocValue Test1
 instance ToDocValue Test2
 instance ToDocValue Test3
 instance ToDocValue Test4
+instance ToDocValue Test5
+instance ToDocValue Test6
+instance ToDocValue Test7
 
 instance FromDocValue Test0
 instance FromDocValue Test1
 instance FromDocValue Test2
 instance FromDocValue Test3
 instance FromDocValue Test4
+instance FromDocValue Test5
+instance FromDocValue Test6
+instance FromDocValue Test7
 
-matchStringValue :: FireStore.Value -> String -> Assertion
-matchStringValue v s = (v ^. FireStore.vStringValue) @?= (Just . pack $ s) 
 
-matchArrayValue :: FireStore.Value -> [String] -> Assertion
-matchArrayValue v ss = zipWithM_ matchStringValue vs ss
-  where
-    vs = v ^. FireStore.vArrayValue . _Just . FireStore.avValues
+matchParser :: (Show a, Eq a, ToDocValue a) => a -> Parser a -> Assertion
+matchParser ref p = case runParser p (toValue ref) of 
+  Right x  -> x @?= ref
+  Left err -> fail err
 
 testGenericShape :: TestTree
 testGenericShape = testCase "Generic encode data shape" $ do
   let
-    [test4a, test4b] = (toValue $ Test4A "xx" "yy") ^. FireStore.vArrayValue . _Just . FireStore.avValues
-    mapTest1a = (toValue $ Test1A "xx" "yy") ^. FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional
-    mapTest2b = (toValue $ Test2A "xx" "yy") ^. FireStore.vMapValue . _Just . FireStore.mvFields . _Just . FireStore.mvfAddtional
-  matchStringValue (toValue Test0A) (show Test0A)
-  matchStringValue test4a "xx"
-  matchStringValue test4b "yy"
-  matchStringValue (mapTest1a HM.! "__TAG__") "Test1A"
-  matchArrayValue  (mapTest1a HM.! "__VALUES__") ["xx", "yy"]
-  matchStringValue (mapTest2b HM.! "test2a") "xx"
-  matchStringValue (mapTest2b HM.! "test2b") "yy"
+  
+  matchParser (Test4A "xx" "yy") $ do
+    Test4A <$> parseArrayHeadWith parse <*> parseArrayHeadWith parse
+  
+  matchParser Test0A $ do
+    tag <- parse >>= (.: "Test0A") 
+    case tag of
+      "Test0A" -> pure Test0A
+      _        -> fail $ "other tag " ++ tag
+  
+  matchParser (Test2A "ee" "ff") $ do
+    parse >>= (.: "Test2A") >>= \v -> Test2A
+         <$> v .: "test2a"
+         <*> v .: "test2b"
+  
+  matchParser Test2B $ do
+    x <- parse >>= (.: "Test2B")
+    if x == ("Test2B" :: String)
+      then pure Test2B
+      else pure Test2C 
 
 checkIso :: (Show a, ToDocValue a, FromDocValue a, Eq a) => a -> Assertion
 checkIso x = let
@@ -81,6 +92,9 @@ testIsomorphism = testCase "Generic isomorphism test" $ do
     _test3c = Test3A Nothing _test1b
     _test3d = Test3A (Just _test2a) _test1b
     _test4a = Test4A "ss" "dd"
+    _test5a = Test5A "0" "1" "2" "3"
+    _test6a = Test6A "0" "1" "2" "3" "4"
+    _test7a = Test7A _test5a
   checkIso _test1a
   checkIso _test1b
   checkIso _test1c
@@ -90,3 +104,6 @@ testIsomorphism = testCase "Generic isomorphism test" $ do
   checkIso _test3c
   checkIso _test3d
   checkIso _test4a
+  checkIso _test5a
+  checkIso _test6a
+  checkIso _test7a
