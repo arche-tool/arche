@@ -257,8 +257,28 @@ optional innerParser = do
     Just nullVal
       | nullVal == FireStore.NullValue -> pure Nothing
       | otherwise                      -> fail "unexpected null value"
-    -- Put context back for inner parser
-    Nothing -> setParserContext value >> fmap Just innerParser
+    Nothing
+      -- In reality a value with all fields empty is also treated as null/nothing
+      | isItAllNull value -> pure Nothing
+      -- Put context back for inner parser
+      | otherwise         -> setParserContext value >> fmap Just innerParser
+
+isItAllNull :: FireStore.Value -> Bool
+isItAllNull v = not $ any id
+  [ hasSomething FireStore.vGeoPointValue
+  , hasSomething FireStore.vBytesValue
+  , hasSomething FireStore.vIntegerValue
+  , hasSomething FireStore.vTimestampValue
+  , hasSomething FireStore.vDoubleValue
+  , hasSomething FireStore.vStringValue
+  , hasSomething FireStore.vBooleanValue
+  , hasSomething FireStore.vMapValue
+  , hasSomething FireStore.vArrayValue
+  , hasSomething FireStore.vReferenceValue
+  , hasSomething FireStore.vNullValue
+  ]
+  where
+    hasSomething f = maybe False (const True) (v ^. f) 
 
 parse :: (FromDocValue a) => Parser a
 parse = P $ \v -> fmap (\a -> (a, Nothing)) (maybe failNoContext fromValue v)
