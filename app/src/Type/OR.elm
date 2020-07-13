@@ -2,6 +2,7 @@ module Type.OR exposing (..)
 
 import Json.Decode as D
 import Json.Encode as JE
+import Array exposing (Array)
 
 type alias ORConfig =
   { misoAngle: Deg
@@ -87,6 +88,9 @@ type alias FitError =
   , devError: Deg
   , avgError: Deg
   }
+
+orEvalListDecoder : D.Decoder (Array OREval)
+orEvalListDecoder = D.array orEvalDecoder
 
 orEvalDecoder : D.Decoder OREval
 orEvalDecoder =

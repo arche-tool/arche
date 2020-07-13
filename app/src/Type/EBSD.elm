@@ -1,6 +1,7 @@
 module Type.EBSD exposing (..)
 
 import Json.Decode as D
+import Array exposing (Array)
 
 type alias EBSD =
   { alias: String
@@ -28,5 +29,5 @@ ebsdDecoder =
       (D.field "hashEBSD" D.string)
       (D.field "createdBy"userDecoder)
 
-ebsdListDecoder : D.Decoder (List EBSD)
-ebsdListDecoder = D.list ebsdDecoder
+ebsdListDecoder : D.Decoder (Array EBSD)
+ebsdListDecoder = D.array ebsdDecoder

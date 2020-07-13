@@ -1,5 +1,6 @@
-module Page.Navegate exposing (Model, Msg(..), main, init, update, subscriptions, view)
+module Page.Navegate exposing (Model, Msg(..), renderEbsds, main, init, update, subscriptions, view)
 
+import Array exposing (Array)
 import Browser
 import Element exposing (Element, Color, column, text, layout, rgb255, row)
 import Element.Background as BG
@@ -10,7 +11,6 @@ import Html.Attributes
 import Http
 import Task
 import Time
-import Json.Decode as D
 import FormatNumber exposing (format)
 import FormatNumber.Locales exposing (Decimals(..), base)
 
@@ -24,8 +24,12 @@ import Type.OR exposing (
   OREval,
   ORConfig,
   orCfgEncoder,
-  orEvalDecoder
+  orEvalDecoder,
+  orEvalListDecoder
   )
+
+import Type.ArcheTree as ArcheTree
+import Type.ArcheTree exposing (ArcheTree)
 
 -- =========== MAIN ===========
 main : Program () Model Msg
@@ -41,18 +45,14 @@ main =
 -- =========== MODEL ===========
 type alias Model =
   { token: Maybe String
-  , ebsds: List EBSD
-  , orEvals: List OREval
-  , selectedEBSDHash: Maybe String
+  , archeTree: ArcheTree
   , orCfgInput: ORConfig
   }
 
 init : () -> (Model, Cmd Msg)
 init _ =
   ( { token = Nothing
-    , ebsds = []
-    , orEvals = []
-    , selectedEBSDHash = Nothing
+    , archeTree = ArcheTree.empty
     , orCfgInput = defaultORCfg
     }
   , Cmd.none
@@ -75,8 +75,8 @@ type Msg
   | SetORConfig ORConfig
   | SubmitORConfig ORConfig
   | NewOR String (Result Http.Error OREval)
-  | ReceivedEBSDs (Result Http.Error (List EBSD))
-  | ReceivedORs String (Result Http.Error (List OREval))
+  | ReceivedEBSDs (Result Http.Error (Array EBSD))
+  | ReceivedORs String (Result Http.Error (Array OREval))
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -101,7 +101,7 @@ update msg model =
     SubmitORConfig orCfg ->
       case model.token of
         Just tk ->
-          case model.selectedEBSDHash of
+          case ArcheTree.getEBSDFocusKey model.archeTree of
             Just ebsdHash ->
               let
                 hs = [Http.header "Authorization" ("Bearer " ++ tk)]
@@ -130,7 +130,7 @@ update msg model =
               , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit"
               , headers = hs
               , body = Http.emptyBody
-              , expect = Http.expectJson (ReceivedORs ebsdHash) (D.list orEvalDecoder)
+              , expect = Http.expectJson (ReceivedORs ebsdHash) orEvalListDecoder
               , timeout = Nothing
               , tracker = Nothing
               }
@@ -138,13 +138,16 @@ update msg model =
         _ -> (model, Cmd.none)
   
     SelectedEBSD hash -> (
-      {model | selectedEBSDHash = Just hash},
+      {model | archeTree = ArcheTree.focusOnEbsd model.archeTree hash},
       Cmd.batch [Task.perform (\_ -> RefreshORs hash) Time.now])
 
     ReceivedEBSDs result ->
       case result of
-        Err _    -> (model, Cmd.none)
-        Ok  ebsds -> ( {model | ebsds = ebsds}, Cmd.none )
+        Err _     -> (model, Cmd.none)
+        Ok  ebsds ->
+          let
+            at = ArcheTree.refreshArcheTree model.archeTree ebsds
+          in ( {model | archeTree = at}, Cmd.none )
 
     SetToken tk -> (
       {model | token = Just tk},
@@ -156,10 +159,13 @@ update msg model =
     
     NewOR _ _ -> (model, Cmd.none)
 
-    ReceivedORs _ result ->
+    ReceivedORs ebsdHash result ->
       case result of
         Err _   -> (model, Cmd.none)
-        Ok  ors -> ({model | orEvals = ors}, Cmd.none)
+        Ok  ors ->
+          let
+            at = ArcheTree.refreshOR model.archeTree ebsdHash ors
+          in ( {model | archeTree = at}, Cmd.none )
 
 -- =========== SUBSCRIPTIONS ===========
 subscriptions : Model -> Sub Msg
@@ -171,27 +177,30 @@ view : Model -> Element Msg
 view model =
   case model.token of
     Nothing -> text "Please Sign-in"
-    Just _ -> row []
-      [ renderEbsds model.ebsds model.selectedEBSDHash
-      , renderORs model.orEvals Nothing
-      , renderORInput model.orCfgInput False
-      ]
+    Just _ -> renderArcheTree model
 
-renderEbsds : List EBSD -> Maybe String -> Element Msg
-renderEbsds ebsds selectedHash =
+
+renderArcheTree : Model -> Element Msg 
+renderArcheTree model = row []
+  [ renderEbsds model.archeTree
+  , renderORs model.archeTree
+  , renderORInput model.orCfgInput False
+  ]
+
+
+renderEbsds : ArcheTree -> Element Msg
+renderEbsds at =
   let
-    isSelected = \ e -> Maybe.withDefault False <| Maybe.map (\s -> s == e.hashEBSD) selectedHash
-    cols = List.map (\e -> renderEbsd e (isSelected e)) ebsds
+    cols = ArcheTree.listEBSDWithFocus at renderEbsd
   in column
     [ Element.spacing 10
     , Element.padding 5
     ] cols
 
-renderORs : List OREval -> Maybe String -> Element Msg
-renderORs orEval selectedHash =
+renderORs : ArcheTree -> Element Msg
+renderORs at =
   let
-    isSelected = \e -> Maybe.withDefault False <| Maybe.map (\s -> s == e.hashOR) selectedHash
-    cols = List.map (\e -> renderOREval e (isSelected e)) orEval
+    cols = ArcheTree.listORWithFocus at renderOREval 
   in column
     [ Element.spacing 10
     , Element.padding 5
