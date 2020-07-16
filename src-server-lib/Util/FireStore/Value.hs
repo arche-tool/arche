@@ -334,6 +334,9 @@ instance FromDocValue Bool where
 instance FromDocValue Int where
   fromValue = genRawParser (fmap fromEnum . (^. FireStore.vIntegerValue)) "not a integer value"
 
+instance {-# OVERLAPPABLE #-} (Enum a) => FromDocValue a where
+  fromValue = fmap toEnum . fromValue 
+
 instance FromDocValue (HM.HashMap Text FireStore.Value) where
   fromValue = genRawParser fromMapValue "Value is not a map"
 
@@ -387,6 +390,9 @@ instance ToDocValue Bool where
 instance ToDocValue Int where
   toValue x = FireStore.value & FireStore.vIntegerValue ?~ (toEnum x)
   
+instance {-# OVERLAPPABLE #-} (Enum a) => ToDocValue a where
+  toValue = toValue . fromEnum
+
 instance ToDocValue [FireStore.Value] where
   toValue vs = FireStore.value & FireStore.vArrayValue ?~ (FireStore.arrayValue & FireStore.avValues .~ vs)
 

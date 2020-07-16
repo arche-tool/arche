@@ -7,6 +7,7 @@
 
 module Handler.ORAPI
   ( orApi
+  , getOR
   ) where
 
 import Control.Lens                 ((&), (.~), (?~), view)

@@ -45,8 +45,10 @@ instance FromJSON GG.Cfg
 instance FromJSON OF.Cfg
 
 instance FromJSON OR.PhaseID
+instance FromJSON OR.OR
 
 instance FromJSON TO.AxisPair
+instance FromJSON TO.Quaternion
 instance FromJSON TO.Deg
 
 instance (FromJSON a) => FromJSON (LV.Vec2 a)
@@ -87,10 +89,15 @@ instance (Hashable a) => Hashable (LV.Vec4 a)
 instance (Hashable a) => Hashable (Vector a) where
     hashWithSalt i = hashWithSalt i .toList 
 
+instance Hashable OR.PhaseID
+instance Hashable OR.OR
+
+instance Hashable GG.Cfg
 instance Hashable OF.Cfg
 
 
 -- ========= Document =========
+instance ToDocValue GG.Cfg
 instance ToDocValue OF.Cfg
 instance ToDocValue OF.OREvaluation
 instance ToDocValue OF.OrientationRelationship
@@ -100,11 +107,13 @@ instance ToDocValue TO.AxisPair
 instance ToDocValue TO.Quaternion
 instance ToDocValue OR.FitError
 instance ToDocValue OR.OR
+instance ToDocValue OR.PhaseID
 
 instance (ToDocValue a) => ToDocValue (LV.Vec3 a)
 instance (ToDocValue a) => ToDocValue (LV.Vec2 a)
 instance (ToDocValue a) => ToDocValue (LV.Vec4 a)
 
+instance FromDocValue GG.Cfg
 instance FromDocValue OF.Cfg
 instance FromDocValue OF.OREvaluation
 instance FromDocValue OF.OrientationRelationship
@@ -114,6 +123,7 @@ instance FromDocValue TO.AxisPair
 instance FromDocValue TO.Quaternion
 instance FromDocValue OR.FitError
 instance FromDocValue OR.OR
+instance FromDocValue OR.PhaseID
 
 instance (FromDocValue a) => FromDocValue (LV.Vec3 a)
 instance (FromDocValue a) => FromDocValue (LV.Vec2 a)

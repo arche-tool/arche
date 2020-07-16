@@ -9,6 +9,7 @@
 
 module Arche.Strategy.GomesGraph
   ( run
+  , processEBSD
   , Cfg(..)
   ) where
 
@@ -64,12 +65,12 @@ data Cfg =
   Cfg
   { misoAngle              :: Deg
   , useExternalMCL         :: Bool
-  , excluedeFloatingGrains :: Bool
+  , excludeFloatingGrains  :: Bool
   , refinementSteps        :: Word8
   , initClusterFactor      :: Double
   , stepClusterFactor      :: Double
   , badAngle               :: Deg
-  , withOR                 :: AxisPair
+  , withOR                 :: OR
   , parentPhaseID          :: Maybe PhaseID
   , outputANGMap           :: Bool
   , outputCTFMap           :: Bool
@@ -156,7 +157,7 @@ getGomesConfig cfg ror maybeEBSD logger = do
           (A.rotation &&& A.phaseNum)
           ebsd
   let 
-    noIsleGrains = excluedeFloatingGrains cfg
+    noIsleGrains = excludeFloatingGrains cfg
     func (gidBox, voxMap) = let
       micro = fst $ getMicroVoxel (gidBox, voxMap)
       in GomesConfig
@@ -269,7 +270,7 @@ processEBSD cfg@Cfg{..} bs action = do
   logger <- Log.newStdoutLoggerSet Log.defaultBufSize
   let
     ebsd = loadEBSD bs
-    ror  = convert withOR
+    ror  = withOR
     nref = fromIntegral refinementSteps
     doit = do
       grainClustering

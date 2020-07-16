@@ -161,7 +161,7 @@ parseGomesGraph = GomesGraph.Cfg
   <*> parseInitCluster
   <*> parseStepCluster
   <*> parseBadAngle
-  <*> parseOR
+  <*> (OR.convert <$> parseOR)
   <*> optional parseParentPhaseID
   <*> parseOutputToANG
   <*> parseOutputToCTF

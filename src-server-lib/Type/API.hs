@@ -12,11 +12,10 @@ module Type.API
 
 import Servant
 
-import qualified Arche.Strategy.GomesGraph as Arche
 import qualified Arche.Strategy.ORFitAll as OR
 
 import Type.Storage (HashEBSD, HashOR, HashArche, StorageLink, StorageObjectName)
-import Type.Store (Arche, EBSD, OR)
+import Type.Store (Arche, ArcheCfg, EBSD, OR)
 
 type API = "api" :>
   (    EBSDAPI
@@ -56,5 +55,5 @@ type ArcheAPI = "ebsd" :> "hash" :> Capture "ebsd_hash" HashEBSD
   :> "orfit" :> "hash" :> Capture "or_hash" HashOR :> "arche" :>
   (                                                 Get  '[JSON] [Arche]
   :<|> "hash" :> Capture "arche_hash" HashArche  :> Get  '[JSON] Arche
-  :<|> ReqBody '[JSON] Arche.Cfg                 :> Post '[JSON] NoContent
+  :<|> ReqBody '[JSON] ArcheCfg                  :> Post '[JSON] Arche
   )

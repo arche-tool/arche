@@ -14,6 +14,7 @@ import Util.OrphanInstances ()
 import qualified Type.Store as Store
 import qualified Util.Auth  as Auth
 
+import Handler.ArcheAPI
 import Handler.ORAPI
 import Handler.EBSDAPI
 import Server.Config
@@ -34,11 +35,8 @@ main = do
     let
         oauthClientID = Auth.mkOAuthClientID (oauth_client_id config)
 
-        fake :: Server ArcheAPI
-        fake = undefined
-
         api :: Store.User -> Server API
-        api user = ebsdApi storageSigner user :<|> orApi user :<|> fake
+        api user = ebsdApi storageSigner user :<|> orApi user :<|> archeApi user
 
         server :: Server ArcheServer
         server = \token -> api $ Store.User

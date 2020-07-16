@@ -3,12 +3,15 @@
 
 module Type.Store where
 
-import Data.Aeson   (ToJSON)
-import Data.Text    (Text)
+import Data.Aeson    (ToJSON, FromJSON)
+import Data.Hashable (Hashable)
+import Data.Text     (Text)
 import GHC.Generics
+import GHC.Word      (Word8)
 
-import qualified Arche.Strategy.GomesGraph as GG
 import qualified Arche.Strategy.ORFitAll   as OF
+import qualified Arche.OR                  as OR
+import qualified Texture.Orientation       as TO
 
 import Type.Storage (HashEBSD(..), HashOR(..), HashArche(..))
 import Util.FireStore
@@ -44,10 +47,34 @@ instance FromDocValue OR
 data Arche
     = Arche
     { hashArche :: HashArche
-    , cfgArche  :: GG.Cfg
+    , cfgArche  :: ArcheCfg
     } deriving (Show, Generic)
 
+data ArcheCfg = ArcheCfg
+  { misoAngle              :: TO.Deg
+  , excludeFloatingGrains  :: Bool
+  , refinementSteps        :: Word8
+  , initClusterFactor      :: Double
+  , stepClusterFactor      :: Double
+  , badAngle               :: TO.Deg
+  , parentPhaseID          :: Maybe OR.PhaseID
+  , outputANGMap           :: Bool
+  , outputCTFMap           :: Bool
+  } deriving (Show, Generic)
+
+
+instance Hashable ArcheCfg
+
 instance ToJSON Arche
+instance ToJSON ArcheCfg
+
+instance FromJSON Arche
+instance FromJSON ArcheCfg
+
+instance ToDocValue Arche
+instance FromDocValue Arche
+instance ToDocValue ArcheCfg
+instance FromDocValue ArcheCfg
 
 -- ================ User ================
 data User
