@@ -11,8 +11,11 @@ module Arche.Strategy.GomesGraph
   ( run
   , processEBSD
   , Cfg(..)
+  , renderImage
   ) where
 
+import Codec.Picture.Png     (encodePng)
+import Codec.Picture.Types   (PixelRGB8(..), Image, generateImage)
 import Control.Arrow         ((&&&))
 import Control.Monad         (forM_, when, replicateM_, zipWithM_, void)
 import Control.Monad.RWS     (RWST(..), ask, asks, get, put, runRWST)
@@ -121,20 +124,20 @@ data GomesState
   , mclFactor    :: Double
   } deriving (Show)
 
-type Gomes = RWST GomesConfig () GomesState IO
+type Gomes = RWST GomesConfig () GomesState
 
 -- =======================================================================================
 
-logInfo :: (ToLogStr a)=> a -> Gomes ()
+logInfo :: (MonadIO m, Monad m, ToLogStr a)=> a -> Gomes m ()
 logInfo msg = asks stdoutLogger >>= (\logger -> liftIO . Log.pushLogStrLn logger . Log.toLogStr $ msg) 
 
 getDist :: (a -> Double) -> V.Vector a -> TDigest 10
 getDist func = TD.compress . V.foldl (\td x -> TD.insert (func x) td) mempty
 
-logParentStatsState :: Gomes ()
+logParentStatsState :: (MonadIO m, Monad m)=> Gomes m ()
 logParentStatsState = get >>= logParentStats . parentGrains
 
-logParentStats :: V.Vector ParentGrain -> Gomes ()
+logParentStats :: (MonadIO m, Monad m)=> V.Vector ParentGrain -> Gomes m ()
 logParentStats parents = let
   tdNumProducts = getDist (fromIntegral . length . productMembers) parents
   renderMsg q = let
@@ -182,7 +185,7 @@ getInitState GomesConfig{..} = let
                 , mclFactor    = k
                 }
 
-grainClustering :: Gomes ()
+grainClustering :: (MonadIO m, Monad m)=> Gomes m ()
 grainClustering = do
   cfg@GomesConfig{..} <- ask
   st@GomesState{..}   <- get
@@ -191,58 +194,6 @@ grainClustering = do
   put $ st { parentGrains = ps
            , mclFactor    = mclFactor * stepClusterFactor inputCfg
            }
-
-plotResults :: FilePath -> Gomes ()
-plotResults base_file = do
-  plotVTK  base_file
-  plotEBSD base_file
-
-plotEBSD :: FilePath -> Gomes ()
-plotEBSD base_filename = do
-  Cfg{..} <- fmap inputCfg ask
-  ebsd <- genParentEBSD
-  liftIO $ do
-    when outputANGMap $ renderANGFile (base_filename <.> "ang") $ either id toANG ebsd
-    when outputCTFMap $ renderCTFFile (base_filename <.> "ctf") $ either toCTF id ebsd
-
-plotVTK :: String -> Gomes ()
-plotVTK base_file = do
-  cfg@GomesConfig{..} <- ask
-  attrAvgAID <- genProductVTKAttr    (-1) fst "Product Grain ID"
-  attrGID    <- genParentVTKAttr     (-1) fst "Parent Grain ID"
-
-  attrAvgErr <- genParentVTKAttr     (-1) (unDeg . avgError . parentAvgErrorFit . snd) "Parent Avg Error Fit [deg]"
-  attrDevErr <- genParentVTKAttr     (-1) (unDeg . devError . parentAvgErrorFit . snd) "Parent StdDev Error Fit [deg]"
-  attrMaxErr <- genParentVTKAttr     (-1) (unDeg . maxError . parentAvgErrorFit . snd) "Parent Max Error Fit [deg]"
-  attrNumPro <- genParentVTKAttr     (-1) (length . productMembers . snd)              "Parent Number of Product Components"
-
-  attrMID    <- genProductFitVTKAttr (-1) (const $ const areaFraction)          "Product Grain Area Fraction"
-  attrORVar  <- genProductFitVTKAttr (-1) (const $ const (fst . variantNumber)) "Product OR Variant Number"
-  attrLocErr <- genProductFitVTKAttr (-1) (const $ const (unDeg . misfitAngle)) "Product Error Fit [deg]"
-
-  attrAvgGIPF <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)                 "Parent Orientation [IPF]"
-  attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . productAvgOrientation . snd)             "Product Orientation [IPF]"
-  attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Product Parent Orientation Component [IPF]"
-  let
-    attrVoxAIPF  = genVoxBoxAttr "Voxel Product Orientation [IPF]" (getCubicIPFColor . fst) orientationBox
-    attrVoxPhase = genVoxBoxAttr "Voxel Phase ID" snd orientationBox
-    vtkD  = renderVoxBoxVTK grainIDBox attrs
-    attrs = [ attrAvgGIPF
-            , attrGIPF
-            , attrGID
-            , attrMID
-            , attrAvgErr
-            , attrDevErr
-            , attrMaxErr
-            , attrNumPro
-            , attrLocErr
-            , attrORVar
-            , attrVoxPhase
-            , attrVoxAIPF
-            , attrAvgAIPF
-            , attrAvgAID
-            ]
-  liftIO $ writeUniVTKfile (base_file <.> "vtr") True vtkD
 
 getTransformedProduct :: GomesConfig -> (Quaternion, PhaseID) -> ParentGrain -> Quaternion
 getTransformedProduct cfg (q, phase) p
@@ -265,9 +216,9 @@ run cfg ebsd_file base_output = do
   let savePlot = get >>= plotResults . (base_output <>) . printf "mcl_%.2f" . mclFactor
   void $ processEBSD cfg bs savePlot
 
-processEBSD :: Cfg -> BSL.ByteString -> Gomes () -> IO GomesState
+processEBSD :: (MonadIO m, Monad m)=> Cfg -> BSL.ByteString -> Gomes m () -> m GomesState
 processEBSD cfg@Cfg{..} bs action = do
-  logger <- Log.newStdoutLoggerSet Log.defaultBufSize
+  logger <- liftIO $ Log.newStdoutLoggerSet Log.defaultBufSize
   let
     ebsd = loadEBSD bs
     ror  = withOR
@@ -281,7 +232,7 @@ processEBSD cfg@Cfg{..} bs action = do
         logParentStatsState
         action
   gomescfg <- either error return (getGomesConfig cfg ror ebsd logger)
-  putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
+  liftIO . putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
   (_, final, _) <- runRWST doit gomescfg (getInitState gomescfg)
   return final
 
@@ -408,7 +359,7 @@ _getWArcheTess phaseID ors xs = (arche, err)
 
 -- ================================ Clustering Refinement ================================
 
-clusteringRefinement :: Gomes ()
+clusteringRefinement :: (MonadIO m, Monad m)=> Gomes m ()
 clusteringRefinement = do
   GomesConfig{..}   <- ask
   st@GomesState{..} <- get
@@ -440,7 +391,7 @@ reinforceCluster ns Graph{..} = let
     | otherwise        = v1
   in Graph $ HM.mapWithKey func graph
 
-refineParentGrain :: ParentGrain -> Gomes (V.Vector ParentGrain)
+refineParentGrain :: (MonadIO m, Monad m)=> ParentGrain -> Gomes m (V.Vector ParentGrain)
 refineParentGrain p@ParentGrain{..} = do
   cfg@GomesConfig{..} <- ask
   GomesState{..}      <- get
@@ -483,7 +434,7 @@ findClusters graph0 i extMCL
 
 -- ====================================== Pixalization functions =======================================
 
-genProductGrainBitmap :: (U.Unbox a)=> a -> ((Int, ProductGrain) -> a) -> Gomes (U.Vector a)
+genProductGrainBitmap :: (Monad m)=> (U.Unbox a)=> a -> ((Int, ProductGrain) -> a) -> Gomes m (U.Vector a)
 genProductGrainBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
@@ -496,7 +447,7 @@ genProductGrainBitmap nullvalue func = do
     mapM_ (fill v) (HM.toList productGrains)
     return v
 
-genParentProductFitBitmap :: (U.Unbox a)=> a -> ((Quaternion, PhaseID) -> ParentGrain -> ParentProductFit -> a) -> Gomes (U.Vector a)
+genParentProductFitBitmap :: (Monad m)=> (U.Unbox a)=> a -> ((Quaternion, PhaseID) -> ParentGrain -> ParentProductFit -> a) -> Gomes m (U.Vector a)
 genParentProductFitBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
@@ -513,7 +464,7 @@ genParentProductFitBitmap nullvalue func = do
     V.mapM_ (fillAllGrains m) parentGrains
     return m
 
-genParentGrainBitmap :: (U.Unbox a)=> a -> ((Int, ParentGrain) -> a) -> Gomes (U.Vector a)
+genParentGrainBitmap :: (Monad m)=> (U.Unbox a)=> a -> ((Int, ParentGrain) -> a) -> Gomes m (U.Vector a)
 genParentGrainBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
@@ -528,18 +479,40 @@ genParentGrainBitmap nullvalue func = do
     V.mapM_ (fill m) (V.imap (,) parentGrains)
     return m
 
+getVoxBoxRange :: (Monad m)=> Gomes m VoxBoxRange
+getVoxBoxRange = (dimension . grainIDBox) <$> ask
+
+toPixelRGB8 :: (Word8, Word8, Word8) -> PixelRGB8
+toPixelRGB8 (r, g, b) = PixelRGB8 r g b
+
+testImage :: (Monad m)=> Gomes m (Image PixelRGB8)
+testImage = do
+  let nullColor = (255,255,255)
+  vs <- genParentGrainBitmap nullColor (getCubicIPFColor . parentOrientation . snd)
+
+  shape <- getVoxBoxRange
+  let
+    (lx, ux, ly, uy, lz, uz) = getBoxLinRange shape
+    genBit x y = let
+      color = vs U.! (shape %@ (VoxelPos (lx + x) (ly + y) lz))
+      in toPixelRGB8 color
+  return $ generateImage genBit (ux - lx) (uy - ly)
+
+renderImage :: (Monad m)=> Gomes m BSL.ByteString
+renderImage = encodePng <$> testImage
+
 -- ====================================== Plotting VTK ===================================================
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=> String -> (a -> b) -> VoxBox a -> VTKAttrPoint c
 genVoxBoxAttr name func qBox = mkPointAttr name (func . (grainID qBox U.!))
 
-genProductVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ProductGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
+genProductVTKAttr :: (Monad m)=> (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ProductGrain) -> a) -> String -> Gomes m (VTKAttrPoint b)
 genProductVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genProductGrainBitmap nul func
 
-genProductFitVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Quaternion, PhaseID) -> ParentGrain -> ParentProductFit -> a) -> String -> Gomes (VTKAttrPoint b)
+genProductFitVTKAttr :: (Monad m)=> (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Quaternion, PhaseID) -> ParentGrain -> ParentProductFit -> a) -> String -> Gomes m (VTKAttrPoint b)
 genProductFitVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genParentProductFitBitmap nul func
 
-genParentVTKAttr :: (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ParentGrain) -> a) -> String -> Gomes (VTKAttrPoint b)
+genParentVTKAttr :: (Monad m)=> (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ParentGrain) -> a) -> String -> Gomes m (VTKAttrPoint b)
 genParentVTKAttr nul f name = func <$> genParentGrainBitmap nul f
   where func = mkPointAttr name . (U.!)
 
@@ -548,15 +521,61 @@ getCubicIPFColor = let
   unColor (RGBColor rgb) = rgb
   in unColor . getRGBColor . snd . getIPFColor Cubic ND . convert
 
-renderQuaternions ::Cfg -> FilePath -> Vector Quaternion -> IO ()
-renderQuaternions Cfg{..} base_file qs = let
-  vtk  = renderSO3PointsVTK . U.map quaternionToSO3 $ qs
-  attr = mkPointValueAttr "IPF" (\i _ -> getCubicIPFColor $ qs U.! i)
-  in writeUniVTKfile (base_file <.> "vtu") True (vtk `addPointValueAttr` attr)
+plotResults :: (MonadIO m, Monad m)=> FilePath -> Gomes m ()
+plotResults base_file = do
+  plotVTK  base_file
+  plotEBSD base_file
+
+plotEBSD :: (MonadIO m, Monad m)=> FilePath -> Gomes m ()
+plotEBSD base_filename = do
+  Cfg{..} <- fmap inputCfg ask
+  ebsd <- genParentEBSD
+  liftIO $ do
+    when outputANGMap $ renderANGFile (base_filename <.> "ang") $ either id toANG ebsd
+    when outputCTFMap $ renderCTFFile (base_filename <.> "ctf") $ either toCTF id ebsd
+
+plotVTK :: (MonadIO m, Monad m)=> String -> Gomes m ()
+plotVTK base_file = do
+  cfg@GomesConfig{..} <- ask
+  attrAvgAID <- genProductVTKAttr    (-1) fst "Product Grain ID"
+  attrGID    <- genParentVTKAttr     (-1) fst "Parent Grain ID"
+
+  attrAvgErr <- genParentVTKAttr     (-1) (unDeg . avgError . parentAvgErrorFit . snd) "Parent Avg Error Fit [deg]"
+  attrDevErr <- genParentVTKAttr     (-1) (unDeg . devError . parentAvgErrorFit . snd) "Parent StdDev Error Fit [deg]"
+  attrMaxErr <- genParentVTKAttr     (-1) (unDeg . maxError . parentAvgErrorFit . snd) "Parent Max Error Fit [deg]"
+  attrNumPro <- genParentVTKAttr     (-1) (length . productMembers . snd)              "Parent Number of Product Components"
+
+  attrMID    <- genProductFitVTKAttr (-1) (const $ const areaFraction)          "Product Grain Area Fraction"
+  attrORVar  <- genProductFitVTKAttr (-1) (const $ const (fst . variantNumber)) "Product OR Variant Number"
+  attrLocErr <- genProductFitVTKAttr (-1) (const $ const (unDeg . misfitAngle)) "Product Error Fit [deg]"
+
+  attrAvgGIPF <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)                 "Parent Orientation [IPF]"
+  attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . productAvgOrientation . snd)             "Product Orientation [IPF]"
+  attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Product Parent Orientation Component [IPF]"
+  let
+    attrVoxAIPF  = genVoxBoxAttr "Voxel Product Orientation [IPF]" (getCubicIPFColor . fst) orientationBox
+    attrVoxPhase = genVoxBoxAttr "Voxel Phase ID" snd orientationBox
+    vtkD  = renderVoxBoxVTK grainIDBox attrs
+    attrs = [ attrAvgGIPF
+            , attrGIPF
+            , attrGID
+            , attrMID
+            , attrAvgErr
+            , attrDevErr
+            , attrMaxErr
+            , attrNumPro
+            , attrLocErr
+            , attrORVar
+            , attrVoxPhase
+            , attrVoxAIPF
+            , attrAvgAIPF
+            , attrAvgAID
+            ]
+  liftIO $ writeUniVTKfile (base_file <.> "vtr") True vtkD
 
 -- ====================================== Plotting EBSD/CTF =============================================
 
-genParentEBSD :: Gomes (Either ANGdata CTFdata)
+genParentEBSD :: (Monad m)=> Gomes m (Either ANGdata CTFdata)
 genParentEBSD = do
   pp <- asks (parentPhaseID . inputCfg)
   qs <- U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
@@ -583,7 +602,13 @@ genParentEBSD = do
 
 -- ========================================== Debugging ==========================================
 
-_plotOrientations :: FilePath -> Int -> Gomes ()
+renderQuaternions ::Cfg -> FilePath -> Vector Quaternion -> IO ()
+renderQuaternions Cfg{..} base_file qs = let
+  vtk  = renderSO3PointsVTK . U.map quaternionToSO3 $ qs
+  attr = mkPointValueAttr "IPF" (\i _ -> getCubicIPFColor $ qs U.! i)
+  in writeUniVTKfile (base_file <.> "vtu") True (vtk `addPointValueAttr` attr)
+
+_plotOrientations :: (MonadIO m, Monad m)=> FilePath -> Int -> Gomes m ()
 _plotOrientations base_file gid = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get

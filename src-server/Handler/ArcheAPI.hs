@@ -11,6 +11,7 @@ module Handler.ArcheAPI
 
 import Control.Lens                 ((&), (.~), (?~), view)
 import Control.Monad                (void)
+import Control.Monad.Trans.Class    (lift)
 import Control.Monad.Trans.Resource (liftResourceT)
 import Control.Monad.IO.Class       (liftIO)
 import Data.Conduit                 (runConduit, (.|))
@@ -19,6 +20,7 @@ import Data.Text                    (Text)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
 
+import qualified Data.ByteString.Lazy     as BSL
 import qualified Data.Conduit.Binary      as Conduit
 import qualified Network.Google           as Google
 import qualified Network.Google.FireStore as FireStore
@@ -58,9 +60,11 @@ runArcheHandler user hashebsd@(HashEBSD hash) hashor cfg bucket = do
   orResult <- getOR user hashebsd hashor 
 
   let
-    action = return ()
+    action = do
+      bs <- GG.renderImage
+      lift $ savePngImage imageBucket hashebsd bs
      
-  !finalState <- liftIO $ GG.processEBSD (webCfgToCLICfg cfg orResult) ang action
+  !finalState <- GG.processEBSD (webCfgToCLICfg cfg orResult) ang action
 
   let arche = Arche
             { hashArche = calculateHashArche cfg
@@ -122,3 +126,14 @@ webCfgToCLICfg (ArcheCfg {..}) orResult = let
   , GG.outputANGMap           = False
   , GG.outputCTFMap           = False
 }
+
+
+savePngImage :: StorageBucket -> HashEBSD -> BSL.ByteString -> Google.Google GCP ()
+savePngImage bucket (HashEBSD ebsdHash) bs = let
+  body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS bs)
+  vox_key = ebsdHash
+  objIns = Storage.objectsInsert (bktName bucket) Storage.object' & Storage.oiName ?~ vox_key
+  in do
+    logGGInfo $ logMsg ("Saving EBSD blob with hash" :: String) ebsdHash
+    void $ Google.upload objIns body
+    logGGInfo $ logMsg ("Saved EBSD blob with hash" :: String) ebsdHash

@@ -86,6 +86,7 @@ Executable arche-server
     , servant-server
     , servant-multipart
     , text
+    , transformers
     , warp
   other-modules:
     Handler.ArcheAPI 
@@ -187,6 +188,7 @@ Library
     , unordered-containers >= 0.2
     , vector               >= 0.10
     , vector-th-unbox      >= 0.2
+    , JuicyPixels          >= 3.0
 
 Benchmark arche-bench
   type: exitcode-stdio-1.0

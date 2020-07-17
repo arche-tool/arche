@@ -11,10 +11,7 @@ module Type.Storage
     , StorageBucket(bktName)
     , StorageLink(..)
     , StorageObjectName(..)
-    , voxelBucket
-    , facesBucket
-    , edgesBucket
-    , vertexBucket
+    , imageBucket
     , ebsdBucket
     , landingZoneBucket
     ) where
@@ -32,17 +29,8 @@ newtype HashArche = HashArche Text deriving (Show, Generic, Eq)
 
 newtype StorageBucket = StorageBucket {bktName :: Text} deriving (Show, Generic, Eq)
 
-voxelBucket :: StorageBucket
-voxelBucket  = StorageBucket "voxel"
-
-facesBucket :: StorageBucket
-facesBucket  = StorageBucket "faces"
-
-edgesBucket :: StorageBucket
-edgesBucket  = StorageBucket "edges"
-
-vertexBucket :: StorageBucket
-vertexBucket = StorageBucket "vertex"
+imageBucket :: StorageBucket
+imageBucket  = StorageBucket "image"
 
 ebsdBucket :: StorageBucket
 ebsdBucket = StorageBucket "ebsd"
