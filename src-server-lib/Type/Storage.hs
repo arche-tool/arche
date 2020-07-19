@@ -30,7 +30,7 @@ newtype HashArche = HashArche Text deriving (Show, Generic, Eq)
 newtype StorageBucket = StorageBucket {bktName :: Text} deriving (Show, Generic, Eq)
 
 imageBucket :: StorageBucket
-imageBucket  = StorageBucket "image"
+imageBucket  = StorageBucket "arche-image"
 
 ebsdBucket :: StorageBucket
 ebsdBucket = StorageBucket "ebsd"

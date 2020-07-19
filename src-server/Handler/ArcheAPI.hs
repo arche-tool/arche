@@ -49,20 +49,24 @@ archeApi :: User -> Server ArcheAPI
 archeApi user = \hashebsd hashor ->
        (runGCPWith $ getArches hashebsd hashor)
   :<|> (runGCPWith . getArche user hashebsd hashor)
-  :<|> (\cfg -> runGCPWith $ runArcheHandler user hashebsd hashor cfg "arche" )
+  :<|> (\cfg -> runGCPWith $ runArcheHandler user hashebsd hashor cfg)
 
 
-runArcheHandler :: User -> HashEBSD -> HashOR -> ArcheCfg -> Text -> Google.Google GCP Arche
-runArcheHandler user hashebsd@(HashEBSD hash) hashor cfg bucket = do
-  stream <- Google.download (Storage.objectsGet bucket hash)
-  ang    <- liftResourceT (runConduit (stream .| Conduit.sinkLbs))
+fetchEbsdData :: HashEBSD -> Google.Google GCP BSL.ByteString
+fetchEbsdData (HashEBSD hash) = do
+  stream <- Google.download (Storage.objectsGet (bktName ebsdBucket) hash)
+  liftResourceT (runConduit (stream .| Conduit.sinkLbs))
 
+runArcheHandler :: User -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP Arche
+runArcheHandler user hashebsd hashor cfg = do
+  ang      <- fetchEbsdData hashebsd
   orResult <- getOR user hashebsd hashor 
 
   let
     action = do
       bs <- GG.renderImage
       lift $ savePngImage imageBucket hashebsd bs
+      return ()
      
   !finalState <- GG.processEBSD (webCfgToCLICfg cfg orResult) ang action
 
@@ -134,6 +138,6 @@ savePngImage bucket (HashEBSD ebsdHash) bs = let
   vox_key = ebsdHash
   objIns = Storage.objectsInsert (bktName bucket) Storage.object' & Storage.oiName ?~ vox_key
   in do
-    logGGInfo $ logMsg ("Saving EBSD blob with hash" :: String) ebsdHash
+    logGGInfo $ logMsg ("Saving image blob with hash" :: String) ebsdHash
     void $ Google.upload objIns body
-    logGGInfo $ logMsg ("Saved EBSD blob with hash" :: String) ebsdHash
+    logGGInfo $ logMsg ("Saved image blob with hash" :: String) ebsdHash
