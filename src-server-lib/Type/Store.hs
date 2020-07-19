@@ -58,10 +58,7 @@ data ArcheCfg = ArcheCfg
   , stepClusterFactor      :: Double
   , badAngle               :: TO.Deg
   , parentPhaseID          :: Maybe OR.PhaseID
-  , outputANGMap           :: Bool
-  , outputCTFMap           :: Bool
   } deriving (Show, Generic)
-
 
 instance Hashable ArcheCfg
 
