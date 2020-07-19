@@ -4,20 +4,22 @@ import Json.Decode as D
 import Json.Encode as JE
 import Array exposing (Array)
 
+import Type.Texture exposing
+  ( Deg
+  , AxisPair
+  , degDecoder
+  , degEncoder
+  , axisPairDecoder
+  , axisPairEncoder
+  , tuple3Idec
+  )
+
 type alias ORConfig =
   { misoAngle: Deg
   , optByAvg: Bool
   , predefinedOR: Maybe AxisPair
   }
 
-type alias Deg =
-    { unDeg: Float
-    }
- 
-type alias AxisPair =
-  { axis: (Float, Float, Float)
-  , angle: Float
-  }
 
 orCfgEncoder : ORConfig -> JE.Value
 orCfgEncoder cfg =
@@ -29,36 +31,12 @@ orCfgEncoder cfg =
     maybeAp = Maybe.map (\ap -> [("predefinedOR", axisPairEncoder ap)]) cfg.predefinedOR
   in JE.object ls
 
-degEncoder : Deg -> JE.Value
-degEncoder deg = JE.object
-  [ ("unDeg", JE.float deg.unDeg) ]
-
-axisPairEncoder : AxisPair -> JE.Value
-axisPairEncoder ap =
-  let
-    (x, y, z) = ap.axis
-  in JE.object
-      [ ("axisAngle", JE.list identity [JE.list JE.float [x, y, z], JE.float ap.angle])
-    ] 
-
 orCfgDecoder : D.Decoder ORConfig
 orCfgDecoder =
     D.map3 ORConfig
       (D.field "misoAngle" degDecoder)
       (D.field "optByAvg" D.bool)
       (D.field "predefinedOR" <| D.maybe axisPairDecoder)
-
-degDecoder : D.Decoder Deg
-degDecoder = D.map Deg (D.field "unDeg" D.float)
-
-axisPairDecoder : D.Decoder AxisPair
-axisPairDecoder = D.field "axisAngle" (D.map2 AxisPair tuple3Fdec D.float)
-
-tuple3Fdec : D.Decoder (Float, Float, Float)
-tuple3Fdec = D.map3 (\a b c -> (a,b,c)) (D.index 0 D.float) (D.index 1 D.float) (D.index 2 D.float)
-
-tuple3Idec : D.Decoder (Int, Int, Int)
-tuple3Idec = D.map3 (\a b c -> (a,b,c)) (D.index 0 D.int) (D.index 1 D.int) (D.index 2 D.int)
 
 type alias OREval =
   { cfgOR: ORConfig

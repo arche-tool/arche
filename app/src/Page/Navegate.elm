@@ -20,13 +20,20 @@ import Type.EBSD exposing (
   )
 
 import Type.OR exposing (
-  Deg,
   OREval,
   ORConfig,
   orCfgEncoder,
   orEvalDecoder,
   orEvalListDecoder
   )
+
+import Type.Arche exposing (
+  Arche,
+  ArcheCfg, 
+  archeCfgEncoder,
+  archeCfgDecoder)
+
+import Type.Texture exposing (Deg)
 
 import Type.ArcheTree as ArcheTree
 import Type.ArcheTree exposing (ArcheTree)
@@ -72,8 +79,10 @@ type Msg
   | RefreshEBSDs 
   | RefreshORs String
   | SelectedEBSD String
+  | SelectedOR String
   | SetORConfig ORConfig
   | SubmitORConfig ORConfig
+  | SubmitArche ArcheCfg
   | NewOR String (Result Http.Error OREval)
   | ReceivedEBSDs (Result Http.Error (Array EBSD))
   | ReceivedORs String (Result Http.Error (Array OREval))
@@ -141,6 +150,10 @@ update msg model =
       {model | archeTree = ArcheTree.focusOnEbsd model.archeTree hash},
       Cmd.batch [Task.perform (\_ -> RefreshORs hash) Time.now])
 
+    SelectedOR hash -> (
+      {model | archeTree = ArcheTree.focusOnOR model.archeTree hash},
+      Cmd.batch [Task.perform (\_ -> RefreshORs hash) Time.now])
+
     ReceivedEBSDs result ->
       case result of
         Err _     -> (model, Cmd.none)
@@ -166,6 +179,30 @@ update msg model =
           let
             at = ArcheTree.refreshOR model.archeTree ebsdHash ors
           in ( {model | archeTree = at}, Cmd.none )
+
+
+    SubmitArche orCfg ->
+      case model.token of
+        Just tk ->
+          case ArcheTree.getEBSDFocusKey model.archeTree of
+            Just ebsdHash -> case ArcheTree.getORFocusKey model.archeTree of
+              Just orHash ->
+                let
+                  hs = [Http.header "Authorization" ("Bearer " ++ tk)]
+                in ( model
+                   , Http.request
+                   { method = "POST"
+                   , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/hash/" ++ orHash ++ "/arche"
+                   , headers = hs
+                   , body = Http.jsonBody <| archeCfgEncoder orCfg
+                   , expect = Http.expectJson (NewOR ebsdHash) orEvalDecoder
+                   , timeout = Nothing
+                   , tracker = Nothing
+                   }
+                   )
+              _ -> (model, Cmd.none)
+            _ -> (model, Cmd.none)
+        _ -> (model, Cmd.none)
 
 -- =========== SUBSCRIPTIONS ===========
 subscriptions : Model -> Sub Msg
@@ -230,7 +267,8 @@ renderEbsd ebsd isSelected = column
 
 renderOREval : OREval -> Bool -> Element Msg
 renderOREval orEval isSelected = column
-  [ Element.Border.rounded 3
+  [ Element.Events.onClick (SelectedOR orEval.hashOR)
+  , Element.Border.rounded 3
   , Element.padding 3
   , Element.pointer
   , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
@@ -245,7 +283,26 @@ renderOREval orEval isSelected = column
   ]
   [ text (degToText orEval.resultOR.misfitError.avgError)
   , text orEval.hashOR
+  , Input.button
+    [ BG.color blue
+    , Element.focused
+        [ BG.color purple ]
+    ]
+    { onPress = Just (SubmitArche testArche)
+    , label = text "+"
+    }
   ]
+
+testArche = 
+  { misoAngle              = Deg 5.0 
+  , excludeFloatingGrains  = True
+  , refinementSteps        = 5
+  , initClusterFactor      = 1.25
+  , stepClusterFactor      = 1.2
+  , badAngle               = Deg 15.0
+  , parentPhaseID          = Nothing
+  }
+
 
 degToText : Deg -> String
 degToText v = format {base | decimals = Exact 1} v.unDeg
