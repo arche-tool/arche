@@ -32,7 +32,7 @@ Executable arche
     -threaded
     -rtsopts
     -Wall
-    -fprof-auto
+    -fprof-auto-exported
     -fprof-cafs
   build-depends:
       arche
@@ -62,6 +62,8 @@ Executable arche-server
     -threaded
     -funbox-strict-fields
     -rtsopts
+    -fprof-auto-exported
+    -fprof-cafs
     -Wall
   hs-source-dirs: src-server
   main-Is:        Main.hs
@@ -99,6 +101,8 @@ Library arche-server-lib
   ghc-options:
     -O2
     -funbox-strict-fields
+    -fprof-auto-exported
+    -fprof-cafs
     -Wall
   exposed-modules:
     Type.API
@@ -161,6 +165,8 @@ Library
   ghc-options:
     -O2
     -funbox-strict-fields
+    -fprof-auto-exported
+    -fprof-cafs
     -Wall
   exposed-modules:
     Arche.Grains
