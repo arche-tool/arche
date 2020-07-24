@@ -21,7 +21,6 @@ import Control.DeepSeq       (NFData)
 import Control.Monad         (forM_, when, replicateM_, zipWithM_, void)
 import Control.Monad.RWS     (RWST(..), ask, asks, get, put, runRWST)
 import Control.Monad.Trans
-import Control.Parallel.Strategies
 import Data.HashMap.Strict   (HashMap)
 import Data.Maybe            (mapMaybe, fromMaybe)
 import Data.TDigest          (TDigest)
@@ -285,10 +284,9 @@ graphWeight noIsleGrains vbq micro withOR = let
   weight x = let
     k = -300
     in exp (k * x * x)
-  mspar = ms `using` parListChunk 100 rpar
   func  = if noIsleGrains then filterIsleGrains else id
   in func . mkUniGraph [] . filter ((>= 0) . snd) $
-     zipWith (\fid x -> (unFaceID fid, maybe 0 weight x)) fs mspar
+     zipWith (\fid x -> (unFaceID fid, maybe 0 weight x)) fs ms
 
 -- ================================== Grain Data ===================================
 
