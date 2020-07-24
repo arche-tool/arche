@@ -45,6 +45,7 @@ module Arche.OR
   , testMisoKS
   ) where
 
+import Control.DeepSeq     (NFData)
 import Data.Vector.Unboxed (Vector)
 import GHC.Generics        (Generic)
 import Data.Vector.Unboxed.Deriving
@@ -86,7 +87,7 @@ instance Rot QuaternionFZ where
 newtype OR
   = OR
   { qOR :: Quaternion
-  } deriving (Show, Semigroup, Monoid, Generic, Group, Rot)
+  } deriving (Show, Semigroup, Monoid, Generic, Group, Rot, NFData)
 
 newtype PhaseID
   = PhaseID
@@ -138,6 +139,8 @@ data FitError
   , devError :: !Deg
   , maxError :: !Deg
   } deriving (Show, Generic)
+
+instance NFData FitError
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
 

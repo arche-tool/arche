@@ -182,6 +182,7 @@ Library
     , filepath             >= 1.3
     , hammer               >= 0.4
     , linear-vect          >= 0.2
+    , deepseq              >= 1.4
     , monad-par            >= 0.3
     , mtl                  >= 2.1
     , parallel             >= 3.1

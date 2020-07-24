@@ -17,6 +17,7 @@ module Arche.Strategy.GomesGraph
 import Codec.Picture.Png     (encodePng)
 import Codec.Picture.Types   (PixelRGB8(..), Image, generateImage)
 import Control.Arrow         ((&&&))
+import Control.DeepSeq       (NFData)
 import Control.Monad         (forM_, when, replicateM_, zipWithM_, void)
 import Control.Monad.RWS     (RWST(..), ask, asks, get, put, runRWST)
 import Control.Monad.Trans
@@ -93,15 +94,14 @@ data ParentGrain =
   , parentOrientation     :: Quaternion
   , parentAvgErrorFit     :: FitError
   , parentErrorPerProduct :: [ParentProductFit]
-  } deriving (Show)
+  } deriving (Generic, Show)
 
 data ParentProductFit
   = ParentProductFit
   { areaFraction  :: !Double
   , misfitAngle   :: !Deg
   , variantNumber :: !(Int, OR)
-  } deriving (Show)
-
+  } deriving (Generic, Show)
 
 data GomesConfig
   = GomesConfig
@@ -125,6 +125,9 @@ data GomesState
   } deriving (Show)
 
 type Gomes = RWST GomesConfig () GomesState
+
+instance NFData ParentGrain
+instance NFData ParentProductFit
 
 -- =======================================================================================
 
