@@ -17,7 +17,7 @@ module Arche.Strategy.GomesGraph
 import Codec.Picture.Png     (encodePng)
 import Codec.Picture.Types   (PixelRGB8(..), Image, generateImage)
 import Control.Arrow         ((&&&))
-import Control.DeepSeq       (NFData)
+import Control.DeepSeq       (NFData, force)
 import Control.Monad         (forM_, when, replicateM_, zipWithM_, void)
 import Control.Monad.RWS     (RWST(..), ask, asks, get, put, runRWST)
 import Control.Monad.Trans
@@ -222,7 +222,7 @@ processEBSD :: (MonadIO m, Monad m)=> Cfg -> BSL.ByteString -> Gomes m () -> m G
 processEBSD cfg@Cfg{..} bs action = do
   logger <- liftIO $ Log.newStdoutLoggerSet Log.defaultBufSize
   let
-    ebsd = loadEBSD bs
+    ebsd = force $ loadEBSD bs
     ror  = withOR
     nref = fromIntegral refinementSteps
     doit = do
