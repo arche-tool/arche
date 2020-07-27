@@ -280,13 +280,14 @@ weightederrorfunc ws ms arche ors
 -- ================================= Arche finder width kernel ===========================
 
 -- | Generate a PPODF (Possible Parent Orientation Function) using another ODF grid structure
--- for effeciecy sake. It also takes in consideranting both remaining paraents and products
+-- for efficiency sake. It also takes in consideration both remaining parents and products
 -- orientation.
 genPPODF :: ODF -> Vector OR -> Vector QuaternionFZ -> Vector QuaternionFZ -> ODF
-genPPODF odf ors rgs ms = addPoints (U.map qFZ rgs U.++ gs) (resetODF odf)
+genPPODF odf ors rgs ms = addPointsParallel qs (resetODF odf)
   where
     func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
     gs     = U.concatMap (func . qFZ) ms
+    qs     = U.map qFZ rgs U.++ gs
 
 archeFinderKernel :: ODF -> Vector OR -> Vector QuaternionFZ
                   -> Vector QuaternionFZ -> (Quaternion, FitError)
