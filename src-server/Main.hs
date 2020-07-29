@@ -5,6 +5,7 @@
 module Main where
 
 import Network.Wai.Handler.Warp
+import Network.Wai.Middleware.Cors
 import Servant
 
 import Type.API
@@ -45,5 +46,6 @@ main = do
             , Store.name      = Auth.name token
             }
 
-    run (port config) $
-        serveWithContext proxyServer (authServerContext oauthClientID) server
+    run (port config) $ do
+        simpleCors $ do
+            serveWithContext proxyServer (authServerContext oauthClientID) server

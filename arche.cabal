@@ -90,6 +90,7 @@ Executable arche-server
     , text
     , transformers
     , warp
+    , wai-cors
   other-modules:
     Handler.ArcheAPI 
     Handler.EBSDAPI 

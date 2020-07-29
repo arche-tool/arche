@@ -493,7 +493,7 @@ testImage = do
 
   shape <- getVoxBoxRange
   let
-    (lx, ux, ly, uy, lz, uz) = getBoxLinRange shape
+    (lx, ux, ly, uy, lz, _) = getBoxLinRange shape
     genBit x y = let
       color = vs U.! (shape %@ (VoxelPos (lx + x) (ly + y) lz))
       in toPixelRGB8 color
