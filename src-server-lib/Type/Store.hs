@@ -26,6 +26,7 @@ data EBSD
     } deriving (Show, Generic)
 
 instance ToJSON EBSD
+instance FromJSON EBSD
 
 instance ToDocValue EBSD
 instance FromDocValue EBSD
@@ -39,6 +40,7 @@ data OR
     } deriving (Show, Generic)
 
 instance ToJSON OR
+instance FromJSON OR
 
 instance ToDocValue OR
 instance FromDocValue OR
@@ -85,6 +87,7 @@ instance Eq User where
     (==) e1 e2 = id_number e1 == id_number e2
 
 instance ToJSON User
+instance FromJSON User
 
 instance ToDocValue User
 instance FromDocValue User

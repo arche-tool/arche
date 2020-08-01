@@ -5,7 +5,6 @@
 module Main where
 
 import Network.Wai.Handler.Warp
-import Network.Wai.Middleware.Cors
 import Servant
 
 import Type.API
@@ -36,16 +35,17 @@ main = do
     let
         oauthClientID = Auth.mkOAuthClientID (oauth_client_id config)
 
-        api :: Store.User -> Server API
-        api user = ebsdApi storageSigner user :<|> orApi user :<|> archeApi user
+        api :: Auth.BearerToken -> Store.User -> Server API
+        api tk user = ebsdApi storageSigner user :<|> orApi user :<|> archeApi tk user
 
         server :: Server ArcheServer
-        server = \token -> api $ Store.User
-            { Store.id_number = Auth.sub token
-            , Store.email     = Auth.email token
-            , Store.name      = Auth.name token
-            }
+        server = \(tk, info) -> let
+            user = Store.User
+                { Store.id_number = Auth.sub   info
+                , Store.email     = Auth.email info
+                , Store.name      = Auth.name  info
+                }
+            in api tk user
 
     run (port config) $ do
-        simpleCors $ do
-            serveWithContext proxyServer (authServerContext oauthClientID) server
+        serveWithContext proxyServer (authServerContext oauthClientID) server

@@ -10,12 +10,13 @@ module Type.API
     , ArcheAPI
     ) where
 
+import Data.Text (Text)
 import Servant
 
 import qualified Arche.Strategy.ORFitAll as OR
 
 import Type.Storage (HashEBSD, HashOR, HashArche, StorageLink, StorageObjectName)
-import Type.Store (Arche, ArcheCfg, EBSD, OR)
+import Type.Store   (Arche, ArcheCfg, EBSD, OR)
 
 type API = "api" :>
   (    EBSDAPI
@@ -53,7 +54,8 @@ type ORAPI = "ebsd" :> "hash" :> Capture "ebsd_hash" HashEBSD
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche/hash/{arche_hash} Arche
 type ArcheAPI = "ebsd" :> "hash" :> Capture "ebsd_hash" HashEBSD
   :> "orfit" :> "hash" :> Capture "or_hash" HashOR :> "arche" :>
-  (                                                 Get  '[JSON] [Arche]
-  :<|> "hash" :> Capture "arche_hash" HashArche  :> Get  '[JSON] Arche
-  :<|> ReqBody '[JSON] ArcheCfg                  :> Post '[JSON] Arche
+  (                                                  Get  '[JSON] [Arche]
+  :<|> "hash"  :> Capture "arche_hash" HashArche  :> Get  '[JSON] Arche
+  :<|>            ReqBody '[JSON] ArcheCfg        :> Post '[JSON] Arche
+  :<|> "async" :> ReqBody '[JSON] ArcheCfg        :> Post '[JSON] Text
   )

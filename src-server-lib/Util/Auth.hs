@@ -1,19 +1,21 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Util.Auth
     ( userInfo
     , authHandler
     , authServerContext
     , mkOAuthClientID
+    , BearerToken(bearerToken)
     , AuthIDToken
     , OAuthClientID
     , TokenInfoV3
@@ -45,7 +47,7 @@ import GHC.Generics                     (Generic)
 import Network.HTTP.Client              (newManager)
 import Network.HTTP.Client.TLS          (tlsManagerSettings)
 import Network.Wai                      (Request, requestHeaders)
-import Servant                          (throwError)
+import Servant                          (throwError, ToHttpApiData)
 import Servant.API                      ((:>), Get, JSON, QueryParam)
 import Servant.API.Experimental.Auth    (AuthProtect)
 import Servant.Client
@@ -56,9 +58,11 @@ import qualified Data.ByteString as BS
 import qualified Data.Text       as T
 
 type AuthIDToken = AuthProtect "google-id-token"
-type instance AuthServerData AuthIDToken = TokenInfoV3
+type instance AuthServerData AuthIDToken = (BearerToken, TokenInfoV3)
 
-type IDToken = Text
+newtype BearerToken =
+  BearerToken { bearerToken :: Text }
+  deriving (Show, Eq, Generic, ToHttpApiData, FromJSON)
 
 newtype OAuthClientID = OAuthClientID { raw_client_id :: Text } deriving (Show, Eq, Generic)
 
@@ -116,32 +120,32 @@ readBool s
   where
     norm = T.toLower s
 
-userInfo :: IDToken -> IO (Either String TokenInfoV3)
-userInfo idToken = do
+userInfo :: BearerToken -> IO (Either String TokenInfoV3)
+userInfo tk = do
   manager' <- newManager tlsManagerSettings
   let env = mkClientEnv manager' (BaseUrl Https "www.googleapis.com" 443 "")
-  res <- runClientM (getTokenInfo $ Just idToken) env 
+  res <- runClientM (getTokenInfo $ Just tk) env 
   return $ case res of
-    Left err -> Left (show err)
-    Right tk -> Right tk
+    Left err     -> Left (show err)
+    Right tkInfo -> Right tkInfo
 
 type TokenInfoMethodGet =
   "oauth2" :> "v3" :> "tokeninfo" :>
-    QueryParam "id_token" Text :>
+    QueryParam "id_token" BearerToken :>
       Get '[JSON] TokenInfoV3
 
 tokeninfo :: Proxy TokenInfoMethodGet
 tokeninfo = Proxy
 
-getTokenInfo :: Maybe Text -> ClientM TokenInfoV3
+getTokenInfo :: Maybe BearerToken -> ClientM TokenInfoV3
 getTokenInfo = client tokeninfo
 
-parseIDToken :: Request -> Either String IDToken
+parseIDToken :: Request -> Either String BearerToken
 parseIDToken req = do
   authHeader <- maybeToEither "Missing authorization header" . lookup "Authorization" . requestHeaders $ req
   bearer <- maybeToEither "Invalid token format. Missing Bearer" $
     (strip . decodeUtf8) <$> BS.stripPrefix "Bearer" authHeader
-  return bearer
+  return (BearerToken bearer)
   where
     maybeToEither e = maybe (Left e) Right
 
@@ -151,22 +155,22 @@ mkOAuthClientID txt
   | otherwise               = OAuthClientID (txt <> suffix) 
   where suffix = ".apps.googleusercontent.com"
 
-authHandler :: OAuthClientID -> AuthHandler Request TokenInfoV3
+authHandler :: OAuthClientID -> AuthHandler Request (BearerToken, TokenInfoV3)
 authHandler expected_azp = mkAuthHandler $ \req -> do
-  idToken   <- either throw401 return $ parseIDToken req
-  tokenInfo <- either throw401 return =<< (liftIO $ userInfo idToken)
+  bearerToken   <- either throw401 return $ parseIDToken req
+  tokenInfo <- either throw401 return =<< (liftIO $ userInfo bearerToken)
   unless (isEmailVerified tokenInfo) $
     throw401 "Account without verified email. Please, verify it first."
   unless (matchAZP tokenInfo) $
     throw401 ("Client ID mismatch: " <> (unpack . raw_client_id $ azp tokenInfo))
   unless (matchIssuer tokenInfo) $
     throw401 ("Unexpected issuer: " <> (unpack $ iss tokenInfo))
-  return tokenInfo
+  return (bearerToken, tokenInfo)
   where
     matchAZP info = azp info == expected_azp 
     matchIssuer info = (iss info == "https://accounts.google.com") || (iss info == "accounts.google.com")
     isEmailVerified info = email_verified info == Just True
     throw401 msg = throwError $ err401 { errBody = fromString msg }
 
-authServerContext :: OAuthClientID -> Context '[AuthHandler Request TokenInfoV3]
+authServerContext :: OAuthClientID -> Context '[AuthHandler Request (BearerToken, TokenInfoV3)]
 authServerContext expected_azp = authHandler expected_azp :. EmptyContext

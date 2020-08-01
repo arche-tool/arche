@@ -19,7 +19,7 @@ module Type.Storage
 import GHC.Generics
 import Data.Aeson    (ToJSON, FromJSON)
 import Data.Text     (Text)
-import Servant       (FromHttpApiData(..))
+import Servant       (FromHttpApiData(..), ToHttpApiData(..))
 
 import Util.FireStore
 
@@ -47,6 +47,7 @@ data StorageLink
     } deriving (Generic, Show)
 
 instance ToJSON StorageLink
+instance FromJSON StorageLink
 
 -- ============================
 -- ======== Instances =========
@@ -75,6 +76,20 @@ instance FromHttpApiData HashArche where
 
 instance FromHttpApiData StorageObjectName where
     parseUrlPiece txt = Right $ StorageObjectName txt
+
+
+-- ========= ToHttp =========
+instance ToHttpApiData HashEBSD where
+    toUrlPiece (HashEBSD txt) = txt
+
+instance ToHttpApiData HashOR where
+    toUrlPiece (HashOR txt) = txt
+
+instance ToHttpApiData HashArche where
+    toUrlPiece (HashArche txt) = txt
+
+instance ToHttpApiData StorageObjectName where
+    toUrlPiece (StorageObjectName txt) = txt
 
 -- ========= JSON =========
 instance ToJSON HashEBSD

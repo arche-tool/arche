@@ -43,7 +43,11 @@ instance (ToJSON a) => ToJSON (LV.Vec4 a)
 instance FromJSON GG.Cfg
 
 instance FromJSON OF.Cfg
+instance FromJSON OF.OrientationRelationship
+instance FromJSON OF.KSDeviation
+instance FromJSON OF.OREvaluation
 
+instance FromJSON OR.FitError
 instance FromJSON OR.PhaseID
 instance FromJSON OR.OR
 

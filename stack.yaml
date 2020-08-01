@@ -9,6 +9,7 @@ packages:
 - packages/vtk/
 - packages/linear-vect/
 - packages/gogol/gogol-firestore
+- packages/gogol/gogol-cloudtasks
 
 extra-deps:
 - gogol-storage-0.5.0@sha256:ba90fd79b014316e0c6088b30f9757e2394bb8af4265615ca5ea284b930586f9,4815

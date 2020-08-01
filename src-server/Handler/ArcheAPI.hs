@@ -13,25 +13,27 @@ import Control.Lens                 ((&), (.~), (?~), view)
 import Control.Monad                (void)
 import Control.Monad.Trans.Class    (lift)
 import Control.Monad.Trans.Resource (liftResourceT)
-import Control.Monad.IO.Class       (liftIO)
+import Data.Binary.Builder          (toLazyByteString)
 import Data.Conduit                 (runConduit, (.|))
 import Data.Maybe                   (mapMaybe)
 import Data.Text                    (Text)
+import Network.HTTP.Client          (method, requestBody, getUri)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
 
-import qualified Data.ByteString.Lazy     as BSL
-import qualified Data.Conduit.Binary      as Conduit
-import qualified Network.Google           as Google
-import qualified Network.Google.FireStore as FireStore
-import qualified Network.Google.Storage   as Storage
+import qualified Data.ByteString.Base64    as B64
+import qualified Data.ByteString.Lazy      as BSL
+import qualified Data.Conduit.Binary       as Conduit
+import qualified Data.HashMap.Strict       as HM
+import qualified Data.Text                 as T
+import qualified Network.Google            as Google
+import qualified Network.Google.FireStore  as FireStore
+import qualified Network.Google.Storage    as Storage
+import qualified Network.Google.CloudTasks as Tasks
 import Servant
-
-import Data.VTK (renderUniVTK)
 
 import qualified Arche.Strategy.GomesGraph as GG
 import qualified Arche.Strategy.ORFitAll   as OR
-import qualified Texture.Orientation       as TO
 
 import Type.API
 import Type.Storage
@@ -41,15 +43,19 @@ import Util.Hash
 import Util.Logger    (logGGInfo, logMsg)
 import Handler.ORAPI  (getOR)
 
+import qualified Util.Auth   as Auth
+import qualified Util.Client as Client
+
 -- ==<< Reconstruction handling >>==
 -- POST /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche ArcheCfg Arche
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche [Arche]
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche/hash/{arche_hash} Arche
-archeApi :: User -> Server ArcheAPI
-archeApi user = \hashebsd hashor ->
+archeApi :: Auth.BearerToken -> User -> Server ArcheAPI
+archeApi tk user = \hashebsd hashor ->
        (runGCPWith $ getArches hashebsd hashor)
   :<|> (runGCPWith . getArche user hashebsd hashor)
   :<|> (\cfg -> runGCPWith $ runArcheHandler user hashebsd hashor cfg)
+  :<|> (\cfg -> runGCPWith $ runAsyncArcheHandler tk hashebsd hashor cfg)
 
 
 fetchEbsdData :: HashEBSD -> Google.Google GCP BSL.ByteString
@@ -141,3 +147,46 @@ savePngImage bucket (HashEBSD ebsdHash) bs = let
     logGGInfo $ logMsg ("Saving image blob with hash" :: String) ebsdHash
     void $ Google.upload objIns body
     logGGInfo $ logMsg ("Saved image blob with hash" :: String) ebsdHash
+
+runAsyncArcheHandler :: Auth.BearerToken -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP Text
+runAsyncArcheHandler tk hashE hashO archeCfg = do
+  httpReq <- either fail return $ createTask tk hashE hashO archeCfg
+  let 
+    parent = "projects/apt-muse-269419/locations/europe-west1/queues/reconstruction-queue"
+    task = Tasks.task & Tasks.tHTTPRequest ?~ httpReq
+    taskReq = Tasks.createTaskRequest & Tasks.ctrTask ?~ task
+  resp <- Google.send (Tasks.projectsLocationsQueuesTasksCreate parent taskReq)
+  name <- maybe (fail "Async task needs a name") return $ view Tasks.tName resp
+  logGGInfo $ logMsg ("Sending async task " :: String) name
+  return name
+  
+createTask :: Auth.BearerToken -> HashEBSD -> HashOR -> ArcheCfg -> Either String Tasks.HTTPRequest
+createTask tk hashE hashO archeCfg = let
+  archeapi = (Client.archeApiClient Client.mkApiClient) hashE hashO
+  toBS req = case requestBody req of
+    RequestBodyLBS lbs     -> return $ BSL.toStrict lbs
+    RequestBodyBS   bs     -> return bs
+    RequestBodyBuilder _ b -> return . BSL.toStrict . toLazyByteString $ b
+    _                      -> fail "Can not build request body."
+  toMethod req = case method req of
+    "POST"    -> Tasks.HTTPRHTTPMPost'
+    "GET"     -> Tasks.HTTPRHTTPMGet'
+    "HEAD"    -> Tasks.HTTPRHTTPMHead'
+    "PUT"     -> Tasks.HTTPRHTTPMPut'
+    "DELETE"  -> Tasks.HTTPRHTTPMDelete'
+    "PATCH"   -> Tasks.HTTPRHTTPMPatch'
+    "OPTIONS" -> Tasks.HTTPRHTTPMOptions
+    _         -> Tasks.HTTPRHTTPMHTTPMethodUnspecified
+  headers = HM.fromList [
+    ("Authorization", "Bearer " <> Auth.bearerToken tk),
+    ("Content-Type", "application/json")
+    ]
+  in do
+    req  <- Client.getRequestOnBaseUrl "https://compute.api.arche.dev" ((Client.postArche archeapi) archeCfg)
+    body <- toBS req
+    return $
+      Tasks.hTTPRequest
+        & Tasks.httprURL ?~ (T.pack . show . getUri $ req)
+        & Tasks.httprBody ?~ (B64.encode body)
+        & Tasks.httprHeaders ?~ (Tasks.hTTPRequestHeaders headers)
+        & Tasks.httprHTTPMethod ?~ (toMethod req)

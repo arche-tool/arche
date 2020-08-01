@@ -192,7 +192,7 @@ update msg model =
                 in ( model
                    , Http.request
                    { method = "POST"
-                   , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/hash/" ++ orHash ++ "/arche"
+                   , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/hash/" ++ orHash ++ "/arche/async"
                    , headers = hs
                    , body = Http.jsonBody <| archeCfgEncoder orCfg
                    , expect = Http.expectJson (NewOR ebsdHash) orEvalDecoder
