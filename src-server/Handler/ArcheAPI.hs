@@ -70,7 +70,7 @@ runArcheHandler user hashebsd hashor cfg = do
 
   let
     action = do
-      bs <- GG.renderImage
+      !bs <- GG.renderImage
       lift $ savePngImage imageBucket hashebsd bs
       return ()
      

@@ -1,5 +1,6 @@
 {-# LANGUAGE
-    DataKinds
+    BangPatterns
+  , DataKinds
   , DeriveGeneric
   , FlexibleInstances
   , RecordWildCards
@@ -17,7 +18,7 @@ module Arche.Strategy.GomesGraph
 import Codec.Picture.Png     (encodePng)
 import Codec.Picture.Types   (PixelRGB8(..), Image, generateImage)
 import Control.Arrow         ((&&&))
-import Control.DeepSeq       (NFData, force)
+import Control.DeepSeq       (NFData, deepseq, force)
 import Control.Monad         (forM_, when, replicateM_, zipWithM_, void)
 import Control.Monad.RWS     (RWST(..), ask, asks, get, put, runRWST)
 import Control.Monad.Trans
@@ -81,17 +82,17 @@ data Cfg =
 
 data ProductGrain =
   ProductGrain
-  { productVoxelPos       :: V.Vector Int
-  , productAvgOrientation :: QuaternionFZ
-  , productAvgPos         :: Vec3D
-  , productPhase          :: PhaseID
+  { productVoxelPos       :: !(V.Vector Int)
+  , productAvgOrientation :: !QuaternionFZ
+  , productAvgPos         :: !Vec3D
+  , productPhase          :: !PhaseID
   } deriving (Show)
 
 data ParentGrain =
   ParentGrain
   { productMembers        :: [Int]
-  , parentOrientation     :: Quaternion
-  , parentAvgErrorFit     :: FitError
+  , parentOrientation     :: !Quaternion
+  , parentAvgErrorFit     :: !FitError
   , parentErrorPerProduct :: [ParentProductFit]
   } deriving (Generic, Show)
 
@@ -119,8 +120,8 @@ data GomesConfig
 
 data GomesState
   = GomesState
-  { parentGrains :: V.Vector ParentGrain
-  , mclFactor    :: Double
+  { parentGrains :: !(V.Vector ParentGrain)
+  , mclFactor    :: !Double
   } deriving (Show)
 
 type Gomes = RWST GomesConfig () GomesState
@@ -339,7 +340,7 @@ getWArcheKernel :: ODF -> Maybe PhaseID -> Vector OR -> Vector (Double, Quaterni
 getWArcheKernel odf phaseID ors xs = (arche, err)
   where
     (was, wms) = U.partition (\(_,_,p) -> Just p == phaseID) xs
-    (arche, err) = archeFinderKernel odf ors as ms
+    (!arche, !err) = archeFinderKernel odf ors as ms
     (_, as, _) = U.unzip3 was
     (_, ms, _) = U.unzip3 wms
 
@@ -489,7 +490,7 @@ toPixelRGB8 (r, g, b) = PixelRGB8 r g b
 testImage :: (Monad m)=> Gomes m (Image PixelRGB8)
 testImage = do
   let nullColor = (255,255,255)
-  vs <- genParentGrainBitmap nullColor (getCubicIPFColor . parentOrientation . snd)
+  !vs <- genParentGrainBitmap nullColor (getCubicIPFColor . parentOrientation . snd)
 
   shape <- getVoxBoxRange
   let
@@ -497,7 +498,7 @@ testImage = do
     genBit x y = let
       color = vs U.! (shape %@ (VoxelPos (lx + x) (ly + y) lz))
       in toPixelRGB8 color
-  return $ generateImage genBit (ux - lx) (uy - ly)
+  return $ vs `deepseq` generateImage genBit (ux - lx) (uy - ly)
 
 renderImage :: (Monad m)=> Gomes m BSL.ByteString
 renderImage = encodePng <$> testImage
