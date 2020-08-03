@@ -77,6 +77,13 @@ listORWithFocus at foo = case FocusedList.getFocus at of
     Nothing   -> []
     Just ebsd -> FocusedList.listWithFocus ebsd.ors (\a b -> foo a.orEvaluation b)
 
+listArchesWithFocus : ArcheTree -> (Arche -> Bool -> b) -> List b 
+listArchesWithFocus at foo = case FocusedList.getFocus at of
+    Nothing   -> []
+    Just ebsd -> case FocusedList.getFocus ebsd.ors of
+        Nothing -> []
+        Just or -> FocusedList.listWithFocus or.arches (\a b -> foo a.archeResult b)
+
 getEBSDFocusKey : ArcheTree -> Maybe String
 getEBSDFocusKey = FocusedList.getFocusKey
 
@@ -90,3 +97,13 @@ focusOnOR : ArcheTree -> String -> ArcheTree
 focusOnOR at key = case FocusedList.getFocus at of 
     Nothing -> at
     Just focusedEBSD -> FocusedList.update at {focusedEBSD | ors = FocusedList.focusOn focusedEBSD.ors key}
+
+focusOnArche : ArcheTree -> String -> ArcheTree
+focusOnArche at key = case FocusedList.getFocus at of 
+    Nothing          -> at
+    Just focusedEBSD -> case FocusedList.getFocus focusedEBSD.ors of
+        Nothing        -> at
+        Just focusedOR ->
+            let
+                orsNew =  FocusedList.focusOn focusedOR.arches key
+            in FocusedList.update at {focusedEBSD | ors = FocusedList.update focusedEBSD.ors {focusedOR | arches = orsNew }}

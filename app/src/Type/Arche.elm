@@ -2,6 +2,7 @@ module Type.Arche exposing (..)
 
 import Json.Decode as D
 import Json.Encode as JE
+import Array exposing (Array)
 
 import Type.Texture exposing
   ( Deg
@@ -60,3 +61,6 @@ archeDecoder : D.Decoder Arche
 archeDecoder = D.map2 Arche
   (D.field "hashArche"  D.string)
   (D.field "cfgArche"   archeCfgDecoder)
+
+archeListDecoder : D.Decoder (Array Arche)
+archeListDecoder = D.array archeDecoder

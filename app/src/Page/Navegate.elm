@@ -1,4 +1,13 @@
-module Page.Navegate exposing (Model, Msg(..), renderEbsds, main, init, update, subscriptions, view)
+module Page.Navegate exposing (
+  Model,
+  Msg(..),
+  renderEbsds,
+  main,
+  init,
+  update,
+  subscriptions,
+  view
+  )
 
 import Array exposing (Array)
 import Browser
@@ -31,7 +40,7 @@ import Type.Arche exposing (
   Arche,
   ArcheCfg, 
   archeCfgEncoder,
-  archeCfgDecoder)
+  archeListDecoder)
 
 import Type.Texture exposing (Deg)
 
@@ -76,16 +85,24 @@ defaultORCfg =
 type Msg
   = SetToken String
   | ResetToken
+
   | RefreshEBSDs 
   | RefreshORs String
+  | RefreshArches String String
+
   | SelectedEBSD String
   | SelectedOR String
+  | SelectedArche String
   | SetORConfig ORConfig
+
   | SubmitORConfig ORConfig
   | SubmitArche ArcheCfg
+
+  | ReceivedEBSDs                (Result Http.Error (Array EBSD))
+  | ReceivedORs    String        (Result Http.Error (Array OREval))
+  | ReceivedArches String String (Result Http.Error (Array Arche))
+
   | NewOR String (Result Http.Error OREval)
-  | ReceivedEBSDs (Result Http.Error (Array EBSD))
-  | ReceivedORs String (Result Http.Error (Array OREval))
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -146,12 +163,37 @@ update msg model =
               )
         _ -> (model, Cmd.none)
   
+    RefreshArches ebsdHash orHash ->
+      case model.token of
+        Just tk ->
+          let
+            hs = [Http.header "Authorization" ("Bearer " ++ tk)]
+          in ( model
+              , Http.request
+              { method = "GET"
+              , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/hash/" ++ orHash ++ "/arche"
+              , headers = hs
+              , body = Http.emptyBody
+              , expect = Http.expectJson (ReceivedArches ebsdHash orHash) archeListDecoder
+              , timeout = Nothing
+              , tracker = Nothing
+              }
+              )
+        _ -> (model, Cmd.none)
+
     SelectedEBSD hash -> (
       {model | archeTree = ArcheTree.focusOnEbsd model.archeTree hash},
       Cmd.batch [Task.perform (\_ -> RefreshORs hash) Time.now])
 
     SelectedOR hash -> (
       {model | archeTree = ArcheTree.focusOnOR model.archeTree hash},
+      case ArcheTree.getEBSDFocusKey model.archeTree of
+         Just ebsdHash -> Cmd.batch [Task.perform (\_ -> RefreshArches ebsdHash hash) Time.now]
+         Nothing       -> Cmd.none
+      )
+
+    SelectedArche hash -> (
+      {model | archeTree = ArcheTree.focusOnArche model.archeTree hash},
       Cmd.batch [Task.perform (\_ -> RefreshORs hash) Time.now])
 
     ReceivedEBSDs result ->
@@ -178,6 +220,15 @@ update msg model =
         Ok  ors ->
           let
             at = ArcheTree.refreshOR model.archeTree ebsdHash ors
+          in ( {model | archeTree = at}, Cmd.none )
+
+
+    ReceivedArches ebsdHash orHash result ->
+      case result of
+        Err _      -> (model, Cmd.none)
+        Ok  arches ->
+          let
+            at = ArcheTree.refreshArche model.archeTree ebsdHash orHash arches
           in ( {model | archeTree = at}, Cmd.none )
 
 
@@ -221,6 +272,7 @@ renderArcheTree : Model -> Element Msg
 renderArcheTree model = row []
   [ renderEbsds model.archeTree
   , renderORs model.archeTree
+  , renderArches model.archeTree
   , renderORInput model.orCfgInput False
   ]
 
@@ -243,6 +295,14 @@ renderORs at =
     , Element.padding 5
     ] cols
 
+renderArches : ArcheTree -> Element Msg
+renderArches at =
+  let
+    cols = ArcheTree.listArchesWithFocus at renderArche 
+  in column
+    [ Element.spacing 10
+    , Element.padding 5
+    ] cols
 
 renderEbsd : EBSD -> Bool -> Element Msg
 renderEbsd ebsd isSelected = column
@@ -283,6 +343,34 @@ renderOREval orEval isSelected = column
   ]
   [ text (degToText orEval.resultOR.misfitError.avgError)
   , text orEval.hashOR
+  , Input.button
+    [ BG.color blue
+    , Element.focused
+        [ BG.color purple ]
+    ]
+    { onPress = Just (SubmitArche testArche)
+    , label = text "+"
+    }
+  ]
+
+renderArche : Arche -> Bool -> Element Msg
+renderArche arche isSelected = column
+  [ Element.Events.onClick (SelectedArche arche.hashArche)
+  , Element.Border.rounded 3
+  , Element.padding 3
+  , Element.pointer
+  , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
+  , Element.htmlAttribute
+    (Html.Attributes.style "user-select" "none")
+  , Element.mouseOver
+    [ Element.Border.color insurelloBlue
+    , Element.Border.glow insurelloBlue 1
+    , Element.Border.innerGlow insurelloBlue 1
+    ]
+  , Element.mouseDown [ Element.alpha 0.6 ]
+  ]
+  [ text (String.fromInt arche.cfgArche.refinementSteps)
+  , text arche.hashArche
   , Input.button
     [ BG.color blue
     , Element.focused
