@@ -4,11 +4,18 @@ module.exports = {
   setupProxy: function(app) {
     app.use(createProxyMiddleware('/compute-api', {
         target: 'http://localhost:8080/',
-        pathRewrite: {'^/compute-api' : '/compute-api'}
+        pathRewrite: {
+          '/async$' : ''
+        },
+        logLevel: "debug"
     }));
 
     app.use(createProxyMiddleware('/api', {
-        target: 'http://localhost:8080/'
+        target: 'http://localhost:8080/',
+        pathRewrite: {
+          '/async$' : ''
+        },
+        logLevel: "debug"
     }));
   }
 };
