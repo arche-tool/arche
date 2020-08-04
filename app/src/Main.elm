@@ -171,11 +171,11 @@ view model =
   , body = [
       layout
         [ Font.color (Element.rgb 0 0 1)
-        , Font.size 18
+        , Font.size 16
         , Font.family
             [ Font.external
-                { name = "MuseoModerno"
-                , url = "https://fonts.googleapis.com/css?family=MuseoModerno"
+                { name = "Raleway"
+                , url = "https://fonts.googleapis.com/css2?family=Raleway:wght@500"
                 }
             ]
         , height fill ] <|
