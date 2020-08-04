@@ -13,7 +13,13 @@ import qualified Arche.Strategy.ORFitAll   as OF
 import qualified Arche.OR                  as OR
 import qualified Texture.Orientation       as TO
 
-import Type.Storage (HashEBSD(..), HashOR(..), HashArche(..))
+import Type.Storage (
+    HashEBSD(..),
+    HashOR(..),
+    HashArche(..), 
+    HashResult(..), 
+    StorageLink(..)
+    )
 import Util.FireStore
 import Util.OrphanInstances ()
 
@@ -50,6 +56,14 @@ data Arche
     = Arche
     { hashArche :: HashArche
     , cfgArche  :: ArcheCfg
+    , results   :: [ArcheResult]
+    } deriving (Show, Generic)
+
+data ArcheResult
+    = ArcheResult
+    { mclFactor :: Double
+    , parentIPF :: HashResult
+    , errorMap  :: HashResult
     } deriving (Show, Generic)
 
 data ArcheCfg = ArcheCfg
@@ -65,13 +79,17 @@ data ArcheCfg = ArcheCfg
 instance Hashable ArcheCfg
 
 instance ToJSON Arche
+instance ToJSON ArcheResult
 instance ToJSON ArcheCfg
 
 instance FromJSON Arche
+instance FromJSON ArcheResult
 instance FromJSON ArcheCfg
 
 instance ToDocValue Arche
+instance ToDocValue ArcheResult
 instance FromDocValue Arche
+instance FromDocValue ArcheResult
 instance ToDocValue ArcheCfg
 instance FromDocValue ArcheCfg
 

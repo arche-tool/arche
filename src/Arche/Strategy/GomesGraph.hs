@@ -11,15 +11,16 @@
 module Arche.Strategy.GomesGraph
   ( run
   , processEBSD
-  , Cfg(..)
   , renderImage
+  , Cfg(..)
+  , GomesState(..)
   ) where
 
 import Codec.Picture.Png     (encodePng)
 import Codec.Picture.Types   (PixelRGB8(..), Image, generateImage)
 import Control.Arrow         ((&&&))
 import Control.DeepSeq       (NFData, deepseq, force)
-import Control.Monad         (forM_, when, replicateM_, zipWithM_, void)
+import Control.Monad         (forM_, forM, when, zipWithM_, void)
 import Control.Monad.RWS     (RWST(..), ask, asks, get, put, runRWST)
 import Control.Monad.Trans
 import Data.HashMap.Strict   (HashMap)
@@ -219,25 +220,23 @@ run cfg ebsd_file base_output = do
   let savePlot = get >>= plotResults . (base_output <>) . printf "mcl_%.2f" . mclFactor
   void $ processEBSD cfg bs savePlot
 
-processEBSD :: (MonadIO m, Monad m)=> Cfg -> BSL.ByteString -> Gomes m () -> m GomesState
+processEBSD :: (MonadIO m, Monad m)=> Cfg -> BSL.ByteString -> Gomes m a -> m [a]
 processEBSD cfg@Cfg{..} bs action = do
   logger <- liftIO $ Log.newStdoutLoggerSet Log.defaultBufSize
   let
     ebsd = force $ loadEBSD bs
     ror  = withOR
-    nref = fromIntegral refinementSteps
-    doit = do
-      grainClustering
-      action
+    nref = fromIntegral refinementSteps :: Int
+    doit = forM [0..nref] $ \step -> do
+      if step == 0
+        then grainClustering
+        else clusteringRefinement
       logParentStatsState
-      replicateM_ nref $ do
-        clusteringRefinement
-        logParentStatsState
-        action
+      action
   gomescfg <- either error return (getGomesConfig cfg ror ebsd logger)
   liftIO . putStrLn $ "[GomesGraph] Using OR = " ++ show ((fromQuaternion $ qOR ror) :: AxisPair)
-  (_, final, _) <- runRWST doit gomescfg (getInitState gomescfg)
-  return final
+  (results, _, _) <- runRWST doit gomescfg (getInitState gomescfg)
+  return results 
 
 -- ==================================== Initial Graph ====================================
 

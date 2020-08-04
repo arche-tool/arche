@@ -11,6 +11,7 @@ module Handler.ArcheAPI
 
 import Control.Lens                 ((&), (.~), (?~), view)
 import Control.Monad                (void)
+import Control.Monad.RWS            (gets)
 import Control.Monad.Trans.Class    (lift)
 import Control.Monad.Trans.Resource (liftResourceT)
 import Data.Binary.Builder          (toLazyByteString)
@@ -51,11 +52,11 @@ import qualified Util.Client as Client
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche [Arche]
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche/hash/{arche_hash} Arche
 archeApi :: Auth.BearerToken -> User -> Server ArcheAPI
-archeApi tk user = \hashebsd hashor ->
-       (runGCPWith $ getArches hashebsd hashor)
-  :<|> (runGCPWith . getArche user hashebsd hashor)
-  :<|> (\cfg -> runGCPWith $ runArcheHandler user hashebsd hashor cfg)
-  :<|> (\cfg -> runGCPWith $ runAsyncArcheHandler tk hashebsd hashor cfg)
+archeApi tk user = \hashE hashO ->
+       (runGCPWith $ getArches hashE hashO)
+  :<|> (runGCPWith . getArche user hashE hashO)
+  :<|> (\cfg -> runGCPWith $ runArcheHandler user hashE hashO cfg)
+  :<|> (\cfg -> runGCPWith $ runAsyncArcheHandler tk hashE hashO cfg)
 
 
 fetchEbsdData :: HashEBSD -> Google.Google GCP BSL.ByteString
@@ -64,24 +65,33 @@ fetchEbsdData (HashEBSD hash) = do
   liftResourceT (runConduit (stream .| Conduit.sinkLbs))
 
 runArcheHandler :: User -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP Arche
-runArcheHandler user hashebsd hashor cfg = do
-  ang      <- fetchEbsdData hashebsd
-  orResult <- getOR user hashebsd hashor 
+runArcheHandler user hashE hashO cfg = do
+  ang      <- fetchEbsdData hashE
+  orResult <- getOR user hashE hashO 
 
   let
+    hashA = calculateHashArche cfg
     action = do
+      factor <- gets GG.mclFactor
+      let
+        hashR = calculateHashResult hashE hashO hashA (show factor ++ "IPF")
       !bs <- GG.renderImage
-      lift $ savePngImage imageBucket hashebsd bs
-      return ()
+      lift $ savePngImage imageBucket hashR bs
+      return $ ArcheResult
+        { mclFactor = factor
+        , parentIPF = hashR
+        , errorMap  = hashR
+        }
      
-  !finalState <- GG.processEBSD (webCfgToCLICfg cfg orResult) ang action
+  !results <- GG.processEBSD (webCfgToCLICfg cfg orResult) ang action
 
   let arche = Arche
-            { hashArche = calculateHashArche cfg
+            { hashArche = hashA 
             , cfgArche  = cfg
+            , results   = results
             }
   
-  writeArche hashebsd hashor arche 
+  writeArche hashE hashO arche 
 
   return arche
 
@@ -138,15 +148,15 @@ webCfgToCLICfg (ArcheCfg {..}) orResult = let
 }
 
 
-savePngImage :: StorageBucket -> HashEBSD -> BSL.ByteString -> Google.Google GCP ()
-savePngImage bucket (HashEBSD ebsdHash) bs = let
+savePngImage :: StorageBucket -> HashResult -> BSL.ByteString -> Google.Google GCP ()
+savePngImage bucket (HashResult ebsdR) bs = let
   body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS bs)
-  vox_key = ebsdHash
+  vox_key = ebsdR
   objIns = Storage.objectsInsert (bktName bucket) Storage.object' & Storage.oiName ?~ vox_key
   in do
-    logGGInfo $ logMsg ("Saving image blob with hash" :: String) ebsdHash
+    logGGInfo $ logMsg ("Saving image blob with hash" :: String) ebsdR
     void $ Google.upload objIns body
-    logGGInfo $ logMsg ("Saved image blob with hash" :: String) ebsdHash
+    logGGInfo $ logMsg ("Saved image blob with hash" :: String) ebsdR
 
 runAsyncArcheHandler :: Auth.BearerToken -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP Text
 runAsyncArcheHandler tk hashE hashO archeCfg = do

@@ -8,6 +8,7 @@ module Type.Storage
     ( HashEBSD(..)
     , HashOR(..)
     , HashArche(..)
+    , HashResult(..)
     , StorageBucket(bktName)
     , StorageLink(..)
     , StorageObjectName(..)
@@ -23,9 +24,10 @@ import Servant       (FromHttpApiData(..), ToHttpApiData(..))
 
 import Util.FireStore
 
-newtype HashEBSD  = HashEBSD  Text deriving (Show, Generic, Eq)
-newtype HashOR    = HashOR    Text deriving (Show, Generic, Eq)
-newtype HashArche = HashArche Text deriving (Show, Generic, Eq)
+newtype HashEBSD   = HashEBSD   Text deriving (Show, Generic, Eq)
+newtype HashOR     = HashOR     Text deriving (Show, Generic, Eq)
+newtype HashArche  = HashArche  Text deriving (Show, Generic, Eq)
+newtype HashResult = HashResult Text deriving (Show, Generic, Eq)
 
 newtype StorageBucket = StorageBucket {bktName :: Text} deriving (Show, Generic, Eq)
 
@@ -57,12 +59,16 @@ instance FromJSON StorageLink
 instance ToDocValue HashEBSD
 instance ToDocValue HashOR
 instance ToDocValue HashArche
+instance ToDocValue HashResult
 instance ToDocValue StorageBucket
+instance ToDocValue StorageLink
 
 instance FromDocValue HashEBSD
 instance FromDocValue HashOR
 instance FromDocValue HashArche
+instance FromDocValue HashResult
 instance FromDocValue StorageBucket
+instance FromDocValue StorageLink
 
 -- ========= FromHttp =========
 instance FromHttpApiData HashEBSD where
@@ -73,6 +79,9 @@ instance FromHttpApiData HashOR where
 
 instance FromHttpApiData HashArche where
     parseUrlPiece txt = Right $ HashArche txt
+
+instance FromHttpApiData HashResult where
+    parseUrlPiece txt = Right $ HashResult txt
 
 instance FromHttpApiData StorageObjectName where
     parseUrlPiece txt = Right $ StorageObjectName txt
@@ -88,6 +97,9 @@ instance ToHttpApiData HashOR where
 instance ToHttpApiData HashArche where
     toUrlPiece (HashArche txt) = txt
 
+instance ToHttpApiData HashResult where
+    toUrlPiece (HashResult txt) = txt
+
 instance ToHttpApiData StorageObjectName where
     toUrlPiece (StorageObjectName txt) = txt
 
@@ -100,6 +112,9 @@ instance FromJSON HashOR
 
 instance ToJSON HashArche
 instance FromJSON HashArche
+
+instance ToJSON HashResult
+instance FromJSON HashResult
 
 instance ToJSON StorageBucket
 instance FromJSON StorageBucket

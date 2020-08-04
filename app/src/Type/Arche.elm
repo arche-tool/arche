@@ -11,13 +11,20 @@ import Type.Texture exposing
   )
 
 type alias Arche =
-    { hashArche : String
-    , cfgArche  : ArcheCfg
-    }
+  { hashArche : String
+  , cfgArche  : ArcheCfg
+  , results   : Array ArcheResult
+  }   
+
+type alias ArcheResult =
+  { mclFactor : Float
+  , parentIPF : String
+  , errorMap  : String
+  }
 
 type alias PhaseID =
-    { phaseId: Int
-    }
+  { phaseId: Int
+  }
 
 type alias ArcheCfg = 
   { misoAngle              : Deg
@@ -58,9 +65,16 @@ phaseIdDecoder : D.Decoder PhaseID
 phaseIdDecoder = D.map PhaseID (D.field "phaseId" D.int)
 
 archeDecoder : D.Decoder Arche
-archeDecoder = D.map2 Arche
+archeDecoder = D.map3 Arche
   (D.field "hashArche"  D.string)
   (D.field "cfgArche"   archeCfgDecoder)
+  (D.field "results"    (D.array archeResultDecoder))
+
+archeResultDecoder : D.Decoder ArcheResult
+archeResultDecoder = D.map3 ArcheResult
+  (D.field "mclFactor"  D.float)
+  (D.field "parentIPF"  D.string)
+  (D.field "errorMap"   D.string)
 
 archeListDecoder : D.Decoder (Array Arche)
 archeListDecoder = D.array archeDecoder
