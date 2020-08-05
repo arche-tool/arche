@@ -1,5 +1,6 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Type.Store where
 
@@ -52,18 +53,18 @@ instance ToDocValue OR
 instance FromDocValue OR
 
 -- ================ Arche ================
-data Arche
+data Arche r
     = Arche
     { hashArche :: HashArche
     , cfgArche  :: ArcheCfg
-    , results   :: [ArcheResult]
+    , results   :: [ArcheResult r]
     } deriving (Show, Generic)
 
-data ArcheResult
+data ArcheResult r
     = ArcheResult
     { mclFactor :: Double
-    , parentIPF :: HashResult
-    , errorMap  :: HashResult
+    , parentIPF :: r
+    , errorMap  :: r
     } deriving (Show, Generic)
 
 data ArcheCfg = ArcheCfg
@@ -76,20 +77,36 @@ data ArcheCfg = ArcheCfg
   , parentPhaseID          :: Maybe OR.PhaseID
   } deriving (Show, Generic)
 
+instance Functor Arche where
+    fmap func Arche{..}
+        = Arche
+        { hashArche = hashArche 
+        , cfgArche  = cfgArche  
+        , results   = map (fmap func) results   
+        }
+
+instance Functor ArcheResult where
+    fmap func ArcheResult{..}
+        = ArcheResult
+        { mclFactor = mclFactor
+        , parentIPF = func parentIPF
+        , errorMap  = func errorMap
+        }
+
 instance Hashable ArcheCfg
 
-instance ToJSON Arche
-instance ToJSON ArcheResult
+instance ToJSON a => ToJSON (Arche a)
+instance ToJSON a => ToJSON (ArcheResult a)
 instance ToJSON ArcheCfg
 
-instance FromJSON Arche
-instance FromJSON ArcheResult
+instance FromJSON a => FromJSON (Arche a)
+instance FromJSON a => FromJSON (ArcheResult a)
 instance FromJSON ArcheCfg
 
-instance ToDocValue Arche
-instance ToDocValue ArcheResult
-instance FromDocValue Arche
-instance FromDocValue ArcheResult
+instance ToDocValue a => ToDocValue (Arche a)
+instance ToDocValue a => ToDocValue (ArcheResult a)
+instance FromDocValue a => FromDocValue (Arche a)
+instance FromDocValue a => FromDocValue (ArcheResult a)
 instance ToDocValue ArcheCfg
 instance FromDocValue ArcheCfg
 

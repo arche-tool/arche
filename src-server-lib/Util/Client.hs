@@ -36,9 +36,9 @@ import Type.Store
 
 data ArcheApiClient m
   = ArcheApiClient 
-  { getArches      :: m [Arche]
-  , getArche       :: HashArche -> m Arche
-  , postArche      :: ArcheCfg  -> m Arche
+  { getArches      :: m [Arche StoragePublicLink]
+  , getArche       :: HashArche -> m (Arche StoragePublicLink)
+  , postArche      :: ArcheCfg  -> m (Arche StoragePublicLink)
   , postArcheAsync :: ArcheCfg  -> m Text
   }
 

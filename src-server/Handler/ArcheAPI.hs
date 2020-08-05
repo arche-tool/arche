@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE KindSignatures      #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE TypeOperators       #-}
@@ -41,6 +42,7 @@ import Type.Storage
 import Type.Store
 import Util.FireStore
 import Util.Hash
+import Util.Storage
 import Util.Logger    (logGGInfo, logMsg)
 import Handler.ORAPI  (getOR)
 
@@ -64,7 +66,7 @@ fetchEbsdData (HashEBSD hash) = do
   stream <- Google.download (Storage.objectsGet (bktName ebsdBucket) hash)
   liftResourceT (runConduit (stream .| Conduit.sinkLbs))
 
-runArcheHandler :: User -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP Arche
+runArcheHandler :: User -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP (Arche StoragePublicLink)
 runArcheHandler user hashE hashO cfg = do
   ang      <- fetchEbsdData hashE
   orResult <- getOR user hashE hashO 
@@ -76,11 +78,11 @@ runArcheHandler user hashE hashO cfg = do
       let
         hashR = calculateHashResult hashE hashO hashA (show factor ++ "IPF")
       !bs <- GG.renderImage
-      lift $ savePngImage imageBucket hashR bs
+      obj <- lift $ savePngImage imageBucket hashR bs
       return $ ArcheResult
         { mclFactor = factor
-        , parentIPF = hashR
-        , errorMap  = hashR
+        , parentIPF = obj
+        , errorMap  = obj
         }
      
   !results <- GG.processEBSD (webCfgToCLICfg cfg orResult) ang action
@@ -93,24 +95,24 @@ runArcheHandler user hashE hashO cfg = do
   
   writeArche hashE hashO arche 
 
-  return arche
+  return $ getResultLink arche
 
-writeArche :: HashEBSD -> HashOR -> Arche -> Google.Google GCP ()
+writeArche :: HashEBSD -> HashOR -> Arche StorageObject -> Google.Google GCP ()
 writeArche (HashEBSD hashE) (HashOR hashO) value  = do
     let
       HashArche hashA = hashArche value
       path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hashE <> "/or/" <> hashO <> "/arche/" <> hashA
     void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc value) path)
 
-getArche :: User -> HashEBSD -> HashOR -> HashArche -> Google.Google GCP Arche
+getArche :: User -> HashEBSD -> HashOR -> HashArche -> Google.Google GCP (Arche StoragePublicLink)
 getArche user (HashEBSD hashE) (HashOR hashO) (HashArche hashA) = do
   logGGInfo $ logMsg ("Retriving OR" :: String) hashO ("for user" :: String) (id_number user)
   let path = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hashE <> "/or/" <> hashO <> "/arche/" <> hashA
   resp <- Google.send (FireStore.projectsDatabasesDocumentsGet path)
   let orDoc = either error id (fromDoc resp)
-  return orDoc
+  return $ getResultLink orDoc
 
-getArches :: (FromDocValue a) => HashEBSD -> HashOR -> Google.Google GCP [a]
+getArches :: HashEBSD -> HashOR -> Google.Google GCP [Arche StoragePublicLink]
 getArches (HashEBSD hashE) (HashOR hashO) = do
   let
     db = "projects/apt-muse-269419/databases/(default)/documents/ebsd/" <> hashE <> "/or/" <> hashO
@@ -128,7 +130,7 @@ getArches (HashEBSD hashE) (HashOR hashO) = do
 
   logGGInfo $ logMsg ("Retriving ORs for EBSD" :: String) hashE
   resp <- Google.send (FireStore.projectsDatabasesDocumentsRunQuery db commitReq)
-  return . mapMaybe (fmap (either error id . fromDoc) . view FireStore.rDocument) $ resp
+  return . mapMaybe (fmap (either error getResultLink . fromDoc) . view FireStore.rDocument) $ resp
 
 webCfgToCLICfg :: ArcheCfg -> OR -> GG.Cfg
 webCfgToCLICfg (ArcheCfg {..}) orResult = let
@@ -148,15 +150,20 @@ webCfgToCLICfg (ArcheCfg {..}) orResult = let
 }
 
 
-savePngImage :: StorageBucket -> HashResult -> BSL.ByteString -> Google.Google GCP ()
+savePngImage :: StorageBucket -> HashResult -> BSL.ByteString -> Google.Google GCP StorageObject
 savePngImage bucket (HashResult ebsdR) bs = let
   body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS bs)
-  vox_key = ebsdR
-  objIns = Storage.objectsInsert (bktName bucket) Storage.object' & Storage.oiName ?~ vox_key
+  obj = StorageObject
+    { objName = ebsdR
+    , objExtension = Just "png"
+    , objBucket = bucket
+    }
+  objIns = createObjectInsertion obj
   in do
     logGGInfo $ logMsg ("Saving image blob with hash" :: String) ebsdR
     void $ Google.upload objIns body
     logGGInfo $ logMsg ("Saved image blob with hash" :: String) ebsdR
+    return obj
 
 runAsyncArcheHandler :: Auth.BearerToken -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP Text
 runAsyncArcheHandler tk hashE hashO archeCfg = do
@@ -200,3 +207,6 @@ createTask tk hashE hashO archeCfg = let
         & Tasks.httprBody ?~ (B64.encode body)
         & Tasks.httprHeaders ?~ (Tasks.hTTPRequestHeaders headers)
         & Tasks.httprHTTPMethod ?~ (toMethod req)
+
+getResultLink :: Arche StorageObject -> Arche StoragePublicLink
+getResultLink results = fmap getPublicLink results

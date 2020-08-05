@@ -166,21 +166,11 @@ saveEBSD bucket (HashEBSD ebsdHash) bs = let
     logGGInfo $ logMsg ("Saved EBSD blob with hash" :: String) ebsdHash
 
 readEBSD :: StorageBucket -> StorageObjectName -> Google.Google GCP BSL.ByteString
-readEBSD bucket StorageObjectName{objName} = do
-    logGGInfo $ logMsg ("Reading object" :: String) objName ("from" :: String) bucket
-    stream <- Google.download $ Storage.objectsGet (bktName bucket) objName
+readEBSD bucket StorageObjectName{objFullName} = do
+    logGGInfo $ logMsg ("Reading object" :: String) objFullName ("from" :: String) bucket
+    stream <- Google.download $ Storage.objectsGet (bktName bucket) objFullName
     liftResourceT (runConduit (stream .| Conduit.sinkLbs))
 
 genUploadLink :: StorageLinkBuilder -> User -> Handler StorageLink
 genUploadLink linkBuilder user = do
   liftIO $ (writeLinkBuilder linkBuilder) user landingZoneBucket 900
-
-writeUser :: User -> Google.Google GCP ()
-writeUser user = do
-    let path = "projects/apt-muse-269419/databases/(default)/documents/users/" <> id_number user
-    void $ Google.send (FireStore.projectsDatabasesDocumentsPatch (toDoc user) path)
-
-writeNewUser :: User -> Google.Google GCP ()
-writeNewUser user = do
-    let path = "projects/apt-muse-269419/databases/(default)/documents"
-    void $ Google.send (FireStore.projectsDatabasesDocumentsCreateDocument path "users" (toDoc user))

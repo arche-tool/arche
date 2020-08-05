@@ -1,14 +1,21 @@
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+
 module Util.Storage
     ( StorageLink(..)
     , StorageLinkBuilder(..)
     , EncodedServiceAccountJson
     , loadStorageSigner
+    , getPublicLink
+    , getStorageObjectFullName
+    , createObjectInsertion
     ) where
 
+import Control.Lens                          ((&), (?~))
+import Crypto.Hash
 import Data.ByteArray                         (convert)
 import Data.Text                              (Text)
 import Data.Time.Clock.POSIX                  (getPOSIXTime)
-import Crypto.Hash
 import Network.Google.Auth.ApplicationDefault (defaultCredentialsPath, cloudSDKConfigPath)
 
 import qualified Data.Aeson              as A
@@ -17,6 +24,7 @@ import qualified Data.Text.Encoding      as T
 import qualified Data.ByteString.Base64  as B64
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy    as BL
+import qualified Network.Google.Storage  as Storage
 
 import Util.SignedUrl
 import Type.Storage
@@ -26,8 +34,8 @@ type EncodedServiceAccountJson = T.Text
 
 data StorageLinkBuilder
     = StorageLinkBuilder
-    { readLinkBuilder  :: StorageObjectName -> StorageBucket -> Int -> IO StorageLink
-    , writeLinkBuilder :: User              -> StorageBucket -> Int -> IO StorageLink
+    { readLinkBuilder  :: StorageObject -> Int -> IO StorageLink
+    , writeLinkBuilder :: User -> StorageBucket -> Int -> IO StorageLink
     }
 
 loadServiceAccoutFromDefaultLocation :: IO ServiceAccount
@@ -51,19 +59,20 @@ loadStorageSigner mAccount = do
         , writeLinkBuilder = loadWriteLinkBuider account
         }
 
-loadReadLinkBuider :: ServiceAccount -> StorageObjectName -> StorageBucket -> Int -> IO StorageLink
-loadReadLinkBuider account obj bucket expSecs = do
-    let req = SignRequest               
+loadReadLinkBuider :: ServiceAccount -> StorageObject -> Int -> IO StorageLink
+loadReadLinkBuider account obj@StorageObject{objBucket} expSecs = do
+    let oName = getStorageObjectFullName obj
+        req = SignRequest               
             { httpVerb     = GET
-            , bucketName   = T.unpack (bktName bucket)
-            , resourcePath = [T.unpack $ objName obj]
+            , bucketName   = T.unpack (bktName objBucket)
+            , resourcePath = [T.unpack oName]
             , queryStrings = []
             , headers      = []
             , expires      = expSecs
             }
     url <- either fail pure =<< generateSignedURL account req
     return $ StorageLink
-        { objectName = objName obj 
+        { objectName = oName 
         , signedLink = T.decodeUtf8 url
         }
 
@@ -96,3 +105,19 @@ loadWriteLinkBuider account user bucket expSecs = do
         , signedLink = T.decodeUtf8 url
         }
             
+getPublicLink :: StorageObject -> StoragePublicLink
+getPublicLink obj@StorageObject{objBucket} = let
+    fullName = getStorageObjectFullName obj
+    in StoragePublicLink
+      { publicName = fullName
+      , publicLink = "https://storage.googleapis.com/" <> bktName objBucket <> "/" <> fullName
+      }
+
+getStorageObjectFullName :: StorageObject -> Text
+getStorageObjectFullName StorageObject{objName, objExtension} =
+    maybe objName ((objName <> ".") <>) objExtension
+
+createObjectInsertion :: StorageObject -> Storage.ObjectsInsert
+createObjectInsertion obj@StorageObject{objBucket} = let
+    fullName = getStorageObjectFullName obj
+    in Storage.objectsInsert (bktName objBucket) Storage.object' & Storage.oiName ?~ fullName

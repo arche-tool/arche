@@ -11,6 +11,8 @@ module Type.Storage
     , HashResult(..)
     , StorageBucket(bktName)
     , StorageLink(..)
+    , StoragePublicLink(..)
+    , StorageObject(..)
     , StorageObjectName(..)
     , imageBucket
     , ebsdBucket
@@ -31,6 +33,8 @@ newtype HashResult = HashResult Text deriving (Show, Generic, Eq)
 
 newtype StorageBucket = StorageBucket {bktName :: Text} deriving (Show, Generic, Eq)
 
+newtype StorageObjectName = StorageObjectName {objFullName :: Text} deriving (Show, Generic, Eq)
+
 imageBucket :: StorageBucket
 imageBucket  = StorageBucket "arche-image"
 
@@ -40,7 +44,12 @@ ebsdBucket = StorageBucket "ebsd"
 landingZoneBucket :: StorageBucket
 landingZoneBucket = StorageBucket "arche-landing-zone"
 
-newtype StorageObjectName = StorageObjectName {objName :: Text} deriving (Show, Generic, Eq)
+data StorageObject
+    = StorageObject
+    { objName      :: Text
+    , objExtension :: Maybe Text
+    , objBucket    :: StorageBucket
+    } deriving (Show, Generic, Eq)
 
 data StorageLink
     = StorageLink
@@ -48,8 +57,11 @@ data StorageLink
     , signedLink :: Text
     } deriving (Generic, Show)
 
-instance ToJSON StorageLink
-instance FromJSON StorageLink
+data StoragePublicLink
+    = StoragePublicLink
+    { publicName :: Text
+    , publicLink :: Text
+    } deriving (Generic, Show)
 
 -- ============================
 -- ======== Instances =========
@@ -61,6 +73,7 @@ instance ToDocValue HashOR
 instance ToDocValue HashArche
 instance ToDocValue HashResult
 instance ToDocValue StorageBucket
+instance ToDocValue StorageObject
 instance ToDocValue StorageLink
 
 instance FromDocValue HashEBSD
@@ -68,6 +81,7 @@ instance FromDocValue HashOR
 instance FromDocValue HashArche
 instance FromDocValue HashResult
 instance FromDocValue StorageBucket
+instance FromDocValue StorageObject
 instance FromDocValue StorageLink
 
 -- ========= FromHttp =========
@@ -83,10 +97,6 @@ instance FromHttpApiData HashArche where
 instance FromHttpApiData HashResult where
     parseUrlPiece txt = Right $ HashResult txt
 
-instance FromHttpApiData StorageObjectName where
-    parseUrlPiece txt = Right $ StorageObjectName txt
-
-
 -- ========= ToHttp =========
 instance ToHttpApiData HashEBSD where
     toUrlPiece (HashEBSD txt) = txt
@@ -99,9 +109,6 @@ instance ToHttpApiData HashArche where
 
 instance ToHttpApiData HashResult where
     toUrlPiece (HashResult txt) = txt
-
-instance ToHttpApiData StorageObjectName where
-    toUrlPiece (StorageObjectName txt) = txt
 
 -- ========= JSON =========
 instance ToJSON HashEBSD
@@ -119,5 +126,14 @@ instance FromJSON HashResult
 instance ToJSON StorageBucket
 instance FromJSON StorageBucket
 
+instance ToJSON StorageObject
+instance FromJSON StorageObject
+
 instance ToJSON StorageObjectName
 instance FromJSON StorageObjectName
+
+instance ToJSON StorageLink
+instance FromJSON StorageLink
+
+instance ToJSON StoragePublicLink
+instance FromJSON StoragePublicLink
