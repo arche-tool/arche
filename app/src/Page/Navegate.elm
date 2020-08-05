@@ -46,6 +46,7 @@ import Type.Texture exposing (Deg)
 
 import Type.ArcheTree as ArcheTree
 import Type.ArcheTree exposing (ArcheTree)
+import Type.Arche exposing (ArcheResult)
 
 -- =========== MAIN ===========
 main : Program () Model Msg
@@ -57,12 +58,45 @@ main =
     , subscriptions = subscriptions
     }
 
+type alias ArcheResultExplorer =
+  { minMclFactor: Float
+  , maxMclFactor: Float
+  , selectedResult: Maybe ArcheResult
+  , selector: Float -> Maybe ArcheResult
+  }
+
+newResult : Arche -> ArcheResultExplorer
+newResult arche =
+  let
+    arr = arche.results
+    max = Array.foldl Basics.max 0 (Array.map (\x -> x.mclFactor) arr)
+    min = Array.foldl Basics.min max (Array.map (\x -> x.mclFactor) arr)
+  in
+    { minMclFactor = min
+    , maxMclFactor = max
+    , selectedResult = Array.get 0 arr
+    , selector = findClosestResult (\x -> x.mclFactor) arr
+    }
+
+findClosestResult : (a -> Float) -> Array a -> Float -> Maybe a 
+findClosestResult func arr ref = Array.foldl (\x mvalue -> case mvalue of
+    Just value ->
+      let
+        diffX = Basics.abs(func x - ref)
+        diffV = Basics.abs(func value - ref)
+      in if diffX < diffV then Just x else Just value
+    Nothing -> Just x 
+  ) Nothing arr
+
+selectResult : Float -> ArcheResultExplorer -> ArcheResultExplorer
+selectResult ref ae = {ae | selectedResult = ae.selector ref}
 
 -- =========== MODEL ===========
 type alias Model =
   { token: Maybe String
   , archeTree: ArcheTree
   , orCfgInput: ORConfig
+  , archeResultView: Maybe ArcheResultExplorer
   }
 
 init : () -> (Model, Cmd Msg)
@@ -70,6 +104,7 @@ init _ =
   ( { token = Nothing
     , archeTree = ArcheTree.empty
     , orCfgInput = defaultORCfg
+    , archeResultView = Nothing
     }
   , Cmd.none
   )
@@ -94,6 +129,7 @@ type Msg
   | SelectedOR String
   | SelectedArche String
   | SetORConfig ORConfig
+  | SetResultMCL Float
 
   | SubmitORConfig ORConfig
   | SubmitArche ArcheCfg
@@ -192,8 +228,13 @@ update msg model =
          Nothing       -> Cmd.none
       )
 
-    SelectedArche hash -> (
-      {model | archeTree = ArcheTree.focusOnArche model.archeTree hash},
+    SelectedArche hash ->
+      let
+        newAT = ArcheTree.focusOnArche model.archeTree hash
+      in (
+      { model
+      | archeTree = newAT
+      , archeResultView =  Maybe.map newResult (ArcheTree.getArcheFocus newAT) },
       Cmd.batch [Task.perform (\_ -> RefreshORs hash) Time.now])
 
     ReceivedEBSDs result ->
@@ -211,6 +252,8 @@ update msg model =
     ResetToken -> ({model | token = Nothing}, Cmd.none)
    
     SetORConfig orCfg -> ({model | orCfgInput = orCfg}, Cmd.none)
+
+    SetResultMCL mcl -> ({model | archeResultView = Maybe.map (selectResult mcl) model.archeResultView}, Cmd.none)
     
     NewOR _ _ -> (model, Cmd.none)
 
@@ -269,13 +312,16 @@ view model =
 
 
 renderArcheTree : Model -> Element Msg 
-renderArcheTree model = row []
-  [ renderEbsds model.archeTree
-  , renderORs model.archeTree
-  , renderArches model.archeTree
-  , renderORInput model.orCfgInput False
-  ]
-
+renderArcheTree model =
+  let
+    base =
+      [ renderEbsds model.archeTree
+      , renderORs model.archeTree
+      , renderArches model.archeTree
+      , renderORInput model.orCfgInput False
+      ]
+    rv = maybe [] (List.singleton << renderResultExplorer) model.archeResultView
+  in row [] (base ++ rv)
 
 renderEbsds : ArcheTree -> Element Msg
 renderEbsds at =
@@ -295,7 +341,7 @@ renderORs at =
     , Element.padding 5
     ] cols
 
-renderArches : ArcheTree -> Element Msg
+renderArches :  ArcheTree -> Element Msg
 renderArches at =
   let
     cols = ArcheTree.listArchesWithFocus at renderArche 
@@ -354,32 +400,36 @@ renderOREval orEval isSelected = column
   ]
 
 renderArche : Arche -> Bool -> Element Msg
-renderArche arche isSelected = column
-  [ Element.Events.onClick (SelectedArche arche.hashArche)
-  , Element.Border.rounded 3
-  , Element.padding 3
-  , Element.pointer
-  , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
-  , Element.htmlAttribute
-    (Html.Attributes.style "user-select" "none")
-  , Element.mouseOver
-    [ Element.Border.color insurelloBlue
-    , Element.Border.glow insurelloBlue 1
-    , Element.Border.innerGlow insurelloBlue 1
-    ]
-  , Element.mouseDown [ Element.alpha 0.6 ]
-  ]
-  [ text (String.fromInt arche.cfgArche.refinementSteps)
-  , text arche.hashArche
-  , Input.button
-    [ BG.color blue
-    , Element.focused
-        [ BG.color purple ]
-    ]
-    { onPress = Just (SubmitArche testArche)
-    , label = text "+"
-    }
-  ]
+renderArche arche isSelected =
+  let
+    attrs =
+      [ Element.Events.onClick (SelectedArche arche.hashArche)
+      , Element.Border.rounded 3
+      , Element.padding 3
+      , Element.pointer
+      , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
+      , Element.htmlAttribute
+        (Html.Attributes.style "user-select" "none")
+      , Element.mouseOver
+        [ Element.Border.color insurelloBlue
+        , Element.Border.glow insurelloBlue 1
+        , Element.Border.innerGlow insurelloBlue 1
+        ]
+      , Element.mouseDown [ Element.alpha 0.6 ]
+      ]
+    elms = 
+      [ text (String.fromInt arche.cfgArche.refinementSteps)
+      , text arche.hashArche
+      , Input.button
+        [ BG.color blue
+        , Element.focused
+          [ BG.color purple ]
+        ]
+        { onPress = Just (SubmitArche testArche)
+        , label = text "+"
+        }
+      ]
+  in column attrs elms
 
 testArche = 
   { misoAngle              = Deg 5.0 
@@ -390,6 +440,57 @@ testArche =
   , badAngle               = Deg 15.0
   , parentPhaseID          = Nothing
   }
+
+
+renderResultExplorer : ArcheResultExplorer -> Element Msg
+renderResultExplorer resultExplorer =
+  let
+    attrs =
+      [ Element.Border.rounded 3
+      , Element.padding 3
+      , Element.pointer
+      , BG.color (rgb255 100 200 100)
+      , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
+      ]
+
+    imgs = case resultExplorer.selectedResult of
+      Just res -> [
+        Element.image [] {src = res.parentIPF.publicLink, description = res.parentIPF.publicName}
+        ]  
+      Nothing -> []
+
+    resultSlider =
+      let
+        value = case resultExplorer.selectedResult of
+          Just mcl -> mcl.mclFactor 
+          Nothing  -> resultExplorer.minMclFactor
+        msg = case resultExplorer.selectedResult of
+          Just mcl -> "MCL factor = " ++ floatToText mcl.mclFactor 
+          Nothing  -> ""
+      in [ Input.slider
+        [ Element.height (Element.px 20)
+        -- Here is where we're creating/styling the "track"
+        , Element.behindContent
+          (Element.el
+            [ Element.width Element.fill
+            , Element.height (Element.px 10)
+            , Element.centerY
+            , BG.color (rgb255 120 120 120)
+            ]
+            Element.none
+          )
+        ]
+        { onChange = SetResultMCL
+        , label = Input.labelAbove [] (text <| msg)
+        , min = resultExplorer.minMclFactor
+        , max = resultExplorer.maxMclFactor
+        , step = Just 0.1
+        , value = value
+        , thumb = Input.defaultThumb
+        }
+      ]
+  in column attrs (imgs ++ resultSlider)
+
 
 
 degToText : Deg -> String
@@ -459,3 +560,11 @@ purple = Element.rgb255 138 138 238
 
 insurelloBlue : Element.Color
 insurelloBlue = rgb255 59 139 186
+
+-- =========== Formatters ===========
+
+floatToText : Float -> String
+floatToText v = format {base | decimals = Exact 1} v
+
+maybe : b -> (a -> b) -> Maybe a -> b
+maybe def func x = Maybe.withDefault def (Maybe.map func x)

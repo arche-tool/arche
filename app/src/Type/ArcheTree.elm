@@ -90,6 +90,24 @@ getEBSDFocusKey = FocusedList.getFocusKey
 getORFocusKey : ArcheTree -> Maybe String
 getORFocusKey at = Maybe.andThen (\x -> FocusedList.getFocusKey x.ors) (FocusedList.getFocus at)
 
+getEBSDFocus : ArcheTree -> Maybe EBSD
+getEBSDFocus at = Maybe.map (\x -> x.ebsd) (FocusedList.getFocus at)
+
+getORFocus : ArcheTree -> Maybe OREval
+getORFocus at =
+    let
+        orNode = Maybe.andThen (\x -> FocusedList.getFocus x.ors) (FocusedList.getFocus at)
+    in Maybe.map (\x -> x.orEvaluation) orNode
+
+getArcheFocus : ArcheTree -> Maybe Arche
+getArcheFocus at =
+    let
+        orNode =
+            Maybe.andThen (\x -> FocusedList.getFocus x.arches) <|
+            Maybe.andThen (\x -> FocusedList.getFocus x.ors) <|
+            FocusedList.getFocus at
+    in Maybe.map (\x -> x.archeResult) orNode
+
 focusOnEbsd : ArcheTree -> String -> ArcheTree
 focusOnEbsd = FocusedList.focusOn
 
