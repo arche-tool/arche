@@ -18,8 +18,13 @@ type alias Arche =
 
 type alias ArcheResult =
   { mclFactor : Float
-  , parentIPF : String
-  , errorMap  : String
+  , parentIPF : PublicLink
+  , errorMap  : PublicLink
+  }
+
+type alias PublicLink =
+  { publicName : String
+  , publicLink : String
   }
 
 type alias PhaseID =
@@ -72,9 +77,14 @@ archeDecoder = D.map3 Arche
 
 archeResultDecoder : D.Decoder ArcheResult
 archeResultDecoder = D.map3 ArcheResult
-  (D.field "mclFactor"  D.float)
-  (D.field "parentIPF"  D.string)
-  (D.field "errorMap"   D.string)
+  (D.field "mclFactor" D.float)
+  (D.field "parentIPF" publicLinkDecoder)
+  (D.field "errorMap"  publicLinkDecoder)
+
+publicLinkDecoder : D.Decoder PublicLink 
+publicLinkDecoder = D.map2 PublicLink
+  (D.field "publicName" D.string)
+  (D.field "publicLink" D.string)
 
 archeListDecoder : D.Decoder (Array Arche)
 archeListDecoder = D.array archeDecoder
