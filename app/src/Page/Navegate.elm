@@ -47,6 +47,7 @@ import Type.Texture exposing (Deg)
 import Type.ArcheTree as ArcheTree
 import Type.ArcheTree exposing (ArcheTree)
 import Type.Arche exposing (ArcheResult)
+import Page.Upload as Upload
 
 -- =========== MAIN ===========
 main : Program () Model Msg
@@ -95,19 +96,24 @@ selectResult ref ae = {ae | selectedResult = ae.selector ref}
 type alias Model =
   { token: Maybe String
   , archeTree: ArcheTree
-  , orCfgInput: ORConfig
   , archeResultView: Maybe ArcheResultExplorer
+  , uploadInput: Upload.Model
+  , orCfgInput: ORConfig
   }
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  ( { token = Nothing
-    , archeTree = ArcheTree.empty
-    , orCfgInput = defaultORCfg
-    , archeResultView = Nothing
-    }
-  , Cmd.none
-  )
+  let
+    (upModel, _) = Upload.init ()
+  in
+    ( { token = Nothing
+      , archeTree = ArcheTree.empty
+      , archeResultView = Nothing
+      , uploadInput = upModel
+      , orCfgInput = defaultORCfg
+      }
+    , Cmd.none
+    )
 
 defaultORCfg : ORConfig
 defaultORCfg =
@@ -139,6 +145,7 @@ type Msg
   | ReceivedArches String String (Result Http.Error (Array Arche))
 
   | NewOR String (Result Http.Error OREval)
+  | Upload Upload.Msg
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -245,9 +252,13 @@ update msg model =
             at = ArcheTree.refreshArcheTree model.archeTree ebsds
           in ( {model | archeTree = at}, Cmd.none )
 
-    SetToken tk -> (
-      {model | token = Just tk},
-      Cmd.batch [Task.perform (\_ -> RefreshEBSDs) Time.now])
+    SetToken tk ->
+      ( { model | token = Just tk }
+      , Cmd.batch
+        [ Task.perform (\_ -> RefreshEBSDs) Time.now
+        , Task.perform (\_ -> Upload (Upload.SetToken tk)) Time.now
+        ]
+      )
     
     ResetToken -> ({model | token = Nothing}, Cmd.none)
    
@@ -297,6 +308,12 @@ update msg model =
               _ -> (model, Cmd.none)
             _ -> (model, Cmd.none)
         _ -> (model, Cmd.none)
+    
+    Upload upmsg ->
+      let
+        (newModel, newCmd) = Upload.update upmsg model.uploadInput
+      in ( {model | uploadInput = newModel }, Cmd.map Upload newCmd )
+    
 
 -- =========== SUBSCRIPTIONS ===========
 subscriptions : Model -> Sub Msg
@@ -315,40 +332,42 @@ renderArcheTree : Model -> Element Msg
 renderArcheTree model =
   let
     base =
-      [ renderEbsds model.archeTree
-      , renderORs model.archeTree
+      [ renderEbsds  model
+      , renderORs    model
       , renderArches model.archeTree
-      , renderORInput model.orCfgInput False
       ]
     rv = maybe [] (List.singleton << renderResultExplorer) model.archeResultView
   in row [] (base ++ rv)
 
-renderEbsds : ArcheTree -> Element Msg
-renderEbsds at =
+renderEbsds : Model -> Element Msg
+renderEbsds model =
   let
-    cols = ArcheTree.listEBSDWithFocus at renderEbsd
+    cols = ArcheTree.listEBSDWithFocus model.archeTree renderEbsd
+    input = renderEBSDUpload model.uploadInput
   in column
     [ Element.spacing 10
     , Element.padding 5
-    ] cols
+    ] (input :: cols)
 
-renderORs : ArcheTree -> Element Msg
-renderORs at =
+renderORs : Model -> Element Msg
+renderORs model =
   let
-    cols = ArcheTree.listORWithFocus at renderOREval 
+    cols = ArcheTree.listORWithFocus model.archeTree renderOREval 
+    input = renderORInput model.orCfgInput False
   in column
     [ Element.spacing 10
     , Element.padding 5
-    ] cols
+    ] (input :: cols)
 
 renderArches :  ArcheTree -> Element Msg
 renderArches at =
   let
     cols = ArcheTree.listArchesWithFocus at renderArche 
+    input = renderArcheInput testArche
   in column
     [ Element.spacing 10
     , Element.padding 5
-    ] cols
+    ] (input :: cols)
 
 renderEbsd : EBSD -> Bool -> Element Msg
 renderEbsd ebsd isSelected = column
@@ -455,7 +474,9 @@ renderResultExplorer resultExplorer =
 
     imgs = case resultExplorer.selectedResult of
       Just res -> [
-        Element.image [] {src = res.parentIPF.publicLink, description = res.parentIPF.publicName}
+        Element.image
+          [ Element.width (Element.px 400) ]
+          {src = res.parentIPF.publicLink, description = res.parentIPF.publicName}
         ]  
       Nothing -> []
 
@@ -549,6 +570,73 @@ renderORInput orCfg isSelected =
   , misoSlider
   , submitNewOR
   ]
+
+renderArcheInput : ArcheCfg -> Element Msg
+renderArcheInput archeCfg =
+  let
+    isAvgCheckbox = Input.checkbox []
+      { onChange = \_ -> RefreshEBSDs
+      , icon = Input.defaultCheckbox
+      , checked = True
+      , label = Input.labelRight [] (text "Use avg orientation?")
+      }
+
+    misoSlider = Input.slider
+      [ Element.height (Element.px 20)
+      -- Here is where we're creating/styling the "track"
+      , Element.behindContent
+          (Element.el
+              [ Element.width Element.fill
+              , Element.height (Element.px 10)
+              , Element.centerY
+              , BG.color (rgb255 120 120 120)
+              ]
+              Element.none
+          )
+      ]
+      { onChange = \_ -> RefreshEBSDs
+      , label = Input.labelAbove [] (text <| "Misorientation Angle")
+      , min = 0.1
+      , max = 15
+      , step = Just 0.1
+      , value = 0.0
+      , thumb = Input.defaultThumb
+      }
+    submitNewOR = Input.button
+      [ BG.color blue
+      , Element.focused
+          [ BG.color purple ]
+      ]
+      { onPress = Just (SubmitArche archeCfg)
+      , label = text "+"
+      }
+  in column
+  [ Element.Border.rounded 3
+  , Element.padding 10
+  , Element.spacing 10
+  , Element.pointer
+  , BG.color (rgb255 200 100 100)
+  , Element.htmlAttribute
+    (Html.Attributes.style "user-select" "none")
+  ]
+  [ isAvgCheckbox
+  , misoSlider
+  , submitNewOR
+  ]
+
+renderEBSDUpload : Upload.Model -> Element Msg
+renderEBSDUpload archeCfg = column
+  [ Element.Border.rounded 3
+  , Element.padding 10
+  , Element.spacing 10
+  , Element.pointer
+  , BG.color (rgb255 200 100 100)
+  , Element.htmlAttribute
+    (Html.Attributes.style "user-select" "none")
+  ]
+  [ Element.map Upload <| Element.html (Upload.view archeCfg)
+  ]
+
 
 
 -- =========== Colors ========
