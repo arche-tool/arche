@@ -99,6 +99,7 @@ type alias Model =
   , archeResultView: Maybe ArcheResultExplorer
   , uploadInput: Maybe Upload.Model
   , orCfgInput: Maybe ORConfig
+  , archeCfgInput: Maybe ArcheCfg
   }
 
 init : () -> (Model, Cmd Msg)
@@ -111,6 +112,7 @@ init _ =
       , archeResultView = Nothing
       , uploadInput = Nothing
       , orCfgInput = Nothing
+      , archeCfgInput = Nothing
       }
     , Cmd.none
     )
@@ -120,6 +122,17 @@ defaultORCfg =
   { misoAngle = { unDeg = 5.0 }
   , optByAvg = False
   , predefinedOR = Nothing
+  }
+
+defaultArcheCfg : ArcheCfg
+defaultArcheCfg = 
+  { misoAngle              = Deg 5.0 
+  , excludeFloatingGrains  = True
+  , refinementSteps        = 5
+  , initClusterFactor      = 1.25
+  , stepClusterFactor      = 1.2
+  , badAngle               = Deg 15.0
+  , parentPhaseID          = Nothing
   }
 
 -- =========== UPDATE ===========
@@ -134,9 +147,12 @@ type Msg
   | SelectedEBSD String
   | SelectedOR String
   | SelectedArche String
+
   | SetORConfig (Maybe ORConfig)
+  | SetArcheConfig (Maybe ArcheCfg)
   | SetResultMCL Float
 
+  | Upload (Maybe Upload.Msg)
   | SubmitORConfig ORConfig
   | SubmitArche ArcheCfg
 
@@ -144,8 +160,7 @@ type Msg
   | ReceivedORs    String        (Result Http.Error (Array OREval))
   | ReceivedArches String String (Result Http.Error (Array Arche))
 
-  | NewOR String (Result Http.Error OREval)
-  | Upload (Maybe Upload.Msg)
+  | ReceivedNewOR String (Result Http.Error OREval)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -180,7 +195,7 @@ update msg model =
                  , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit"
                  , headers = hs
                  , body = Http.jsonBody <| orCfgEncoder orCfg
-                 , expect = Http.expectJson (NewOR ebsdHash) orEvalDecoder
+                 , expect = Http.expectJson (ReceivedNewOR ebsdHash) orEvalDecoder
                  , timeout = Nothing
                  , tracker = Nothing
                  }
@@ -264,9 +279,11 @@ update msg model =
    
     SetORConfig orCfg -> ({model | orCfgInput = orCfg}, Cmd.none)
 
+    SetArcheConfig archeCfg -> ({model | archeCfgInput = archeCfg}, Cmd.none)
+
     SetResultMCL mcl -> ({model | archeResultView = Maybe.map (selectResult mcl) model.archeResultView}, Cmd.none)
     
-    NewOR _ _ -> (model, Cmd.none)
+    ReceivedNewOR _ _ -> (model, Cmd.none)
 
     ReceivedORs ebsdHash result ->
       case result of
@@ -300,7 +317,7 @@ update msg model =
                    , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/hash/" ++ orHash ++ "/arche/async"
                    , headers = hs
                    , body = Http.jsonBody <| archeCfgEncoder orCfg
-                   , expect = Http.expectJson (NewOR ebsdHash) orEvalDecoder
+                   , expect = Http.expectJson (ReceivedNewOR ebsdHash) orEvalDecoder
                    , timeout = Nothing
                    , tracker = Nothing
                    }
@@ -337,7 +354,7 @@ renderArcheTree model =
     base =
       [ renderEbsds  model
       , renderORs    model
-      , renderArches model.archeTree
+      , renderArches model
       ]
     rv = maybe [] (List.singleton << renderResultExplorer) model.archeResultView
   in row [] (base ++ rv)
@@ -364,11 +381,11 @@ renderORs model =
     , Element.width (Element.px 300)
     ] (input :: cols)
 
-renderArches :  ArcheTree -> Element Msg
-renderArches at =
+renderArches :  Model -> Element Msg
+renderArches model =
   let
-    cols = ArcheTree.listArchesWithFocus at renderArche 
-    input = renderArcheInput testArche
+    cols = ArcheTree.listArchesWithFocus model.archeTree renderArche 
+    input = renderArcheInput model
   in column
     [ Element.spacing 10
     , Element.padding 5
@@ -416,14 +433,6 @@ renderOREval orEval isSelected = column
   ]
   [ text (degToText orEval.resultOR.misfitError.avgError)
   , text orEval.hashOR
-  , Input.button
-    [ BG.color blue
-    , Element.focused
-        [ BG.color purple ]
-    ]
-    { onPress = Just (SubmitArche testArche)
-    , label = text "+"
-    }
   ]
 
 renderArche : Arche -> Bool -> Element Msg
@@ -448,26 +457,8 @@ renderArche arche isSelected =
     elms = 
       [ text (String.fromInt arche.cfgArche.refinementSteps)
       , text arche.hashArche
-      , Input.button
-        [ BG.color blue
-        , Element.focused
-          [ BG.color purple ]
-        ]
-        { onPress = Just (SubmitArche testArche)
-        , label = text "+"
-        }
       ]
   in column attrs elms
-
-testArche = 
-  { misoAngle              = Deg 5.0 
-  , excludeFloatingGrains  = True
-  , refinementSteps        = 5
-  , initClusterFactor      = 1.25
-  , stepClusterFactor      = 1.2
-  , badAngle               = Deg 15.0
-  , parentPhaseID          = Nothing
-  }
 
 
 renderResultExplorer : ArcheResultExplorer -> Element Msg
@@ -521,7 +512,6 @@ renderResultExplorer resultExplorer =
         }
       ]
   in column attrs (imgs ++ resultSlider)
-
 
 
 degToText : Deg -> String
@@ -596,15 +586,8 @@ toogleInput func value = Input.button []
     _      -> "-" 
   }
 
-toogleInputRaw : (a -> msg) -> a -> Bool -> Element msg
-toogleInputRaw func value toogleOn = Input.button []
-  { onPress = Just (func value)
-  , label = text <| if toogleOn
-      then "+"
-      else "-" 
-  }
-renderArcheInput : ArcheCfg -> Element Msg
-renderArcheInput archeCfg =
+renderArcheInput : Model -> Element Msg
+renderArcheInput model =
   let
     isAvgCheckbox = Input.checkbox []
       { onChange = \_ -> RefreshEBSDs
@@ -613,7 +596,7 @@ renderArcheInput archeCfg =
       , label = Input.labelRight [] (text "Use avg orientation?")
       }
 
-    misoSlider = Input.slider
+    misoSlider archeCfg = Input.slider
       [ Element.height (Element.px 20)
       -- Here is where we're creating/styling the "track"
       , Element.behindContent
@@ -626,15 +609,15 @@ renderArcheInput archeCfg =
               Element.none
           )
       ]
-      { onChange = \_ -> RefreshEBSDs
+      { onChange = \x -> SetArcheConfig <| Just { archeCfg | refinementSteps = Basics.round x } 
       , label = Input.labelAbove [] (text <| "Misorientation Angle")
-      , min = 0.1
+      , min = 1
       , max = 15
-      , step = Just 0.1
-      , value = 0.0
+      , step = Just 1.0
+      , value = toFloat archeCfg.refinementSteps
       , thumb = Input.defaultThumb
       }
-    submitNewOR = Input.button
+    submitNewOR archeCfg = Input.button
       [ BG.color blue
       , Element.focused
           [ BG.color purple ]
@@ -642,20 +625,28 @@ renderArcheInput archeCfg =
       { onPress = Just (SubmitArche archeCfg)
       , label = text "+"
       }
-  in column
-  [ Element.Border.rounded 3
-  , Element.padding 10
-  , Element.width Element.fill
-  , Element.spacing 10
-  , Element.pointer
-  , BG.color (rgb255 200 100 100)
-  , Element.htmlAttribute
-    (Html.Attributes.style "user-select" "none")
-  ]
-  [ isAvgCheckbox
-  , misoSlider
-  , submitNewOR
-  ]
+  in case model.archeCfgInput of
+    Just archeCfg -> column
+      [ Element.Border.rounded 3
+      , Element.padding 10
+      , Element.width Element.fill
+      , Element.spacing 10
+      , Element.pointer
+      , BG.color (rgb255 200 100 100)
+      , Element.htmlAttribute
+        (Html.Attributes.style "user-select" "none")
+      ]
+      [ isAvgCheckbox
+      , misoSlider archeCfg
+      , submitNewOR archeCfg
+      , toogleInput SetArcheConfig Nothing
+      ]
+    Nothing -> if ArcheTree.hasORFocus model.archeTree
+      then toogleInput SetArcheConfig
+        <| Just
+        <| maybe defaultArcheCfg .cfgArche
+        <| ArcheTree.getArcheFocus model.archeTree
+      else Element.none
 
 renderEBSDUpload : Model -> Element Msg
 renderEBSDUpload model =
@@ -675,8 +666,6 @@ renderEBSDUpload model =
         else toogleInput Upload Nothing
       ]
     Nothing -> toogleInput Upload (Just Upload.Cancel)
-
-
 
 -- =========== Colors ========
 blue : Color
