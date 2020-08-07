@@ -21,8 +21,6 @@ import Html.Attributes
 import Http
 import Task
 import Time
-import FormatNumber exposing (format)
-import FormatNumber.Locales exposing (Decimals(..), base)
 
 import Type.EBSD exposing (
   EBSD,
@@ -47,9 +45,15 @@ import Type.Texture exposing (Deg)
 
 import Type.ArcheTree as ArcheTree
 import Type.ArcheTree exposing (ArcheTree)
-import Type.Arche exposing (ArcheResult)
 import Page.Upload as Upload
-import Html exposing (a)
+import Utils exposing (..)
+
+import Widget.ArcheResultExplorer exposing
+  ( ArcheResultExplorer
+  , newResult
+  , selectResult
+  , renderResultExplorer
+  )
 
 -- =========== MAIN ===========
 main : Program () Model Msg
@@ -60,39 +64,6 @@ main =
     , update = update
     , subscriptions = subscriptions
     }
-
-type alias ArcheResultExplorer =
-  { minMclFactor: Float
-  , maxMclFactor: Float
-  , selectedResult: Maybe ArcheResult
-  , selector: Float -> Maybe ArcheResult
-  }
-
-newResult : Arche -> ArcheResultExplorer
-newResult arche =
-  let
-    arr = arche.results
-    max = Array.foldl Basics.max 0 (Array.map (\x -> x.mclFactor) arr)
-    min = Array.foldl Basics.min max (Array.map (\x -> x.mclFactor) arr)
-  in
-    { minMclFactor = min
-    , maxMclFactor = max
-    , selectedResult = Array.get 0 arr
-    , selector = findClosestResult (\x -> x.mclFactor) arr
-    }
-
-findClosestResult : (a -> Float) -> Array a -> Float -> Maybe a 
-findClosestResult func arr ref = Array.foldl (\x mvalue -> case mvalue of
-    Just value ->
-      let
-        diffX = Basics.abs(func x - ref)
-        diffV = Basics.abs(func value - ref)
-      in if diffX < diffV then Just x else Just value
-    Nothing -> Just x 
-  ) Nothing arr
-
-selectResult : Float -> ArcheResultExplorer -> ArcheResultExplorer
-selectResult ref ae = {ae | selectedResult = ae.selector ref}
 
 -- =========== MODEL ===========
 type alias Model =
@@ -151,7 +122,7 @@ type Msg
   | SetArcheConfig (Maybe ArcheCfg)
   | SetResultMCL Float
 
-  | Upload (Maybe Upload.Msg)
+  | SubmitEBSDFile (Maybe Upload.Msg)
   | SubmitORConfig ORConfig
   | SubmitArche ArcheCfg
 
@@ -324,19 +295,28 @@ update msg model =
             _ -> (model, Cmd.none)
         _ -> (model, Cmd.none)
     
-    Upload Nothing      -> ({ model | uploadInput = Nothing }, Cmd.none)
-    Upload (Just upmsg) -> case model.uploadInput of
+    SubmitEBSDFile Nothing      -> ({ model | uploadInput = Nothing }, Cmd.none)
+    SubmitEBSDFile (Just upmsg) -> case model.uploadInput of
       Just upModel ->
         let
           (newModel, newCmd) = Upload.update upmsg upModel
-        in ( {model | uploadInput = Just newModel }, Cmd.map (Upload << Just) newCmd )
+        in if Upload.isDone newModel
+          then
+            ( { model | uploadInput = Nothing }
+            , Cmd.batch [Task.perform (\_ -> RefreshEBSDs) Time.now]
+            )
+          else
+            ( {model | uploadInput = Just newModel }
+            , Cmd.map (SubmitEBSDFile << Just) newCmd
+            )
       Nothing -> ({ model | uploadInput = Just <| Upload.initModelWithToken model.token } , Cmd.none)
     
 
 -- =========== SUBSCRIPTIONS ===========
 subscriptions : Model -> Sub Msg
-subscriptions _ = Sub.none
-
+subscriptions model = case model.uploadInput of
+  Just upModel -> Sub.map (SubmitEBSDFile << Just) (Upload.subscriptions upModel)
+  _            -> Sub.none
 
 -- =========== VIEW ===========
 view : Model -> Element Msg
@@ -354,9 +334,11 @@ renderArcheTree model =
       , renderORs    model
       , renderArches model
       ]
-    rv = maybe [] (List.singleton << renderResultExplorer) model.archeResultView
+    msgBuilder = { selectedMcl = SetResultMCL }
+    rv = maybe [] (List.singleton << renderResultExplorer msgBuilder) model.archeResultView
   in column
     [ Element.spacing 15
+    , Element.alignTop
     ]
     (row [ Element.alignTop] base :: rv) 
 
@@ -464,63 +446,6 @@ renderArche arche isSelected =
       ]
   in column attrs elms
 
-
-renderResultExplorer : ArcheResultExplorer -> Element Msg
-renderResultExplorer resultExplorer =
-  let
-    attrs =
-      [ Element.Border.rounded 3
-      , Element.padding 5
-      , Element.spacing 5
-      , Element.pointer
-      , Element.centerX
-      , BG.color (rgb255 150 150 150)
-      , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
-      ]
-
-    imgs = case resultExplorer.selectedResult of
-      Just res -> [
-        Element.image
-          [ Element.width (Element.px 400) ]
-          {src = res.parentIPF.publicLink, description = res.parentIPF.publicName}
-        ]  
-      Nothing -> []
-
-    resultSlider =
-      let
-        value = case resultExplorer.selectedResult of
-          Just mcl -> mcl.mclFactor 
-          Nothing  -> resultExplorer.minMclFactor
-        msg = case resultExplorer.selectedResult of
-          Just mcl -> "MCL factor = " ++ floatToText mcl.mclFactor 
-          Nothing  -> ""
-      in [ Input.slider
-        [ Element.height (Element.px 20)
-        -- Here is where we're creating/styling the "track"
-        , Element.behindContent
-          (Element.el
-            [ Element.width Element.fill
-            , Element.height (Element.px 10)
-            , Element.centerY
-            , BG.color (rgb255 120 120 120)
-            ]
-            Element.none
-          )
-        ]
-        { onChange = SetResultMCL
-        , label = Input.labelAbove [] (text <| msg)
-        , min = resultExplorer.minMclFactor
-        , max = resultExplorer.maxMclFactor
-        , step = Just 0.1
-        , value = value
-        , thumb = Input.defaultThumb
-        }
-      ]
-  in column attrs (imgs ++ resultSlider)
-
-
-degToText : Deg -> String
-degToText v = format {base | decimals = Exact 1} v.unDeg
 
 renderORInput : Model -> Element Msg
 renderORInput model =
@@ -641,12 +566,12 @@ renderEBSDUpload model =
       , BG.color (rgb255 200 100 100)
       , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
       ]
-      [ Element.map (Upload << Just) <| Element.html (Upload.view upModel)
+      [ Element.map (SubmitEBSDFile << Just) <| Element.html (Upload.view upModel)
       , if Upload.isUploading upModel
         then Element.none
-        else toogleInput Upload Nothing
+        else toogleInput SubmitEBSDFile Nothing
       ]
-    Nothing -> toogleInput Upload (Just Upload.Cancel)
+    Nothing -> toogleInput SubmitEBSDFile (Just Upload.Cancel)
 
 -- =========== Colors ========
 blue : Color
@@ -679,13 +604,3 @@ submitButton x = Input.button
   { onPress = Just x
   , label = text "Submit"
   }
-
--- =========== Formatters ===========
-floatToText : Float -> String
-floatToText = format {base | decimals = Exact 1}
-
-intToText : Int -> String
-intToText = format {base | decimals = Exact 0} << toFloat
-
-maybe : b -> (a -> b) -> Maybe a -> b
-maybe def func x = Maybe.withDefault def (Maybe.map func x)
