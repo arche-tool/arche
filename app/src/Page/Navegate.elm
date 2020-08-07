@@ -15,6 +15,7 @@ import Element exposing (Element, Color, column, text, layout, rgb255, row)
 import Element.Background as BG
 import Element.Border
 import Element.Events
+import Element.Font as Font
 import Element.Input as Input
 import Html.Attributes
 import Http
@@ -48,6 +49,7 @@ import Type.ArcheTree as ArcheTree
 import Type.ArcheTree exposing (ArcheTree)
 import Type.Arche exposing (ArcheResult)
 import Page.Upload as Upload
+import Html exposing (a)
 
 -- =========== MAIN ===========
 main : Program () Model Msg
@@ -357,7 +359,9 @@ renderArcheTree model =
       , renderArches model
       ]
     rv = maybe [] (List.singleton << renderResultExplorer) model.archeResultView
-  in row [] (base ++ rv)
+  in row
+    [ Element.alignTop
+    ] (base ++ rv)
 
 renderEbsds : Model -> Element Msg
 renderEbsds model =
@@ -368,6 +372,7 @@ renderEbsds model =
     [ Element.spacing 10
     , Element.padding 5
     , Element.width (Element.px 300)
+    , Element.alignTop
     ] (input :: cols)
 
 renderORs : Model -> Element Msg
@@ -379,6 +384,7 @@ renderORs model =
     [ Element.spacing 10
     , Element.padding 5
     , Element.width (Element.px 300)
+    , Element.alignTop
     ] (input :: cols)
 
 renderArches :  Model -> Element Msg
@@ -390,6 +396,7 @@ renderArches model =
     [ Element.spacing 10
     , Element.padding 5
     , Element.width (Element.px 300)
+    , Element.alignTop
     ] (input :: cols)
 
 renderEbsd : EBSD -> Bool -> Element Msg
@@ -548,14 +555,6 @@ renderORInput model =
       , value = orCfg.misoAngle.unDeg
       , thumb = Input.defaultThumb
       }
-    submitNewOR orCfg = Input.button
-      [ BG.color blue
-      , Element.focused
-          [ BG.color purple ]
-      ]
-      { onPress = Just (SubmitORConfig orCfg)
-      , label = text "+"
-      }
   in case model.orCfgInput of
     Just orCfg -> column
       [ Element.Border.rounded 3
@@ -568,7 +567,7 @@ renderORInput model =
       ]
       [ isAvgCheckbox orCfg
       , misoSlider orCfg
-      , submitNewOR orCfg
+      , submitButton (SubmitORConfig orCfg)
       , toogleInput SetORConfig Nothing
       ]
     Nothing -> if ArcheTree.hasEBSDFocus model.archeTree
@@ -578,25 +577,17 @@ renderORInput model =
         <| ArcheTree.getORFocus model.archeTree
       else Element.none
 
-toogleInput : (Maybe a -> msg) -> Maybe a -> Element msg
-toogleInput func value = Input.button []
-  { onPress = Just (func value)
-  , label = text <| case value of
-    Just _ -> "+"
-    _      -> "-" 
-  }
-
 renderArcheInput : Model -> Element Msg
 renderArcheInput model =
   let
-    isAvgCheckbox = Input.checkbox []
-      { onChange = \_ -> RefreshEBSDs
+    excludeFloatingCheckbox archeCfg = Input.checkbox []
+      { onChange = \x -> SetArcheConfig <| Just { archeCfg | excludeFloatingGrains = x } 
       , icon = Input.defaultCheckbox
-      , checked = True
-      , label = Input.labelRight [] (text "Use avg orientation?")
+      , checked = archeCfg.excludeFloatingGrains
+      , label = Input.labelRight [] (text "Exclude Floating Grains?")
       }
 
-    misoSlider archeCfg = Input.slider
+    stepsSlider archeCfg = Input.slider
       [ Element.height (Element.px 20)
       -- Here is where we're creating/styling the "track"
       , Element.behindContent
@@ -610,20 +601,12 @@ renderArcheInput model =
           )
       ]
       { onChange = \x -> SetArcheConfig <| Just { archeCfg | refinementSteps = Basics.round x } 
-      , label = Input.labelAbove [] (text <| "Misorientation Angle")
+      , label = Input.labelAbove [] (text <| "Number of steps: " ++ intToText archeCfg.refinementSteps)
       , min = 1
-      , max = 15
+      , max = 10
       , step = Just 1.0
       , value = toFloat archeCfg.refinementSteps
       , thumb = Input.defaultThumb
-      }
-    submitNewOR archeCfg = Input.button
-      [ BG.color blue
-      , Element.focused
-          [ BG.color purple ]
-      ]
-      { onPress = Just (SubmitArche archeCfg)
-      , label = text "+"
       }
   in case model.archeCfgInput of
     Just archeCfg -> column
@@ -636,9 +619,9 @@ renderArcheInput model =
       , Element.htmlAttribute
         (Html.Attributes.style "user-select" "none")
       ]
-      [ isAvgCheckbox
-      , misoSlider archeCfg
-      , submitNewOR archeCfg
+      [ excludeFloatingCheckbox archeCfg
+      , stepsSlider archeCfg
+      , submitButton (SubmitArche archeCfg)
       , toogleInput SetArcheConfig Nothing
       ]
     Nothing -> if ArcheTree.hasORFocus model.archeTree
@@ -677,10 +660,34 @@ purple = Element.rgb255 138 138 238
 insurelloBlue : Element.Color
 insurelloBlue = rgb255 59 139 186
 
--- =========== Formatters ===========
+-- =========== Widgets ===========
+toogleInput : (Maybe a -> msg) -> Maybe a -> Element msg
+toogleInput func value = Input.button
+  [ Font.size 40
+  , Element.centerX
+  ]
+  { onPress = Just (func value)
+  , label = text <| case value of
+    Just _ -> "+"
+    _      -> "-" 
+  }
 
+submitButton : msg -> Element msg
+submitButton x = Input.button
+  [ BG.color blue
+  , Element.focused [ BG.color purple ]
+  , Element.padding 5
+  ]
+  { onPress = Just x
+  , label = text "Submit"
+  }
+
+-- =========== Formatters ===========
 floatToText : Float -> String
-floatToText v = format {base | decimals = Exact 1} v
+floatToText = format {base | decimals = Exact 1}
+
+intToText : Int -> String
+intToText = format {base | decimals = Exact 0} << toFloat
 
 maybe : b -> (a -> b) -> Maybe a -> b
 maybe def func x = Maybe.withDefault def (Maybe.map func x)
