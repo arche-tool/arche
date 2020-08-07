@@ -1,4 +1,14 @@
-module Page.Upload exposing (Model, Msg(..), main, init, update, subscriptions, view)
+module Page.Upload exposing (
+  Model,
+  Msg(..),
+  main,
+  init,
+  initModelWithToken,
+  isUploading,
+  update,
+  subscriptions,
+  view
+  )
 
 import Browser
 import File exposing (File)
@@ -34,12 +44,19 @@ type UploadState
   | Fail
 
 
+isUploading : Model -> Bool
+isUploading model = case model.state of
+  Uploading _ -> True 
+  _           -> False
+
 init : () -> (Model, Cmd Msg)
 init _ =
   ( {token = Nothing, state = Waiting}
   , Cmd.none
   )
 
+initModelWithToken : Maybe String -> Model
+initModelWithToken tk = {token = tk, state = Waiting}
 
 -- =========== UPDATE ===========
 type Msg

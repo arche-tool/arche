@@ -97,8 +97,8 @@ type alias Model =
   { token: Maybe String
   , archeTree: ArcheTree
   , archeResultView: Maybe ArcheResultExplorer
-  , uploadInput: Upload.Model
-  , orCfgInput: ORConfig
+  , uploadInput: Maybe Upload.Model
+  , orCfgInput: Maybe ORConfig
   }
 
 init : () -> (Model, Cmd Msg)
@@ -109,8 +109,8 @@ init _ =
     ( { token = Nothing
       , archeTree = ArcheTree.empty
       , archeResultView = Nothing
-      , uploadInput = upModel
-      , orCfgInput = defaultORCfg
+      , uploadInput = Nothing
+      , orCfgInput = Nothing
       }
     , Cmd.none
     )
@@ -134,7 +134,7 @@ type Msg
   | SelectedEBSD String
   | SelectedOR String
   | SelectedArche String
-  | SetORConfig ORConfig
+  | SetORConfig (Maybe ORConfig)
   | SetResultMCL Float
 
   | SubmitORConfig ORConfig
@@ -145,7 +145,7 @@ type Msg
   | ReceivedArches String String (Result Http.Error (Array Arche))
 
   | NewOR String (Result Http.Error OREval)
-  | Upload Upload.Msg
+  | Upload (Maybe Upload.Msg)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -256,7 +256,7 @@ update msg model =
       ( { model | token = Just tk }
       , Cmd.batch
         [ Task.perform (\_ -> RefreshEBSDs) Time.now
-        , Task.perform (\_ -> Upload (Upload.SetToken tk)) Time.now
+        , Task.perform (\_ -> Upload (Just <| Upload.SetToken tk)) Time.now
         ]
       )
     
@@ -309,10 +309,13 @@ update msg model =
             _ -> (model, Cmd.none)
         _ -> (model, Cmd.none)
     
-    Upload upmsg ->
-      let
-        (newModel, newCmd) = Upload.update upmsg model.uploadInput
-      in ( {model | uploadInput = newModel }, Cmd.map Upload newCmd )
+    Upload Nothing      -> ({ model | uploadInput = Nothing }, Cmd.none)
+    Upload (Just upmsg) -> case model.uploadInput of
+      Just upModel ->
+        let
+          (newModel, newCmd) = Upload.update upmsg upModel
+        in ( {model | uploadInput = Just newModel }, Cmd.map (Upload << Just) newCmd )
+      Nothing -> ({ model | uploadInput = Just <| Upload.initModelWithToken model.token } , Cmd.none)
     
 
 -- =========== SUBSCRIPTIONS ===========
@@ -343,20 +346,22 @@ renderEbsds : Model -> Element Msg
 renderEbsds model =
   let
     cols = ArcheTree.listEBSDWithFocus model.archeTree renderEbsd
-    input = renderEBSDUpload model.uploadInput
+    input = renderEBSDUpload model
   in column
     [ Element.spacing 10
     , Element.padding 5
+    , Element.width (Element.px 300)
     ] (input :: cols)
 
 renderORs : Model -> Element Msg
 renderORs model =
   let
     cols = ArcheTree.listORWithFocus model.archeTree renderOREval 
-    input = renderORInput model.orCfgInput False
+    input = renderORInput model
   in column
     [ Element.spacing 10
     , Element.padding 5
+    , Element.width (Element.px 300)
     ] (input :: cols)
 
 renderArches :  ArcheTree -> Element Msg
@@ -367,6 +372,7 @@ renderArches at =
   in column
     [ Element.spacing 10
     , Element.padding 5
+    , Element.width (Element.px 300)
     ] (input :: cols)
 
 renderEbsd : EBSD -> Bool -> Element Msg
@@ -374,6 +380,7 @@ renderEbsd ebsd isSelected = column
   [ Element.Events.onClick (SelectedEBSD ebsd.hashEBSD)
   , Element.Border.rounded 3
   , Element.padding 3
+  , Element.width Element.fill
   , Element.pointer
   , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
   , Element.htmlAttribute
@@ -395,6 +402,7 @@ renderOREval orEval isSelected = column
   [ Element.Events.onClick (SelectedOR orEval.hashOR)
   , Element.Border.rounded 3
   , Element.padding 3
+  , Element.width Element.fill
   , Element.pointer
   , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
   , Element.htmlAttribute
@@ -425,6 +433,7 @@ renderArche arche isSelected =
       [ Element.Events.onClick (SelectedArche arche.hashArche)
       , Element.Border.rounded 3
       , Element.padding 3
+      , Element.width Element.fill
       , Element.pointer
       , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
       , Element.htmlAttribute
@@ -467,6 +476,7 @@ renderResultExplorer resultExplorer =
     attrs =
       [ Element.Border.rounded 3
       , Element.padding 3
+      , Element.width Element.fill
       , Element.pointer
       , BG.color (rgb255 100 200 100)
       , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
@@ -517,18 +527,17 @@ renderResultExplorer resultExplorer =
 degToText : Deg -> String
 degToText v = format {base | decimals = Exact 1} v.unDeg
 
-renderORInput : ORConfig -> Bool -> Element Msg
-renderORInput orCfg isSelected =
+renderORInput : Model -> Element Msg
+renderORInput model =
   let
-    degValue = degToText orCfg.misoAngle
-    isAvgCheckbox = Input.checkbox []
-      { onChange = \isAvg -> SetORConfig { orCfg | optByAvg = isAvg}
+    isAvgCheckbox orCfg = Input.checkbox []
+      { onChange = \isAvg -> SetORConfig <| Just { orCfg | optByAvg = isAvg}
       , icon = Input.defaultCheckbox
       , checked = orCfg.optByAvg
       , label = Input.labelRight [] (text "Use avg orientation?")
       }
 
-    misoSlider = Input.slider
+    misoSlider orCfg = Input.slider
       [ Element.height (Element.px 20)
       -- Here is where we're creating/styling the "track"
       , Element.behindContent
@@ -541,15 +550,15 @@ renderORInput orCfg isSelected =
               Element.none
           )
       ]
-      { onChange = \deg -> SetORConfig { orCfg | misoAngle = {unDeg = deg}}
-      , label = Input.labelAbove [] (text <| "Misorientation Angle = " ++ degValue ++ "°")
+      { onChange = \deg -> SetORConfig <| Just { orCfg | misoAngle = {unDeg = deg}}
+      , label = Input.labelAbove [] (text <| "Misorientation Angle = " ++ degToText orCfg.misoAngle ++ "°")
       , min = 0.1
       , max = 15
       , step = Just 0.1
       , value = orCfg.misoAngle.unDeg
       , thumb = Input.defaultThumb
       }
-    submitNewOR = Input.button
+    submitNewOR orCfg = Input.button
       [ BG.color blue
       , Element.focused
           [ BG.color purple ]
@@ -557,20 +566,43 @@ renderORInput orCfg isSelected =
       { onPress = Just (SubmitORConfig orCfg)
       , label = text "+"
       }
-  in column
-  [ Element.Border.rounded 3
-  , Element.padding 10
-  , Element.spacing 10
-  , Element.pointer
-  , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
-  , Element.htmlAttribute
-    (Html.Attributes.style "user-select" "none")
-  ]
-  [ isAvgCheckbox
-  , misoSlider
-  , submitNewOR
-  ]
+  in case model.orCfgInput of
+    Just orCfg -> column
+      [ Element.Border.rounded 3
+      , Element.padding 10
+      , Element.width Element.fill
+      , Element.spacing 10
+      , Element.pointer
+      , BG.color (rgb255 100 200 100)
+      , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
+      ]
+      [ isAvgCheckbox orCfg
+      , misoSlider orCfg
+      , submitNewOR orCfg
+      , toogleInput SetORConfig Nothing
+      ]
+    Nothing -> if ArcheTree.hasEBSDFocus model.archeTree
+      then toogleInput SetORConfig
+        <| Just
+        <| maybe defaultORCfg .cfgOR
+        <| ArcheTree.getORFocus model.archeTree
+      else Element.none
 
+toogleInput : (Maybe a -> msg) -> Maybe a -> Element msg
+toogleInput func value = Input.button []
+  { onPress = Just (func value)
+  , label = text <| case value of
+    Just _ -> "+"
+    _      -> "-" 
+  }
+
+toogleInputRaw : (a -> msg) -> a -> Bool -> Element msg
+toogleInputRaw func value toogleOn = Input.button []
+  { onPress = Just (func value)
+  , label = text <| if toogleOn
+      then "+"
+      else "-" 
+  }
 renderArcheInput : ArcheCfg -> Element Msg
 renderArcheInput archeCfg =
   let
@@ -613,6 +645,7 @@ renderArcheInput archeCfg =
   in column
   [ Element.Border.rounded 3
   , Element.padding 10
+  , Element.width Element.fill
   , Element.spacing 10
   , Element.pointer
   , BG.color (rgb255 200 100 100)
@@ -624,18 +657,24 @@ renderArcheInput archeCfg =
   , submitNewOR
   ]
 
-renderEBSDUpload : Upload.Model -> Element Msg
-renderEBSDUpload archeCfg = column
-  [ Element.Border.rounded 3
-  , Element.padding 10
-  , Element.spacing 10
-  , Element.pointer
-  , BG.color (rgb255 200 100 100)
-  , Element.htmlAttribute
-    (Html.Attributes.style "user-select" "none")
-  ]
-  [ Element.map Upload <| Element.html (Upload.view archeCfg)
-  ]
+renderEBSDUpload : Model -> Element Msg
+renderEBSDUpload model =
+  case model.uploadInput of
+    Just upModel -> column
+      [ Element.Border.rounded 3
+      , Element.padding 10
+      , Element.width Element.fill
+      , Element.spacing 10
+      , Element.pointer
+      , BG.color (rgb255 200 100 100)
+      , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
+      ]
+      [ Element.map (Upload << Just) <| Element.html (Upload.view upModel)
+      , if Upload.isUploading upModel
+        then Element.none
+        else toogleInput Upload Nothing
+      ]
+    Nothing -> toogleInput Upload (Just Upload.Cancel)
 
 
 

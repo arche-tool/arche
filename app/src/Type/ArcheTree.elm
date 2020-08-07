@@ -108,6 +108,21 @@ getArcheFocus at =
             FocusedList.getFocus at
     in Maybe.map (\x -> x.archeResult) orNode
 
+isJust : Maybe a -> Bool
+isJust x = case x of
+   Just _  -> True
+   Nothing -> False
+
+hasEBSDFocus : ArcheTree -> Bool
+hasEBSDFocus = isJust << getEBSDFocus 
+
+hasORFocus : ArcheTree -> Bool
+hasORFocus = isJust << getORFocus 
+
+hasArcheFocus : ArcheTree -> Bool
+hasArcheFocus = isJust << getArcheFocus 
+
+
 focusOnEbsd : ArcheTree -> String -> ArcheTree
 focusOnEbsd = FocusedList.focusOn
 
