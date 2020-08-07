@@ -1,9 +1,10 @@
 port module Page.SignIn exposing (Model, Msg, init, update, subscriptions, view)
 
 import GoogleSignIn
-import Element exposing (Element, column, html, text)
-import Html
-import Html.Events exposing (onClick)
+import Element exposing (Color, Element, column, html, text)
+import Element.Background as BG
+import Element.Events as Events
+import Element.Input as Input
 import Json.Encode as E
 
 
@@ -45,15 +46,35 @@ subscriptions _ = googleSignOutComplete (\_ -> SignOutComplete)
 -- VIEW
 view : Model -> Element Msg
 view model = case model.profile of
-    Just profile -> column []
+    Just profile -> column
+        [ Element.centerX
+        , Element.spacing 10
+        ]
         [ text profile.name
-        , html <| Html.button [ onClick BeginSignOut ] [ Html.text "Sign Out" ] 
+        , Input.button
+            [ Events.onClick BeginSignOut
+            , BG.color purple
+            , Element.focused [ BG.color blue ]
+            , Element.padding 5
+            ]
+            { label = text "Sign Out"
+            , onPress = Nothing
+            } 
         ]
 
-    Nothing -> column []
-        [ text "Sign-in here"
-        , html <| GoogleSignIn.view
+    Nothing -> column
+        [ Element.centerX
+        , Element.spacing 8
+        ]
+        [ html <| GoogleSignIn.view
             [ GoogleSignIn.onSignIn SignIn
             , GoogleSignIn.idAttr model.client_id
             ]
         ]
+
+-- =========== Colors ========
+blue : Color
+blue = Element.rgb255 238 238 238
+
+purple : Color
+purple = Element.rgb255 138 138 238

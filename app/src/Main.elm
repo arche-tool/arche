@@ -185,7 +185,8 @@ sidePanel model channels =
           , label = text channel.label
           }
     
-      logo = image []
+      logo = image
+        [ centerX ]
         { src = model.flags.logo
         , description = "logo"
         }
@@ -193,9 +194,9 @@ sidePanel model channels =
     in
     column
         [ height fill
-        , width (px 300)
-        , paddingXY 0 10
-        , scrollbars
+        , width (px 175)
+        , paddingXY 8 10
+        , spacing 10
         , Background.color <| rgb255 92 99 118
         , Font.color <| rgb255 255 255 255
         ] <| [logo, signIn] ++ List.map channelEl channels

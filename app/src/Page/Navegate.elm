@@ -106,18 +106,15 @@ type alias Model =
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  let
-    (upModel, _) = Upload.init ()
-  in
-    ( { token = Nothing
-      , archeTree = ArcheTree.empty
-      , archeResultView = Nothing
-      , uploadInput = Nothing
-      , orCfgInput = Nothing
-      , archeCfgInput = Nothing
-      }
-    , Cmd.none
-    )
+  ( { token = Nothing
+    , archeTree = ArcheTree.empty
+    , archeResultView = Nothing
+    , uploadInput = Nothing
+    , orCfgInput = Nothing
+    , archeCfgInput = Nothing
+    }
+  , Cmd.none
+  )
 
 defaultORCfg : ORConfig
 defaultORCfg =
@@ -273,7 +270,6 @@ update msg model =
       ( { model | token = Just tk }
       , Cmd.batch
         [ Task.perform (\_ -> RefreshEBSDs) Time.now
-        , Task.perform (\_ -> Upload (Just <| Upload.SetToken tk)) Time.now
         ]
       )
     
@@ -359,9 +355,10 @@ renderArcheTree model =
       , renderArches model
       ]
     rv = maybe [] (List.singleton << renderResultExplorer) model.archeResultView
-  in row
-    [ Element.alignTop
-    ] (base ++ rv)
+  in column
+    [ Element.spacing 15
+    ]
+    (row [ Element.alignTop] base :: rv) 
 
 renderEbsds : Model -> Element Msg
 renderEbsds model =
@@ -473,10 +470,11 @@ renderResultExplorer resultExplorer =
   let
     attrs =
       [ Element.Border.rounded 3
-      , Element.padding 3
-      , Element.width Element.fill
+      , Element.padding 5
+      , Element.spacing 5
       , Element.pointer
-      , BG.color (rgb255 100 200 100)
+      , Element.centerX
+      , BG.color (rgb255 150 150 150)
       , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
       ]
 
