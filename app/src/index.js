@@ -1,4 +1,5 @@
 import './main.css';
+import './spinner.css';
 import { Elm } from './Main.elm';
 import ElmGoogleSignIn from './sign-in.js';
 

@@ -43,6 +43,7 @@ type alias Model =
 type UploadState
   = Waiting
   | Uploading Float
+  | Processing
   | Done EBSD
   | Fail
 
@@ -142,7 +143,7 @@ update msg model =
             hs = case model.token of
               Just tk -> [Http.header "Authorization" ("Bearer " ++ tk)]
               _       -> []
-          in ( {model | state = Uploading 0}
+          in ( {model | state = Processing}
             , Http.request
               { method = "POST"
               , url = "/api/ebsd"
@@ -188,12 +189,13 @@ renderState : UploadState -> Html Msg
 renderState state =
   case state of
     Waiting ->
-      input
-        [ A.type_ "file"
-        , A.multiple False
-        , E.on "change" (D.map GotFiles filesDecoder)
+      div [] [
+        input
+          [ A.type_ "file"
+          , A.multiple False
+          , E.on "change" (D.map GotFiles filesDecoder)
+          ] []
         ]
-        []
 
     Uploading fraction ->
       div []
@@ -204,7 +206,7 @@ renderState state =
             ]
             []
         , button [ E.onClick Cancel ] [ text "Cancel" ]
-        ]
+        ] 
 
     Done _ ->
       h1 [] [ text "DONE" ]
@@ -212,6 +214,16 @@ renderState state =
     Fail ->
       h1 [] [ text "FAIL" ]
 
+    Processing ->
+      div [] [
+        text "Processing EBSD"
+        , Html.div
+          [A.class "spinner"] 
+          [ Html.div [A.class "bounce1"] []
+          , Html.div [A.class "bounce2"] []
+          , Html.div [A.class "bounce3"] []
+          ]
+        ]
 filesDecoder : D.Decoder (List File)
 filesDecoder =
   D.at ["target", "files"] (D.list File.decoder)
