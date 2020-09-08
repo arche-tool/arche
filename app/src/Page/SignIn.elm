@@ -4,6 +4,7 @@ import GoogleSignIn
 import Element exposing (Element, column, html, text)
 import Element.Background as BG
 import Element.Events as Events
+import Element.Font as Font
 import Element.Input as Input
 import Json.Encode as E
 
@@ -54,9 +55,11 @@ view model = case model.profile of
         [ text profile.name
         , Input.button
             [ Events.onClick BeginSignOut
-            , BG.color G.black
+            , BG.color G.colorA2
+            , Font.color <| G.white
             , Element.focused [ BG.color G.white ]
             , Element.padding 5
+            , Element.centerX
             ]
             { label = text "Sign Out"
             , onPress = Nothing

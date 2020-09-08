@@ -65,7 +65,7 @@ renderResultExplorer courier resultExplorer =
       , Element.spacing 5
       , Element.pointer
       , Element.centerX
-      , BG.color G.black
+      , BG.color G.colorA
       , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
       ]
 
@@ -93,7 +93,7 @@ renderResultExplorer courier resultExplorer =
             [ Element.width Element.fill
             , Element.height (Element.px 10)
             , Element.centerY
-            , BG.color G.black
+            , BG.color G.white
             ]
             Element.none
           )

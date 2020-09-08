@@ -173,7 +173,10 @@ view model =
 sidePanel : Model -> List PageLink -> Element Msg
 sidePanel model channels =
     let
-      activeChannelAttrs = [ Background.color <| G.black, Font.bold ]
+      activeChannelAttrs =
+        [ Background.color <| G.colorA1, Font.bold
+        , Font.color <| G.white
+        ]
       channelAttrs = [ Element.paddingXY 15 5, width fill ]
 
       channelEl channel = el (
@@ -197,8 +200,8 @@ sidePanel model channels =
         , width (px 175)
         , paddingXY 8 10
         , spacing 10
-        , Background.color <| G.black
-        , Font.color <| G.white
+        , Background.color <| G.colorA
+        , Font.color <| G.black
         ] <| [logo, signIn] ++ List.map channelEl channels
 
 type alias PageLink =

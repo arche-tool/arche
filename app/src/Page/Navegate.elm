@@ -1,6 +1,6 @@
 module Page.Navegate exposing (
   Model,
-  Msg(..),
+  Msg(..), boxShape,
   renderEbsds,
   main,
   init,
@@ -382,21 +382,7 @@ renderArches model =
 
 renderEbsd : EBSD -> Bool -> Element Msg
 renderEbsd ebsd isSelected = column
-  [ Element.Events.onClick (SelectedEBSD ebsd.hashEBSD)
-  , Element.Border.rounded 3
-  , Element.padding 3
-  , Element.width Element.fill
-  , Element.pointer
-  , BG.color ( if isSelected then G.black else G.black)
-  , Element.htmlAttribute
-    (Html.Attributes.style "user-select" "none")
-  , Element.mouseOver
-    [ Element.Border.color G.black
-    , Element.Border.glow G.black 1
-    , Element.Border.innerGlow G.black 1
-    ]
-  , Element.mouseDown [ Element.alpha 0.6 ]
-  ]
+  (Element.Events.onClick (SelectedEBSD ebsd.hashEBSD) :: boxShape isSelected)
   [ text ebsd.alias
   , text ebsd.hashEBSD
   , text (Maybe.withDefault "" ebsd.createdBy.name)
@@ -404,21 +390,7 @@ renderEbsd ebsd isSelected = column
 
 renderOREval : OREval -> Bool -> Element Msg
 renderOREval orEval isSelected = column
-  [ Element.Events.onClick (SelectedOR orEval.hashOR)
-  , Element.Border.rounded 3
-  , Element.padding 3
-  , Element.width Element.fill
-  , Element.pointer
-  , BG.color ( if isSelected then G.black else G.black)
-  , Element.htmlAttribute
-    (Html.Attributes.style "user-select" "none")
-  , Element.mouseOver
-    [ Element.Border.color G.black
-    , Element.Border.glow G.black 1
-    , Element.Border.innerGlow G.black 1
-    ]
-  , Element.mouseDown [ Element.alpha 0.6 ]
-  ]
+  (Element.Events.onClick (SelectedOR orEval.hashOR) :: boxShape isSelected)
   [ text (degToText orEval.resultOR.misfitError.avgError)
   , text orEval.hashOR
   ]
@@ -427,21 +399,7 @@ renderArche : Arche -> Bool -> Element Msg
 renderArche arche isSelected =
   let
     attrs =
-      [ Element.Events.onClick (SelectedArche arche.hashArche)
-      , Element.Border.rounded 3
-      , Element.padding 3
-      , Element.width Element.fill
-      , Element.pointer
-      , BG.color ( if isSelected then G.black else G.black)
-      , Element.htmlAttribute
-        (Html.Attributes.style "user-select" "none")
-      , Element.mouseOver
-        [ Element.Border.color G.black
-        , Element.Border.glow G.black 1
-        , Element.Border.innerGlow G.black 1
-        ]
-      , Element.mouseDown [ Element.alpha 0.6 ]
-      ]
+      Element.Events.onClick (SelectedArche arche.hashArche) :: boxShape isSelected
     elms = 
       [ text (String.fromInt arche.cfgArche.refinementSteps)
       , text arche.hashArche
@@ -482,14 +440,7 @@ renderORInput model =
       }
   in case model.orCfgInput of
     Just orCfg -> column
-      [ Element.Border.rounded 3
-      , Element.padding 10
-      , Element.width Element.fill
-      , Element.spacing 10
-      , Element.pointer
-      , BG.color G.black
-      , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
-      ]
+      boxInputShape
       [ isAvgCheckbox orCfg
       , misoSlider orCfg
       , submitButton (SubmitORConfig orCfg)
@@ -535,15 +486,7 @@ renderArcheInput model =
       }
   in case model.archeCfgInput of
     Just archeCfg -> column
-      [ Element.Border.rounded 3
-      , Element.padding 10
-      , Element.width Element.fill
-      , Element.spacing 10
-      , Element.pointer
-      , BG.color G.black
-      , Element.htmlAttribute
-        (Html.Attributes.style "user-select" "none")
-      ]
+      boxInputShape
       [ excludeFloatingCheckbox archeCfg
       , stepsSlider archeCfg
       , submitButton (SubmitArche archeCfg)
@@ -560,14 +503,7 @@ renderEBSDUpload : Model -> Element Msg
 renderEBSDUpload model =
   case model.uploadInput of
     Just upModel -> column
-      [ Element.Border.rounded 3
-      , Element.padding 10
-      , Element.width Element.fill
-      , Element.spacing 10
-      , Element.pointer
-      , BG.color G.black
-      , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
-      ]
+      boxInputShape
       [ Element.map (SubmitEBSDFile << Just) <| Element.html (Upload.view upModel)
       , if Upload.isUploading upModel
         then Element.none
@@ -575,23 +511,57 @@ renderEBSDUpload model =
       ]
     Nothing -> toogleInput SubmitEBSDFile (Just Upload.Cancel)
 
+-- =========== commum ============
+
+boxShape : Bool -> List (Element.Attribute msg)
+boxShape isSelected =
+  [ Element.Border.rounded 3
+  , Element.padding 3
+  , Element.width Element.fill
+  , Element.pointer
+  , BG.color (if isSelected then G.colorA1 else G.colorA)
+  , Element.htmlAttribute
+    (Html.Attributes.style "user-select" "none")
+  , Element.mouseOver
+    [ Element.Border.color G.black
+    , Element.Border.glow G.black 1
+    , Element.Border.innerGlow G.black 1
+    ]
+  , Element.mouseDown [ Element.alpha 0.6 ]
+  ]
+
+boxInputShape : List (Element.Attribute msg)
+boxInputShape =
+  [ Element.Border.rounded 3
+  , Element.padding 10
+  , Element.width Element.fill
+  , Element.spacing 10
+  , Element.pointer
+  , BG.color G.colorA1
+  , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
+  ]
+
 -- =========== Widgets ===========
 toogleInput : (Maybe a -> msg) -> Maybe a -> Element msg
-toogleInput func value = Input.button
-  [ Font.size 40
-  , Element.centerX
-  , Font.color <| G.black
-  ]
-  { onPress = Just (func value)
-  , label = text <| case value of
-    Just _ -> "+"
-    _      -> "-" 
-  }
+toogleInput func value =
+  let
+    color = case value of
+      Just _ -> G.colorB
+      _      -> G.colorB 
+  in Input.button
+    [ Font.size 20
+    , Element.centerX
+    , Font.color <| color
+    ]
+    { onPress = Just (func value)
+    , label = text <| case value of
+      Just _ -> "✚"
+      _      -> "✖" 
+    }
 
 submitButton : msg -> Element msg
 submitButton x = Input.button
-  [ BG.color G.black
-  , Element.focused [ BG.color G.black ]
+  [ BG.color G.colorA2
   , Element.padding 5
   ]
   { onPress = Just x
