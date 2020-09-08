@@ -11,7 +11,7 @@ module Page.Navegate exposing (
 
 import Array exposing (Array)
 import Browser
-import Element exposing (Element, Color, column, text, layout, rgb255, row)
+import Element exposing (Element, column, text, layout, row)
 import Element.Background as BG
 import Element.Border
 import Element.Events
@@ -21,6 +21,8 @@ import Html.Attributes
 import Http
 import Task
 import Time
+
+import Globals as G
 
 import Type.EBSD exposing (
   EBSD,
@@ -385,13 +387,13 @@ renderEbsd ebsd isSelected = column
   , Element.padding 3
   , Element.width Element.fill
   , Element.pointer
-  , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
+  , BG.color ( if isSelected then G.black else G.black)
   , Element.htmlAttribute
     (Html.Attributes.style "user-select" "none")
   , Element.mouseOver
-    [ Element.Border.color insurelloBlue
-    , Element.Border.glow insurelloBlue 1
-    , Element.Border.innerGlow insurelloBlue 1
+    [ Element.Border.color G.black
+    , Element.Border.glow G.black 1
+    , Element.Border.innerGlow G.black 1
     ]
   , Element.mouseDown [ Element.alpha 0.6 ]
   ]
@@ -407,13 +409,13 @@ renderOREval orEval isSelected = column
   , Element.padding 3
   , Element.width Element.fill
   , Element.pointer
-  , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
+  , BG.color ( if isSelected then G.black else G.black)
   , Element.htmlAttribute
     (Html.Attributes.style "user-select" "none")
   , Element.mouseOver
-    [ Element.Border.color insurelloBlue
-    , Element.Border.glow insurelloBlue 1
-    , Element.Border.innerGlow insurelloBlue 1
+    [ Element.Border.color G.black
+    , Element.Border.glow G.black 1
+    , Element.Border.innerGlow G.black 1
     ]
   , Element.mouseDown [ Element.alpha 0.6 ]
   ]
@@ -430,13 +432,13 @@ renderArche arche isSelected =
       , Element.padding 3
       , Element.width Element.fill
       , Element.pointer
-      , BG.color ( if isSelected then rgb255 100 200 100 else rgb255 200 100 100)
+      , BG.color ( if isSelected then G.black else G.black)
       , Element.htmlAttribute
         (Html.Attributes.style "user-select" "none")
       , Element.mouseOver
-        [ Element.Border.color insurelloBlue
-        , Element.Border.glow insurelloBlue 1
-        , Element.Border.innerGlow insurelloBlue 1
+        [ Element.Border.color G.black
+        , Element.Border.glow G.black 1
+        , Element.Border.innerGlow G.black 1
         ]
       , Element.mouseDown [ Element.alpha 0.6 ]
       ]
@@ -465,7 +467,7 @@ renderORInput model =
               [ Element.width Element.fill
               , Element.height (Element.px 10)
               , Element.centerY
-              , BG.color (rgb255 120 120 120)
+              , BG.color G.white
               ]
               Element.none
           )
@@ -485,7 +487,7 @@ renderORInput model =
       , Element.width Element.fill
       , Element.spacing 10
       , Element.pointer
-      , BG.color (rgb255 100 200 100)
+      , BG.color G.black
       , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
       ]
       [ isAvgCheckbox orCfg
@@ -518,7 +520,7 @@ renderArcheInput model =
               [ Element.width Element.fill
               , Element.height (Element.px 10)
               , Element.centerY
-              , BG.color (rgb255 120 120 120)
+              , BG.color G.white
               ]
               Element.none
           )
@@ -538,7 +540,7 @@ renderArcheInput model =
       , Element.width Element.fill
       , Element.spacing 10
       , Element.pointer
-      , BG.color (rgb255 200 100 100)
+      , BG.color G.black
       , Element.htmlAttribute
         (Html.Attributes.style "user-select" "none")
       ]
@@ -563,7 +565,7 @@ renderEBSDUpload model =
       , Element.width Element.fill
       , Element.spacing 10
       , Element.pointer
-      , BG.color (rgb255 200 100 100)
+      , BG.color G.black
       , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
       ]
       [ Element.map (SubmitEBSDFile << Just) <| Element.html (Upload.view upModel)
@@ -573,21 +575,12 @@ renderEBSDUpload model =
       ]
     Nothing -> toogleInput SubmitEBSDFile (Just Upload.Cancel)
 
--- =========== Colors ========
-blue : Color
-blue = Element.rgb255 238 238 238
-
-purple : Color
-purple = Element.rgb255 138 138 238
-
-insurelloBlue : Element.Color
-insurelloBlue = rgb255 59 139 186
-
 -- =========== Widgets ===========
 toogleInput : (Maybe a -> msg) -> Maybe a -> Element msg
 toogleInput func value = Input.button
   [ Font.size 40
   , Element.centerX
+  , Font.color <| G.black
   ]
   { onPress = Just (func value)
   , label = text <| case value of
@@ -597,8 +590,8 @@ toogleInput func value = Input.button
 
 submitButton : msg -> Element msg
 submitButton x = Input.button
-  [ BG.color blue
-  , Element.focused [ BG.color purple ]
+  [ BG.color G.black
+  , Element.focused [ BG.color G.black ]
   , Element.padding 5
   ]
   { onPress = Just x

@@ -1,12 +1,13 @@
 port module Page.SignIn exposing (Model, Msg, init, update, subscriptions, view)
 
 import GoogleSignIn
-import Element exposing (Color, Element, column, html, text)
+import Element exposing (Element, column, html, text)
 import Element.Background as BG
 import Element.Events as Events
 import Element.Input as Input
 import Json.Encode as E
 
+import Globals as G
 
 port googleSignOut : E.Value -> Cmd msg
 
@@ -53,8 +54,8 @@ view model = case model.profile of
         [ text profile.name
         , Input.button
             [ Events.onClick BeginSignOut
-            , BG.color purple
-            , Element.focused [ BG.color blue ]
+            , BG.color G.black
+            , Element.focused [ BG.color G.white ]
             , Element.padding 5
             ]
             { label = text "Sign Out"
@@ -71,10 +72,3 @@ view model = case model.profile of
             , GoogleSignIn.idAttr model.client_id
             ]
         ]
-
--- =========== Colors ========
-blue : Color
-blue = Element.rgb255 238 238 238
-
-purple : Color
-purple = Element.rgb255 138 138 238

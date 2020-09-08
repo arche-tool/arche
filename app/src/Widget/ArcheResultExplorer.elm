@@ -9,12 +9,13 @@ module Widget.ArcheResultExplorer exposing
 import Array exposing (Array)
 import Html.Attributes
 
-import Element exposing (Element, column, text, rgb255)
+import Element exposing (Element, column, text)
 import Element.Background as BG
 import Element.Border
 import Element.Input as Input
 
 import Type.Arche exposing (Arche, ArcheResult)
+import Globals as G
 import Utils exposing (..)
 
 type alias ArcheResultExplorer =
@@ -64,7 +65,7 @@ renderResultExplorer courier resultExplorer =
       , Element.spacing 5
       , Element.pointer
       , Element.centerX
-      , BG.color (rgb255 150 150 150)
+      , BG.color G.black
       , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
       ]
 
@@ -92,7 +93,7 @@ renderResultExplorer courier resultExplorer =
             [ Element.width Element.fill
             , Element.height (Element.px 10)
             , Element.centerY
-            , BG.color (rgb255 120 120 120)
+            , BG.color G.black
             ]
             Element.none
           )

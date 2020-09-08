@@ -12,6 +12,7 @@ import Time
 import Url
 import Url.Parser as Url
 
+import Globals as G
 import Page.Draw as Viewer
 import Page.SignIn as SignIn
 import Page.Navegate as Navegate
@@ -47,7 +48,6 @@ type alias Model =
 
 type Page
     = HomePage 
-    | UploadPage
     | ViewerPage
     | NavegatePage
 
@@ -154,7 +154,7 @@ view model =
   { title = "Arche"
   , body = [
       layout
-        [ Font.color (Element.rgb 0 0 1)
+        [ Font.color G.white
         , Font.size 16
         , Font.family
             [ Font.external
@@ -173,7 +173,7 @@ view model =
 sidePanel : Model -> List PageLink -> Element Msg
 sidePanel model channels =
     let
-      activeChannelAttrs = [ Background.color <| rgb255 117 179 201, Font.bold ]
+      activeChannelAttrs = [ Background.color <| G.black, Font.bold ]
       channelAttrs = [ Element.paddingXY 15 5, width fill ]
 
       channelEl channel = el (
@@ -197,8 +197,8 @@ sidePanel model channels =
         , width (px 175)
         , paddingXY 8 10
         , spacing 10
-        , Background.color <| rgb255 92 99 118
-        , Font.color <| rgb255 255 255 255
+        , Background.color <| G.black
+        , Font.color <| G.white
         ] <| [logo, signIn] ++ List.map channelEl channels
 
 type alias PageLink =
