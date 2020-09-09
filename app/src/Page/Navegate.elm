@@ -11,7 +11,7 @@ module Page.Navegate exposing (
 
 import Array exposing (Array)
 import Browser
-import Element exposing (Element, column, text, layout, row)
+import Element exposing (Element, column, text, layout, row, el)
 import Element.Background as BG
 import Element.Border
 import Element.Events
@@ -391,9 +391,17 @@ renderEbsd ebsd isSelected = column
 renderOREval : OREval -> Bool -> Element Msg
 renderOREval orEval isSelected = column
   (Element.Events.onClick (SelectedOR orEval.hashOR) :: boxShape isSelected)
-  [ text (degToText orEval.resultOR.misfitError.avgError)
-  , text orEval.hashOR
+  [ cardEnrty "avg. angular misfit" <| degToText orEval.resultOR.misfitError.avgError ++ "°"
+  , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.planeDeviation ++ "°"
+  , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.axisDeviation ++ "°"
   ]
+
+cardEnrty : String -> String -> Element Msg
+cardEnrty field value = row
+  [ Element.spaceEvenly
+  , Element.width Element.fill
+  ]
+  [ text field, text value ]
 
 renderArche : Arche -> Bool -> Element Msg
 renderArche arche isSelected =
@@ -401,8 +409,11 @@ renderArche arche isSelected =
     attrs =
       Element.Events.onClick (SelectedArche arche.hashArche) :: boxShape isSelected
     elms = 
-      [ text (String.fromInt arche.cfgArche.refinementSteps)
-      , text arche.hashArche
+      [ cardEnrty "steps" <| String.fromInt arche.cfgArche.refinementSteps
+      , cardEnrty "exclude floating grains" <| if arche.cfgArche.excludeFloatingGrains then "☑" else "☐"
+      , cardEnrty "initial cluster factor" <| floatToText arche.cfgArche.initClusterFactor
+      , cardEnrty "incremental cluster factor" <| floatToText arche.cfgArche.stepClusterFactor
+      , cardEnrty "angular misfit threshold" <| degToText arche.cfgArche.badAngle
       ]
   in column attrs elms
 
@@ -517,9 +528,11 @@ boxShape : Bool -> List (Element.Attribute msg)
 boxShape isSelected =
   [ Element.Border.rounded 3
   , Element.padding 3
+  , Element.spacing 3
   , Element.width Element.fill
   , Element.pointer
   , BG.color (if isSelected then G.colorA1 else G.colorA)
+  , Font.color <| if isSelected then G.white else G.black
   , Element.htmlAttribute
     (Html.Attributes.style "user-select" "none")
   , Element.mouseOver
