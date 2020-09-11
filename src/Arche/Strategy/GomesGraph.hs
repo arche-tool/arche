@@ -11,7 +11,8 @@
 module Arche.Strategy.GomesGraph
   ( run
   , processEBSD
-  , renderImage
+  , renderIPFImage
+  , renderAvgParentError
   , Cfg(..)
   , GomesState(..)
   ) where
@@ -486,10 +487,12 @@ getVoxBoxRange = (dimension . grainIDBox) <$> ask
 toPixelRGB8 :: (Word8, Word8, Word8) -> PixelRGB8
 toPixelRGB8 (r, g, b) = PixelRGB8 r g b
 
-testImage :: (Monad m)=> Gomes m (Image PixelRGB8)
-testImage = do
-  let nullColor = (255,255,255)
-  !vs <- genParentGrainBitmap nullColor (getCubicIPFColor . parentOrientation . snd)
+renderParentGrainMap :: (Monad m)
+  => ((Int, ParentGrain) -> (Word8, Word8, Word8))
+  -> (Word8, Word8, Word8)
+  -> Gomes m (Image PixelRGB8)
+renderParentGrainMap func vNull = do
+  !vs <- genParentGrainBitmap vNull (func )
 
   shape <- getVoxBoxRange
   let
@@ -499,8 +502,22 @@ testImage = do
       in toPixelRGB8 color
   return $ vs `deepseq` generateImage genBit (ux - lx) (uy - ly)
 
-renderImage :: (Monad m)=> Gomes m BSL.ByteString
-renderImage = encodePng <$> testImage
+renderIPFImage :: (Monad m)=> Gomes m BSL.ByteString
+renderIPFImage = encodePng <$>
+  renderParentGrainMap (getCubicIPFColor . parentOrientation . snd) (255,255,255)
+
+renderAvgParentError :: (Monad m)=> Gomes m BSL.ByteString
+renderAvgParentError = encodePng <$>
+  renderParentGrainMap (colorScale . (/ 45.0) . unDeg . avgError . parentAvgErrorFit . snd) (255,255,255)
+
+colorScale :: Double -> (Word8, Word8, Word8)
+colorScale x = let
+  t = x
+  v = 1 - x
+  (lr, lg, lb) = (255, 0, 0)
+  (ur, ug, ub) = (0, 255, 0)
+  in (floor $ lr * v + ur * t, floor $ lg * v + ug * t, floor $ lb * v + ub * t)
+
 
 -- ====================================== Plotting VTK ===================================================
 

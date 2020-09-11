@@ -76,13 +76,19 @@ runArcheHandler user hashE hashO cfg = do
     action = do
       factor <- gets GG.mclFactor
       let
-        hashR = calculateHashResult hashE hashO hashA (show factor ++ "IPF")
-      !bs <- GG.renderImage
-      obj <- lift $ savePngImage imageBucket hashR bs
+        hashIPF    = calculateHashResult hashE hashO hashA (show factor ++ "IPF")
+        hashAvgErr = calculateHashResult hashE hashO hashA (show factor ++ "AvgError")
+      
+      !bsIPF <- GG.renderIPFImage
+      objIPF <- lift $ savePngImage imageBucket hashIPF bsIPF
+
+      !bsAE <- GG.renderAvgParentError
+      objAE <- lift $ savePngImage imageBucket hashAvgErr bsAE
+
       return $ ArcheResult
         { mclFactor = factor
-        , parentIPF = obj
-        , errorMap  = obj
+        , parentIPF = objIPF
+        , errorMap  = objAE
         }
      
   !results <- GG.processEBSD (webCfgToCLICfg cfg orResult) ang action
