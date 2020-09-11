@@ -53,8 +53,10 @@ import Utils exposing (..)
 import Widget.ArcheResultExplorer exposing
   ( ArcheResultExplorer
   , newResult
-  , selectResult
+  , updateMcl 
+  , updateType 
   , renderResultExplorer
+  , ResultType (..)
   )
 
 -- =========== MAIN ===========
@@ -123,6 +125,7 @@ type Msg
   | SetORConfig (Maybe ORConfig)
   | SetArcheConfig (Maybe ArcheCfg)
   | SetResultMCL Float
+  | SetResultType ResultType
 
   | SubmitEBSDFile (Maybe Upload.Msg)
   | SubmitORConfig ORConfig
@@ -252,7 +255,9 @@ update msg model =
 
     SetArcheConfig archeCfg -> ({model | archeCfgInput = archeCfg}, Cmd.none)
 
-    SetResultMCL mcl -> ({model | archeResultView = Maybe.map (selectResult mcl) model.archeResultView}, Cmd.none)
+    SetResultMCL mcl -> ({model | archeResultView = Maybe.map (updateMcl mcl) model.archeResultView}, Cmd.none)
+   
+    SetResultType resTy -> ({model | archeResultView = Maybe.map (updateType resTy) model.archeResultView}, Cmd.none)
     
     ReceivedNewOR _ _ -> (model, Cmd.none)
 
@@ -336,7 +341,11 @@ renderArcheTree model =
       , renderORs    model
       , renderArches model
       ]
-    msgBuilder = { selectedMcl = SetResultMCL }
+    msgBuilder =
+      { selectedMcl = SetResultMCL
+      , selectedType = SetResultType
+      }
+    
     rv = maybe [] (List.singleton << renderResultExplorer msgBuilder) model.archeResultView
   in column
     [ Element.spacing 15
@@ -527,7 +536,7 @@ renderEBSDUpload model =
 boxShape : Bool -> List (Element.Attribute msg)
 boxShape isSelected =
   [ Element.Border.rounded 3
-  , Element.padding 3
+  , Element.padding 10
   , Element.spacing 3
   , Element.width Element.fill
   , Element.pointer
