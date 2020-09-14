@@ -508,14 +508,14 @@ renderIPFImage = encodePng <$>
 
 renderAvgParentError :: (Monad m)=> Gomes m BSL.ByteString
 renderAvgParentError = encodePng <$>
-  renderParentGrainMap (colorScale . (/ 45.0) . unDeg . avgError . parentAvgErrorFit . snd) (255,255,255)
+  renderParentGrainMap (colorScale . (/ 30.0) . unDeg . avgError . parentAvgErrorFit . snd) (255,255,255)
 
 colorScale :: Double -> (Word8, Word8, Word8)
 colorScale x = let
-  t = x
-  v = 1 - x
-  (lr, lg, lb) = (255, 0, 0)
-  (ur, ug, ub) = (0, 255, 0)
+  t = max 0.0 (min x 1.0)
+  v = 1.0 - t
+  (lr, lg, lb) = (0, 0, 255)
+  (ur, ug, ub) = (255, 0, 0)
   in (floor $ lr * v + ur * t, floor $ lg * v + ug * t, floor $ lb * v + ub * t)
 
 

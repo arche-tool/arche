@@ -19,6 +19,7 @@ import Element.Input as Input
 import Type.Arche exposing (Arche, ArcheResult, PublicLink)
 import Globals as G
 import Utils exposing (..)
+import Html
 
 type alias ArcheResultExplorer =
   { minMclFactor: Float
@@ -75,9 +76,28 @@ renderImg resultExplorer = case resultExplorer.selectedResult of
   Just (res, ty) -> 
     let
       link = getLinkByType res ty
-    in Element.image
-      [ Element.width (Element.px 400) ]
-      {src = link.publicLink, description = link.publicName}
+      legend = case ty of
+        ErrorMap -> Html.div
+          [ Html.Attributes.style "background-image" "linear-gradient(red, blue)"
+          , Html.Attributes.style "position" "absolute"
+          , Html.Attributes.style "border-style" "solid"
+          , Html.Attributes.style "border-color" "white"
+          , Html.Attributes.style "top" "30px"
+          , Html.Attributes.style "right" "10px"
+          , Html.Attributes.style "height" "100px"
+          , Html.Attributes.style "width" "20px"
+          , Html.Attributes.class "scale"
+          ] []
+        _ -> Html.div [] []
+    in Element.html <| Html.div []
+      [ Html.img
+        [ Html.Attributes.src link.publicLink
+        , Html.Attributes.alt link.publicName
+        , Html.Attributes.width 400
+        ] []
+      , legend
+      ]
+
   _ -> Element.none
 
 getLinkByType : ArcheResult -> ResultType -> PublicLink
