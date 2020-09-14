@@ -2,7 +2,11 @@
 /.cabal-sandbox/
 /.output/
 /.docker_images/
+/config-server.json
+/app/.firebase
+/profile/
 .DS_Store*
 .stack-root/
 .stack-work/
 .vscode/
+.credentials.json

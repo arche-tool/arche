@@ -1,0 +1,77 @@
+name: CI
+
+# Trigger the workflow on push or pull request, but only for the master branch
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ghc ${{ matrix.ghc }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        stack: ["latest"]
+        ghc: ["8.6.5"]
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+
+    - uses: actions/setup-haskell@v1.1
+      name: Setup Haskell Stack
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        stack-version: ${{ matrix.stack }}
+        enable-stack: true
+
+    - name: Setup node
+      uses: actions/setup-node@v1
+      with:
+        node-version: '12'
+
+    - name: Install elm-app
+      run: make setup-frontend-dev-env
+        
+    - uses: actions/cache@v1
+      name: Cache ~/.npm
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+    
+    - uses: actions/cache@v1
+      name: Cache ~/.stack
+      with:
+        path: ~/.stack
+        key: stack-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('stack.yaml.lock') }}
+        restore-keys: |
+          stack-${{ runner.os }}-${{ matrix.ghc }}-
+
+    - name: Build
+      run: |
+        make build
+
+    - name: Test
+      run: |
+        make run-test
+
+    - name: Build cli tool
+      run: |
+        make arche-cli
+
+    - name: Build server
+      run: |
+        make arche-server
+
+    - name: Build frontend
+      env:
+        ELM_APP_OAUTH_AZP: ${{ secrets.OAUTH_AZP }}
+      run: |
+        make build-frontend

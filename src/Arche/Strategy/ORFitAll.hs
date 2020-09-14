@@ -1,23 +1,45 @@
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE
+    BangPatterns
+  , DeriveGeneric
+  , FlexibleInstances
+  , RecordWildCards
+  #-}
 
 module Arche.Strategy.ORFitAll
   ( run
+  , processEBSD
   , Cfg(..)
+  , OrientationRelationship
+    ( orValue
+    , orAxis
+    , orAngle
+    )
+  , KSDeviation
+    ( directDeviation
+    , planeDeviation
+    , axisDeviation
+    )
+  , OREvaluation
+    ( orientationRelationship
+    , ksDeviation
+    , misfitError
+    )
+  , evaluateOR
   ) where
 
 import Control.Arrow       ((&&&))
-import Control.Monad       (when)
 import Data.Maybe          (mapMaybe)
 import Data.HashMap.Strict (HashMap)
 import Data.Vector.Unboxed (Vector)
+import GHC.Generics        (Generic)
 import System.FilePath
 import System.Random.TF
 import System.Random.TF.Init
 import System.Random.TF.Instances
-import qualified Data.Vector         as V
-import qualified Data.Vector.Unboxed as U
-import qualified Data.HashMap.Strict as HM
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Vector          as V
+import qualified Data.Vector.Unboxed  as U
+import qualified Data.HashMap.Strict  as HM
 
 import File.EBSD
 import Linear.Vect
@@ -34,55 +56,47 @@ import Arche.OR
 
 data Cfg =
   Cfg
-  { misoAngle   :: Deg
-  , ang_input   :: FilePath
-  , base_output :: FilePath
-  , optByAvg    :: Bool
-  , renderORMap :: Bool
-  , moreOR      :: [AxisPair]
-  } deriving (Show)
+  { misoAngle    :: Deg
+  , optByAvg     :: Bool
+  , predefinedOR :: Maybe AxisPair
+  } deriving (Generic, Show)
 
-run :: Cfg -> IO ()
-run cfg@Cfg{..} = do
-  ebsd <- readEBSD ang_input
-  let vbq = readEBSDToVoxBox
-            (C.rotation &&& C.phase   )
-            (A.rotation &&& A.phaseNum)
-            ebsd
+run :: Cfg -> FilePath -> FilePath -> IO ()
+run cfg@Cfg{..} ebsd_file base_output = do
+  bs <- BSL.readFile ebsd_file
+  (orEval, vtk) <- processEBSD cfg bs
+  printOREvaluation orEval 
+  writeUniVTKfile (base_output <.> "vtu") True vtk
+
+processEBSD :: Cfg -> BSL.ByteString -> IO (OREvaluation, VTK Vec3D)
+processEBSD cfg@Cfg{..} bs = do
   gen <- initTFGen
-  (gidBox, voxMap) <- maybe (error "No grain detected!") return
-                      (getGrainID' misoAngle Cubic vbq)
   let
-    mkr  = fst $ getMicroVoxel (gidBox, voxMap)
-    qmap = getGrainAverageQ vbq voxMap
-    getGoods = U.filter ((5 >) . evalMisoORWithKS)
+    vbq = either error id $ do
+      ebsd <- loadEBSD bs
+      readEBSDToVoxBox
+        (C.rotation &&& C.phase)
+        (A.rotation &&& A.phaseNum)
+        ebsd
+    (gidBox, voxMap) = maybe (error "No grain detected!") id (getGrainID' misoAngle Cubic vbq)
+    getGoods         = U.filter ((5 >) . evalMisoORWithKS)
+    mkr              = fst $ getMicroVoxel (gidBox, voxMap)
+    qmap             = getGrainAverageQ vbq voxMap
     segs
       | optByAvg  = getGoods $ getGBbyAverage  qmap mkr gen 1000
       | otherwise = getGoods $ getGBbySegments vbq  mkr gen 1000
 
-    -- fitting OR
     realOR = findORFace segs ksOR
+    !ror = maybe realOR (OR . toQuaternion) predefinedOR
+    !orEval = evaluateOR ror segs
+    vtk = renderVTK cfg vbq qmap mkr ror
 
-    doit (name, ror) = analyse cfg vbq qmap mkr segs name ror
-    inOR = zip (map (("OR"++) . show) [1::Int ..]) (map (OR . toQuaternion) moreOR)
+  return (orEval, vtk)
 
-  mapM_ doit $ ("Calculated", realOR) : inOR
-
-analyse :: Cfg -> VoxBox (Quaternion, Int) -> HashMap Int (Quaternion, Int) -> MicroVoxel
-        -> Vector ((Quaternion, Int), (Quaternion, Int)) -> String -> OR -> IO ()
-analyse Cfg{..} vbq qmap mkr segs name ror = let
-  err = faceerrorfunc segs (genTS ror)
-  -- render VTK images
-  vtk
-    | optByAvg  = renderGBOR        ror vbq qmap mkr
-    | otherwise = renderFaceVoxelOR ror vbq      mkr
-  in do
-    -- printout results
-    putStrLn $ "====================== " ++ name ++ " ======================"
-    putStrLn $ "Error: " ++ show err
-    showOR ror
-    showResult ror
-    when renderORMap $ writeUniVTKfile (base_output ++ name <.> "vtu") True vtk
+renderVTK :: Cfg -> VoxBox (Quaternion, Int) -> HashMap Int (Quaternion, Int) -> MicroVoxel -> OR -> VTK Vec3D
+renderVTK Cfg{..} vbq qmap mkr ror
+  | optByAvg  = renderGBOR        ror vbq qmap mkr
+  | otherwise = renderFaceVoxelOR ror vbq      mkr
 
 -- ================================== Find OR ============================================
 
@@ -190,16 +204,47 @@ faceMisoOR ors qmap face = maybe pi id getM
 --nw = OR $ toQuaternion $ mkAxisPair (Vec3 2 5 24) (Deg 45.98)
 --gt = OR $ toQuaternion $ mkAxisPair (Vec3 2 3 15) (Deg 44.23)
 
-showOR :: OR -> IO ()
-showOR ror = let
-  ap      = fromQuaternion (qOR ror)
-  (v,w)   = axisAngle ap
-  (h,k,l) = aproxToIdealAxis v 0.001
-  msg = "OR: " ++ show [h, k, l] ++ " " ++ show ((toAngle w):: Deg)
-  in putStrLn msg
+data OrientationRelationship
+  = OrientationRelationship
+  { orValue :: !OR
+  , orAxis :: !(Int, Int, Int)
+  , orAngle :: !Deg
+  } deriving (Generic, Show)
 
-showResult :: OR -> IO ()
-showResult ror = let
+data KSDeviation
+  = KSDeviation
+  { directDeviation :: !Deg
+  , planeDeviation :: !Deg
+  , axisDeviation :: !Deg
+  } deriving (Generic, Show)
+
+data OREvaluation
+  = OREvaluation
+  { orientationRelationship :: !OrientationRelationship
+  , ksDeviation :: !KSDeviation
+  , misfitError :: !FitError
+  } deriving (Generic, Show)
+
+evaluateOR :: OR -> Vector ((Quaternion, Int), (Quaternion, Int)) -> OREvaluation
+evaluateOR ror segs = OREvaluation
+  { orientationRelationship = mkOrientationRelationship ror
+  , ksDeviation = calculateKSDeviation ror
+  , misfitError = faceerrorfunc segs (genTS ror)
+  }
+
+mkOrientationRelationship :: OR -> OrientationRelationship
+mkOrientationRelationship ror = let
+  ap    = fromQuaternion (qOR ror)
+  (v,w) = axisAngle ap
+  axis  = aproxToIdealAxis v 0.001
+  in OrientationRelationship
+    { orValue = ror
+    , orAxis = axis
+    , orAngle = toAngle w
+    }
+
+calculateKSDeviation :: OR -> KSDeviation
+calculateKSDeviation ror = let
   rors = genTS ror
 
   evalManyOR :: (OR -> Double) -> Deg
@@ -212,7 +257,26 @@ showResult ror = let
   devPlane = evalVecRot (Vec3 1 1 0) (Vec3 1 1 1)
   devDir   = evalVecRot (Vec3 1 1 1) (Vec3 1 1 0)
   dev      = getMisoAngle Cubic (qOR ksOR) . qOR
-  in do
-    putStrLn ("Direct deviation from KS: "       ++ show (evalManyOR dev))
-    putStrLn ("Deviation from (111) <-> (110): " ++ show (evalManyOR devPlane))
-    putStrLn ("Deviation from [110] <-> [111]: " ++ show (evalManyOR devDir))
+  in KSDeviation
+    { directDeviation = evalManyOR dev
+    , planeDeviation = evalManyOR devPlane
+    , axisDeviation = evalManyOR devDir
+    }
+
+printKSDev :: KSDeviation -> IO ()
+printKSDev KSDeviation{..} = do
+  putStrLn $ "Direct deviation from KS: "       ++ show directDeviation
+  putStrLn $ "Deviation from (111) <-> (110): " ++ show planeDeviation
+  putStrLn $ "Deviation from [110] <-> [111]: " ++ show axisDeviation
+
+printOR :: OrientationRelationship -> IO ()
+printOR OrientationRelationship{..} = let
+  (h,k,l) = orAxis
+  msg = "OR: " ++ show [h, k, l] ++ " " ++ show orAngle
+  in putStrLn msg
+
+printOREvaluation :: OREvaluation -> IO ()
+printOREvaluation OREvaluation{..} = do
+  putStrLn $ "Error: " ++ show misfitError
+  printOR orientationRelationship
+  printKSDev ksDeviation

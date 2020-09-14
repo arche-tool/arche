@@ -3,10 +3,45 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: gogol-storage-0.5.0@sha256:ba90fd79b014316e0c6088b30f9757e2394bb8af4265615ca5ea284b930586f9,4815
+    pantry-tree:
+      size: 5847
+      sha256: 7ec8bf02b1826ac7cd317df2012da79c8527030f7b50cc1632a992592e231ad3
+  original:
+    hackage: gogol-storage-0.5.0@sha256:ba90fd79b014316e0c6088b30f9757e2394bb8af4265615ca5ea284b930586f9,4815
+- completed:
+    hackage: gogol-core-0.5.0@sha256:c0a919cd89a33de7fd6ee925abdb48b0eb5d1002a016124acbdff568f267e4c7,2821
+    pantry-tree:
+      size: 686
+      sha256: f3c803da46a2df6987b72098b3e7c6c2c0aeb141335d2a0d5630b210401bc2c8
+  original:
+    hackage: gogol-core-0.5.0@sha256:c0a919cd89a33de7fd6ee925abdb48b0eb5d1002a016124acbdff568f267e4c7,2821
+- completed:
+    hackage: gogol-0.5.0@sha256:01b38acf97ae0afb2465935fee1bebce03c1b84e629cf0887467be7ae361f0a7,3222
+    pantry-tree:
+      size: 1243
+      sha256: ab472e169f12b97837cdfca2262b2d6fb569ae17876cbc10e97186944a401866
+  original:
+    hackage: gogol-0.5.0@sha256:01b38acf97ae0afb2465935fee1bebce03c1b84e629cf0887467be7ae361f0a7,3222
+- completed:
+    hackage: cryptostore-0.2.1.0@sha256:9896e2984f36a1c8790f057fd5ce3da4cbcaf8aa73eb2d9277916886978c5b19,3881
+    pantry-tree:
+      size: 8596
+      sha256: e392f8dded050690140636b81433fb350bd87dd21643dde9a2f0aa344cf038e5
+  original:
+    hackage: cryptostore-0.2.1.0@sha256:9896e2984f36a1c8790f057fd5ce3da4cbcaf8aa73eb2d9277916886978c5b19,3881
+- completed:
+    hackage: cryptonite-0.26@sha256:43c722f3770c31f4c5376e7aa42645b104834103312e217aa7fe79316416d6df,17352
+    pantry-tree:
+      size: 22455
+      sha256: cbec4c7bd57508339510f18df64827dbd65eb7ede00db07a463a36aecdda077c
+  original:
+    hackage: cryptonite-0.26@sha256:43c722f3770c31f4c5376e7aa42645b104834103312e217aa7fe79316416d6df
 snapshots:
 - completed:
-    size: 496697
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/13/9.yaml
-    sha256: 3846ba7d13dd1b2679426dc3f450332a3b8a181063b0f3fc2d0c7d55db2e9c24
-  original: lts-13.9
+    size: 524996
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/14/27.yaml
+    sha256: 7ea31a280c56bf36ff591a7397cc384d0dff622e7f9e4225b47d8980f019a0f0
+  original: lts-14.27

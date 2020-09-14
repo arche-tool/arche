@@ -1,18 +1,21 @@
 [submodule "packages/sledge"]
 	path = packages/sledge
-	url = https://github.com/lostbean/sledge.git
+	url = git@github.com:lostbean/sledge.git
 [submodule "packages/queryforest"]
 	path = packages/queryforest
-	url = https://github.com/lostbean/queryforest.git
+	url = git@github.com:lostbean/queryforest.git
 [submodule "packages/hammer"]
 	path = packages/hammer
-	url = https://github.com/lostbean/hammer.git
+	url = git@github.com:lostbean/hammer.git
 [submodule "packages/linear-vect"]
 	path = packages/linear-vect
-	url = https://github.com/lostbean/linear-vect.git
+	url = git@github.com:lostbean/linear-vect.git
 [submodule "packages/vtk"]
 	path = packages/vtk
-	url = https://github.com/lostbean/vtk.git
+	url = git@github.com:lostbean/vtk.git
 [submodule "packages/mcl"]
 	path = packages/mcl
-	url = https://github.com/lostbean/mcl.git
+	url = git@github.com:lostbean/mcl.git
+[submodule "packages/gogol"]
+	path = packages/gogol
+	url = git@github.com:arche-tool/gogol.git

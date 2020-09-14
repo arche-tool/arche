@@ -1,5 +1,7 @@
 {-# LANGUAGE
-    ExistentialQuantification
+    BangPatterns
+  , DeriveGeneric
+  , ExistentialQuantification
   , GeneralizedNewtypeDeriving
   , MultiParamTypeClasses
   , TemplateHaskell
@@ -43,9 +45,12 @@ module Arche.OR
   , testMisoKS
   ) where
 
+import Control.DeepSeq     (NFData)
 import Data.Vector.Unboxed (Vector)
+import GHC.Generics        (Generic)
 import Data.Vector.Unboxed.Deriving
 import System.Random
+import qualified Data.List           as L
 import qualified Data.Vector         as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Generic as G
@@ -79,9 +84,15 @@ instance Rot QuaternionFZ where
   fromQuaternion = getQinFZ
   getOmega       = getOmega . qFZ
 
-newtype OR = OR {qOR :: Quaternion} deriving (Show, Semigroup, Monoid, Group, Rot)
+newtype OR
+  = OR
+  { qOR :: Quaternion
+  } deriving (Show, Semigroup, Monoid, Generic, Group, Rot, NFData)
 
-newtype PhaseID = PhaseID {phaseId :: Int} deriving (Show, Eq, Ord)
+newtype PhaseID
+  = PhaseID
+  { phaseId :: Int
+  } deriving (Show, Eq, Ord, Generic)
 
 mkOR :: Vec3D -> Deg -> OR
 mkOR v = OR . toQuaternion . mkAxisPair v
@@ -104,52 +115,64 @@ genTS (OR t) = let
   vs = V.convert $ getAllSymmVec (getSymmOps Cubic) v
   in G.map (OR . mergeQuaternion . (,) w) vs
 
-misoDoubleKS :: Symm -> Quaternion -> Quaternion -> Double
+misoDoubleKS :: Vector SymmOp -> Quaternion -> Quaternion -> Double
 misoDoubleKS = misoDoubleOR ksORs
 
-misoDoubleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
-misoDoubleOR ors symm q1 q2 = let
-  ks1 = U.map ((q1 #<=) . qOR) ors
-  ks2 = U.map ((q2 #<=) . qOR) ors
-  -- Fully correct. Need prove that works!
-  foo q = U.map (getMisoAngle symm q) ks2
-  in U.minimum $ U.concatMap foo ks1
+misoDoubleOR :: Vector OR -> Vector SymmOp -> Quaternion -> Quaternion -> Double
+misoDoubleOR ors symOps q1 q2 = let
+  lor = U.toList ors
+  func :: OR -> OR -> Double
+  func ora orb = let
+    ks1 = ((q1 #<=) . qOR) ora
+    ks2 = ((q2 #<=) . qOR) orb
+    in getMisoAngleFaster symOps ks1 ks2
+  in L.minimum [ func ora orb | ora <- lor, orb <- lor ]
 
-misoSingleOR :: Vector OR -> Symm -> Quaternion -> Quaternion -> Double
-misoSingleOR ors symm q1 q2 = let
-  ks = U.map ((q2 #<=) . qOR) ors
-  -- Fully correct. Need prove that works!
-  in U.minimum $ U.map (getMisoAngle symm q1) ks
+misoSingleOR :: Vector OR -> Vector SymmOp -> Quaternion -> Quaternion -> Double
+misoSingleOR ors symOps q1 q2 = let
+  ks = U.map (getMisoAngleFaster symOps q1 . (q2 #<=) . qOR) ors
+  in U.minimum ks
 
 data FitError
   = FitError
-  { avgError :: Deg
-  , devError :: Deg
-  , maxError :: Deg
-  } deriving (Show)
+  { avgError :: !Deg
+  , devError :: !Deg
+  , maxError :: !Deg
+  } deriving (Show, Generic)
+
+instance NFData FitError
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
 
 evalMisoOR :: Vector OR -> (Quaternion, Int) -> (Quaternion, Int) -> Double
 evalMisoOR ors (qa, pa) (qb, pb)
-  | pa == pb  = misoDoubleOR ors Cubic qa qb
-  | otherwise = misoSingleOR ors Cubic qa qb
+  | pa == pb  = misoDoubleOR ors symOps qa qb
+  | otherwise = misoSingleOR ors symOps qa qb
+  where
+    symOps = getSymmOps Cubic
 
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
 faceerrorfunc :: Vector ((Quaternion, Int), (Quaternion, Int)) -> Vector OR -> FitError
-faceerrorfunc ms ors = let
-  n     = fromIntegral (G.length ms)
-  errs  = G.map (uncurry (evalMisoOR ors)) ms
-  avg   = G.sum errs / n
-  diff  = G.map ((\x->x*x) . (-) avg) errs
-  dev   = sqrt (G.sum diff / n)
-  in FitError
-     { avgError = toAngle avg
-     , devError = toAngle dev
-     , maxError = toAngle (G.maximum errs)
-     }
+faceerrorfunc ms ors
+  | n == 0 = FitError
+    { avgError = toAngle 0.0
+    , devError = toAngle 0.0
+    , maxError = toAngle 0.0
+    }
+  | otherwise = let
+    errs  = G.map (uncurry (evalMisoOR ors)) ms
+    avg   = G.sum errs / n
+    diff  = G.map ((\x->x*x) . (-) avg) errs
+    dev   = sqrt (G.sum diff / n)
+    in FitError
+      { avgError = toAngle avg
+      , devError = toAngle dev
+      , maxError = toAngle (G.maximum errs)
+      }
+  where
+    n = fromIntegral (G.length ms)
 
 deltaVec3 :: (Vec3D -> Double) -> Vec3D -> (Double, Vec3D)
 deltaVec3 func v = let
@@ -257,13 +280,14 @@ weightederrorfunc ws ms arche ors
 -- ================================= Arche finder width kernel ===========================
 
 -- | Generate a PPODF (Possible Parent Orientation Function) using another ODF grid structure
--- for effeciecy sake. It also takes in consideranting both remaining paraents and products
+-- for efficiency sake. It also takes in consideration both remaining parents and products
 -- orientation.
 genPPODF :: ODF -> Vector OR -> Vector QuaternionFZ -> Vector QuaternionFZ -> ODF
-genPPODF odf ors rgs ms = addPoints (U.map qFZ rgs U.++ gs) (resetODF odf)
+genPPODF odf ors rgs ms = addPointsParallel qs (resetODF odf)
   where
     func m = U.map (toFZ Cubic . (m #<=) . qOR) ors
     gs     = U.concatMap (func . qFZ) ms
+    qs     = U.map qFZ rgs U.++ gs
 
 archeFinderKernel :: ODF -> Vector OR -> Vector QuaternionFZ
                   -> Vector QuaternionFZ -> (Quaternion, FitError)

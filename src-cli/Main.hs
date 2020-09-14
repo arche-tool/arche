@@ -21,32 +21,35 @@ import           Linear.Vect
 -- ===================================== Data & class ====================================
 
 class ParserCmdLine a where
-  runAlgo  :: a -> IO ()
-  validate :: a -> IO (Either a String)
+  runAlgo  :: a -> FilePath -> FilePath -> IO ()
+  validate :: FilePath -> a -> IO (Either a String)
 
-data RunMode = forall a . ParserCmdLine a => RunMode {config :: a}
+data RunMode = forall a . ParserCmdLine a => RunMode
+  { config :: a
+  , io_files :: (FilePath, FilePath)
+  }
 
 -- ========================================= Main ========================================
 
 parseMode :: Parser RunMode
 parseMode = subparser
  ( command "micro-features"
-   (info (RunMode <$> parseShowGraph)
+   (info (RunMode <$> parseShowGraph <*> parseInOut)
    (progDesc "Identify grain's ID, vertexes, edges and faces."))
  <> command "optimum-OR"
-   (info (RunMode <$> parseORFitAll)
+   (info (RunMode <$> parseORFitAll <*> parseInOut)
    (progDesc "Finds the best Orientation Relationship."))
  <> command "reconstruction"
-   (info (RunMode <$> parseGomesGraph)
+   (info (RunMode <$> parseGomesGraph <*> parseInOut)
    (progDesc "Reconstruction based on Gomes's method (graph clustering)."))
  )
 
 main :: IO ()
 main = do
-  RunMode mode <- execParser opts
-  cfg <- validate mode
+  RunMode mode (file_in, file_out) <- execParser opts
+  cfg <- validate file_in mode
   case cfg of
-    Left  c -> runAlgo c
+    Left  c -> runAlgo c file_in file_out
     Right s -> error s
   where
     opts = info (helper <*> parseMode)
@@ -84,11 +87,10 @@ parseOR = let
   func (v1, v2, v3, w) = mkAxisPair v (Deg w)
       where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
   in (func <$> option auto
-   (  long "or"
-   <> short 'r'
-   <> metavar "\"(Int,Int,Int,Double)\""
-   <> value (1,1,2,90)
-   <> help "The default OR is KS <1,1,2> (Deg 90)."))
+    (  long "or"
+    <> short 'r'
+    <> metavar "\"(Int,Int,Int,Double)\""
+    ))
 
 parseInOut :: Parser (FilePath, FilePath)
 parseInOut = let
@@ -110,9 +112,9 @@ goodInputFile fin = do
   when (not inOK) (putStrLn  $ "Invalid input file! " ++ fin)
   return inOK
 
-testInputFile :: (a -> FilePath) -> a -> IO (Either a String)
-testInputFile func cfg = do
-    inOk <- goodInputFile (func cfg)
+testInputFile :: FilePath -> a -> IO (Either a String)
+testInputFile file cfg = do
+    inOk <- goodInputFile file
     return $ if inOk
       then Left cfg
       else Right "Failed to read the input file."
@@ -121,41 +123,22 @@ testInputFile func cfg = do
 
 instance ParserCmdLine Graph.Cfg where
   runAlgo  = Graph.run
-  validate = testInputFile Graph.ang_input
+  validate = testInputFile
 
 parseShowGraph :: Parser Graph.Cfg
-parseShowGraph = let
-  func m (fin, fout) = Graph.Cfg m fin fout
-  in func
-     <$> parseMisoAngle
-     <*> parseInOut
+parseShowGraph = Graph.Cfg <$> parseMisoAngle
 
 -- ======================================= OR Fit All ====================================
 
 instance ParserCmdLine ORFitAll.Cfg where
   runAlgo  = ORFitAll.run
-  validate = testInputFile ORFitAll.ang_input
+  validate = testInputFile
 
 parseORFitAll :: Parser ORFitAll.Cfg
-parseORFitAll = let
-  func m (fin, fout) = ORFitAll.Cfg m fin fout
-  in func
-     <$> parseMisoAngle
-     <*> parseInOut
-     <*> parseORbyAvg
-     <*> parseRenderORMap
-     <*> parseORs
-
-parseORs :: Parser [AxisPair]
-parseORs = let
-  func :: (Int, Int, Int, Double) -> AxisPair
-  func (v1, v2, v3, w) = mkAxisPair v (Deg w)
-      where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
-  reader :: Parser (Int, Int, Int, Double)
-  reader = argument auto
-           (  metavar "(Int,Int,Int,Double)" <>
-              help "The default OR is KS <1,1,2> (Deg 90).")
-  in (map func <$> many reader)
+parseORFitAll = ORFitAll.Cfg
+  <$> parseMisoAngle
+  <*> parseORbyAvg
+  <*> optional parseOR
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch
@@ -163,34 +146,25 @@ parseORbyAvg = switch
    <> short 'a'
    <> help "Uses average grain orientation when optimizing OR")
 
-parseRenderORMap :: Parser Bool
-parseRenderORMap = switch
-   (  long "vtk"
-   <> short 'v'
-   <> help "Renders grain boundaries map with OR misorientation values.")
-
 -- ================================== GomesGraph =========================================
 
 instance ParserCmdLine GomesGraph.Cfg where
   runAlgo  = GomesGraph.run
-  validate = testInputFile GomesGraph.ang_input
+  validate = testInputFile
 
 parseGomesGraph :: Parser GomesGraph.Cfg
-parseGomesGraph = let
-  func m (fin, fout) mcl r f0 fk bw = GomesGraph.Cfg m fin fout mcl r f0 fk bw
-  in func
-     <$> parseMisoAngle
-     <*> parseInOut
-     <*> parseExtMCL
-     <*> parseNoFloatingGrains
-     <*> parseRefinementSteps
-     <*> parseInitCluster
-     <*> parseStepCluster
-     <*> parseBadAngle
-     <*> parseOR
-     <*> optional parseParentPhaseID
-     <*> parseOutputToANG
-     <*> parseOutputToCTF
+parseGomesGraph = GomesGraph.Cfg
+  <$> parseMisoAngle
+  <*> parseExtMCL
+  <*> parseNoFloatingGrains
+  <*> parseRefinementSteps
+  <*> parseInitCluster
+  <*> parseStepCluster
+  <*> parseBadAngle
+  <*> (OR.convert <$> parseOR)
+  <*> optional parseParentPhaseID
+  <*> parseOutputToANG
+  <*> parseOutputToCTF
 
 parseRefinementSteps :: Parser Word8
 parseRefinementSteps = option auto

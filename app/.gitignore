@@ -1,0 +1,6 @@
+/elm-stuff/
+/node_modules/
+/build/
+.DS_Store*
+.vscode/
+.env

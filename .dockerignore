@@ -1,0 +1,5 @@
+*
+!.output
+!.credentials.json
+!linux.Dockerfile
+!wine.Dockerfile

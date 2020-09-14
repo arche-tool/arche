@@ -1,0 +1,8 @@
+{
+  "name": "arche-dev-server-proxy",
+  "version": "1.0.0",
+  "devDependencies": {
+    "create-elm-app": "^4.2.23",
+    "http-proxy-middleware": "^1.0.4"
+  }
+}
