@@ -59,6 +59,7 @@ data Cfg =
   { misoAngle    :: Deg
   , optByAvg     :: Bool
   , predefinedOR :: Maybe AxisPair
+  , startOR      :: Maybe AxisPair
   } deriving (Generic, Show)
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
@@ -86,7 +87,7 @@ processEBSD cfg@Cfg{..} bs = do
       | optByAvg  = getGoods $ getGBbyAverage  qmap mkr gen 1000
       | otherwise = getGoods $ getGBbySegments vbq  mkr gen 1000
 
-    realOR = findORFace segs ksOR
+    realOR = findORFace segs $ maybe ksOR (OR . toQuaternion) startOR
     !ror = maybe realOR (OR . toQuaternion) predefinedOR
     !orEval = evaluateOR ror segs
     vtk = renderVTK cfg vbq qmap mkr ror

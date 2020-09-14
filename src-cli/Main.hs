@@ -92,6 +92,16 @@ parseOR = let
     <> metavar "\"(Int,Int,Int,Double)\""
     ))
 
+parseStartOR :: Parser AxisPair
+parseStartOR = let
+  func :: (Int, Int, Int, Double) -> AxisPair
+  func (v1, v2, v3, w) = mkAxisPair v (Deg w)
+      where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
+  in (func <$> option auto
+    (  long "start-or"
+    <> metavar "\"(Int,Int,Int,Double)\""
+    ))
+
 parseInOut :: Parser (FilePath, FilePath)
 parseInOut = let
   func a b = (a, getStdOut a b)
@@ -139,6 +149,7 @@ parseORFitAll = ORFitAll.Cfg
   <$> parseMisoAngle
   <*> parseORbyAvg
   <*> optional parseOR
+  <*> optional parseStartOR
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch
