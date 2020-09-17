@@ -388,8 +388,8 @@ plotErrFunc a = let
   errf = uniformerrorfunc fzqs
   (grid, vtk) = mkSO3 35 35 35
   es = G.map (\s -> fromAngle $ avgError $ uniformerrorfunc fzqs (so3ToQuaternion s) ksORs) grid
-  attr = mkPointAttr "Error function" (es U.!)
-  vtk' = addPointAttr vtk attr
+  attr = mkPointValueAttr "Error function" (\ix _ -> es U.! ix)
+  vtk' = addPointValueAttr vtk attr
 
   gi   = so3ToQuaternion $ grid U.! (U.minIndex es)
   in do
