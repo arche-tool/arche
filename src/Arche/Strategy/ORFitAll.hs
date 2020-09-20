@@ -67,7 +67,7 @@ run cfg@Cfg{..} ebsd_file base_output = do
   bs <- BSL.readFile ebsd_file
   (orEval, vtk) <- processEBSD cfg bs
   printOREvaluation orEval 
-  writeUniVTKfile (base_output <.> "vtu") True vtk
+  writeUniVTKfile (base_output <.> "vtp") True vtk
 
 processEBSD :: Cfg -> BSL.ByteString -> IO (OREvaluation, VTK Vec3D)
 processEBSD cfg@Cfg{..} bs = do

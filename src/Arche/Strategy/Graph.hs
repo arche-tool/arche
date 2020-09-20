@@ -45,9 +45,9 @@ run cfg ebsd_file base_output = do
     Left err -> error err
     Right (gids, micro, attrs) -> do
       writeUniVTKfile (base_output ++ ".vtr")        True $ renderVoxBoxVTK      gids attrs
-      writeUniVTKfile (base_output ++ "_faces.vtu")  True $ renderMicroFacesVTK  gids micro
-      writeUniVTKfile (base_output ++ "_edges.vtu")  True $ renderMicroEdgesVTK  gids micro
-      writeUniVTKfile (base_output ++ "_vertex.vtu") True $ renderMicroVertexVTK gids micro
+      writeUniVTKfile (base_output ++ "_faces.vtp")  True $ renderMicroFacesVTK  gids micro
+      writeUniVTKfile (base_output ++ "_edges.vtp")  True $ renderMicroEdgesVTK  gids micro
+      writeUniVTKfile (base_output ++ "_vertex.vtp") True $ renderMicroVertexVTK gids micro
 
 processEBSD :: Cfg -> BSL.ByteString -> Either String (VoxBox GrainID, MicroVoxel, [VTKAttrPoint a])
 processEBSD Cfg{..} bs = do
