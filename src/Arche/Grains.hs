@@ -16,6 +16,8 @@ import Hammer.VoxConn
 import Texture.Orientation
 import Texture.Symmetry
 
+import Arche.OR
+
 getGrainID :: Deg -> Symm -> VoxBox Quaternion
            -> Maybe (VoxBox GrainID, HashMap Int (Vector VoxelPos))
 getGrainID mis symm vbox = let
@@ -25,17 +27,16 @@ getGrainID mis symm vbox = let
   vboxSymm = vbox { grainID = U.map (toFZ symm) (grainID vbox) }
   in resetGrainIDs <$> grainFinder isGrain vboxSymm
 
-getGrainID' :: Deg -> Symm -> VoxBox (Quaternion, Int)
+getGrainID' :: Deg -> Symm -> VoxBox (Quaternion, PhaseID)
             -> Maybe (VoxBox GrainID, HashMap Int (Vector VoxelPos))
 getGrainID' mis symm vbox = let
   isGrain (qa, pa) (qb, pb) = let
     omega = getMisoAngle symm qa qb
     in pa == pb && abs (fromAngle mis) > omega
-  --vboxSymm = vbox { grainID = U.map (toFZ symm) (grainID vbox) }
   in resetGrainIDs <$> grainFinder isGrain vbox
 
-getGrainPhase :: VoxBox (Quaternion, Int) -> HashMap Int (V.Vector VoxelPos)
-              -> Int -> Maybe Int
+getGrainPhase :: VoxBox (Quaternion, PhaseID) -> HashMap Int (V.Vector VoxelPos)
+              -> Int -> Maybe PhaseID
 getGrainPhase vbqp gmap gid = HM.lookup gid gmap >>= func
   where func vs
           | V.null vs = Nothing

@@ -47,14 +47,16 @@ module Arche.OR
 
 import Control.DeepSeq     (NFData)
 import Data.Vector.Unboxed (Vector)
-import GHC.Generics        (Generic)
+import Data.Map            (Map)
 import Data.Vector.Unboxed.Deriving
+import GHC.Generics        (Generic)
 import System.Random
 import qualified Data.List           as L
 import qualified Data.Vector         as V
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Generic as G
 
+import File.EBSD (EBSDdata)
 import Linear.Vect
 import Hammer.Math.Optimum
 import Hammer.VTK
@@ -144,7 +146,7 @@ instance NFData FitError
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
 
-evalMisoOR :: Vector OR -> (Quaternion, Int) -> (Quaternion, Int) -> Double
+evalMisoOR :: (Eq a)=> Vector OR -> (Quaternion, a) -> (Quaternion, a) -> Double
 evalMisoOR ors (qa, pa) (qb, pb)
   | pa == pb  = misoDoubleOR ors symOps qa qb
   | otherwise = misoSingleOR ors symOps qa qb
@@ -154,7 +156,7 @@ evalMisoOR ors (qa, pa) (qb, pb)
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
-faceerrorfunc :: Vector ((Quaternion, Int), (Quaternion, Int)) -> Vector OR -> FitError
+faceerrorfunc :: Vector ((Quaternion, PhaseID), (Quaternion, PhaseID)) -> Vector OR -> FitError
 faceerrorfunc ms ors
   | n == 0 = FitError
     { avgError = toAngle 0.0
@@ -183,7 +185,7 @@ deltaVec3 func v = let
   d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
   in (x, Vec3 d1 d2 d3)
 
-findORFace :: Vector ((Quaternion, Int), (Quaternion, Int)) -> OR -> OR
+findORFace :: Vector ((Quaternion, PhaseID), (Quaternion, PhaseID)) -> OR -> OR
 findORFace qs t0 = let
   func = fromAngle . avgError . faceerrorfunc qs .
          genTS . OR . toQuaternion . mkUnsafeRodrigues
@@ -337,6 +339,11 @@ hotStartTesseract ors ms
     gavg  = averageQuaternionWithSymm Hexagonal (V.convert gc :: V.Vector Quaternion)
     eravg = uniformerrorfunc ms gavg ors
     ermax = uniformerrorfunc ms gmax ors
+
+-- ======================================= Unbox ==========================================
+
+getPhaseSymmetry :: EBSDdata -> [(PhaseID, Symm)] -> PhaseID -> Maybe Symm
+getPhaseSymmetry = undefined
 
 -- ======================================= Unbox ==========================================
 

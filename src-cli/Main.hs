@@ -150,6 +150,7 @@ parseORFitAll = ORFitAll.Cfg
   <*> parseORbyAvg
   <*> optional parseOR
   <*> optional parseStartOR
+  <*> pure mempty
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch

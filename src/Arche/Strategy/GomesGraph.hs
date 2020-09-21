@@ -111,7 +111,7 @@ data GomesConfig
   , realOR          :: OR
   , realORs         :: Vector OR
   , inputEBSD       :: EBSDdata
-  , orientationBox  :: VoxBox (Quaternion, Int)
+  , orientationBox  :: VoxBox (Quaternion, PhaseID)
   , grainIDBox      :: VoxBox GrainID
   , structureGraph  :: MicroVoxel
   , productGrains   :: HashMap Int ProductGrain
@@ -161,8 +161,8 @@ getGomesConfig :: Cfg -> OR -> Either String EBSDdata -> LoggerSet -> Either Str
 getGomesConfig cfg ror maybeEBSD logger = do
   ebsd  <- maybeEBSD 
   qpBox <- readEBSDToVoxBox
-          (C.rotation &&& C.phase)
-          (A.rotation &&& A.phaseNum)
+          (C.rotation &&& (PhaseID . C.phase))
+          (A.rotation &&& (PhaseID . A.phaseNum))
           ebsd
   let 
     noIsleGrains = excludeFloatingGrains cfg
@@ -253,7 +253,7 @@ filterIsleGrains Graph{..} = let
   clean2  = L.foldl' foo clean1 singles
   in Graph clean2
 
-getFaceIDmisOR :: VoxBox (Quaternion, Int) -> MicroVoxel -> Vector OR
+getFaceIDmisOR :: VoxBox (Quaternion, PhaseID) -> MicroVoxel -> Vector OR
                -> FaceID -> Maybe Double
 getFaceIDmisOR vbq micro ors fid = let
   facelist = getFaceProp fid micro >>= getPropValue
@@ -263,7 +263,7 @@ getFaceIDmisOR vbq micro ors fid = let
     in (t / n) :: Double
   in func <$> facelist
 
-getFaceVoxelmisOR :: VoxBox (Quaternion, Int) -> Vector OR -> FaceVoxelPos -> Double
+getFaceVoxelmisOR :: VoxBox (Quaternion, PhaseID) -> Vector OR -> FaceVoxelPos -> Double
 getFaceVoxelmisOR vbq ors face = let
   (v1, v2) = getFaceVoxels face
   q1 = vbq #! v1
@@ -277,7 +277,7 @@ getFaceVoxels (Fx pos) = (pos, pos #+# VoxelPos (-1) 0 0)
 getFaceVoxels (Fy pos) = (pos, pos #+# VoxelPos 0 (-1) 0)
 getFaceVoxels (Fz pos) = (pos, pos #+# VoxelPos 0 0 (-1))
 
-graphWeight :: Bool -> VoxBox (Quaternion, Int) -> MicroVoxel -> OR -> Graph Int Double
+graphWeight :: Bool -> VoxBox (Quaternion, PhaseID) -> MicroVoxel -> OR -> Graph Int Double
 graphWeight noIsleGrains vbq micro withOR = let
   fs    = HM.keys $ microFaces micro
   ors   = genTS withOR
@@ -291,7 +291,7 @@ graphWeight noIsleGrains vbq micro withOR = let
 
 -- ================================== Grain Data ===================================
 
-getProductGrainData :: VoxBox (Quaternion, Int) -> HashMap Int (V.Vector VoxelPos) -> HashMap Int ProductGrain
+getProductGrainData :: VoxBox (Quaternion, PhaseID) -> HashMap Int (V.Vector VoxelPos) -> HashMap Int ProductGrain
 getProductGrainData vbq gmap = let
   getAvgQ = getQinFZ . averageQuaternionWithSymm Cubic . V.map (fst . (vbq #!))
   getAvgPos v = let
@@ -303,7 +303,7 @@ getProductGrainData vbq gmap = let
            { productVoxelPos       = V.map (boxdim %@) x
            , productAvgOrientation = getAvgQ x
            , productAvgPos         = getAvgPos x
-           , productPhase          = PhaseID $ fromMaybe (-1) (getGrainPhase vbq gmap gid)
+           , productPhase          = fromMaybe (PhaseID $ -1) (getGrainPhase vbq gmap gid)
            }
   in HM.mapWithKey func gmap
 
@@ -572,7 +572,7 @@ plotVTK base_file = do
   attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Product Parent Orientation Component [IPF]"
   let
     attrVoxAIPF  = genVoxBoxAttr "Voxel Product Orientation [IPF]" (getCubicIPFColor . fst) orientationBox
-    attrVoxPhase = genVoxBoxAttr "Voxel Phase ID" snd orientationBox
+    attrVoxPhase = genVoxBoxAttr "Voxel Phase ID" (phaseId . snd) orientationBox
     vtkD  = renderVoxBoxVTK grainIDBox attrs
     attrs = [ attrAvgGIPF
             , attrGIPF
