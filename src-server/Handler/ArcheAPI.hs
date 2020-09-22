@@ -150,7 +150,8 @@ webCfgToCLICfg (ArcheCfg {..}) orResult = let
   , GG.stepClusterFactor      = stepClusterFactor
   , GG.badAngle               = badAngle
   , GG.withOR                 = orValue
-  , GG.parentPhaseID          = parentPhaseID
+  , GG.productPhase           = productPhase
+  , GG.parentPhase            = parentPhase
   , GG.outputANGMap           = False
   , GG.outputCTFMap           = False
 }

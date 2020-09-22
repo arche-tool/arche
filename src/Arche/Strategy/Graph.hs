@@ -9,6 +9,7 @@ module Arche.Strategy.Graph
 
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Vector.Unboxed  as U
+import Control.Arrow ((&&&))
 import Data.Word
 
 import qualified File.ANGReader as A
@@ -23,10 +24,13 @@ import Texture.Orientation
 import Texture.IPF
 
 import Arche.Grains
+import Arche.OR
 
 data Cfg =
   Cfg
   { misoAngle   :: Deg
+  , parentPhase  :: Maybe (PhaseID, Symm)
+  , productPhase :: (PhaseID, Symm)
   } deriving (Show)
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
@@ -49,17 +53,24 @@ run cfg ebsd_file base_output = do
       writeUniVTKfile (base_output ++ "_edges.vtp")  True $ renderMicroEdgesVTK  gids micro
       writeUniVTKfile (base_output ++ "_vertex.vtp") True $ renderMicroVertexVTK gids micro
 
+getSymmSelector :: Cfg -> (PhaseID -> Maybe Symm)
+getSymmSelector Cfg{..} = case parentPhase of  
+  Just (parentPh, parentSy) -> \ph -> if ph == parentPh then Just parentSy else if ph == fst productPhase then Just (snd productPhase) else Nothing 
+  _                         -> \ph -> if ph == fst productPhase then Just (snd productPhase) else Nothing 
+
 processEBSD :: Cfg -> BSL.ByteString -> Either String (VoxBox GrainID, MicroVoxel, [VTKAttrPoint a])
-processEBSD Cfg{..} bs = do
+processEBSD cfg@Cfg{..} bs = do
   ebsd <- loadEBSD bs
-  vbp <- readEBSDToVoxBox C.phase    A.phaseNum ebsd
-  vbq <- readEBSDToVoxBox C.rotation A.rotation ebsd
-  case getGrainID misoAngle Cubic (vbq) of
+  vbq <- readEBSDToVoxBox
+    (C.rotation &&& (PhaseID . C.phase))
+    (A.rotation &&& (PhaseID . A.phaseNum))
+    ebsd
+  case getGrainID misoAngle (getSymmSelector cfg) vbq of
     Nothing -> Left "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg
       attrGID   = genVoxBoxAttr "GrainID" unGrainID gids
-      attrIPF   = genVoxBoxAttr "IPF"   getCubicIPFColor vbq
-      attrPhase = genVoxBoxAttr "Phase" id vbp
+      attrIPF   = genVoxBoxAttr "IPF"   (getCubicIPFColor .fst) vbq
+      attrPhase = genVoxBoxAttr "Phase" (phaseId . snd) vbq
       attrs = [attrGID, attrIPF, attrPhase]
       in Right (gids, micro, attrs)

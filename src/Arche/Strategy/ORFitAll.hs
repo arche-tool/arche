@@ -30,7 +30,6 @@ module Arche.Strategy.ORFitAll
 import Control.Arrow       ((&&&))
 import Data.Maybe          (mapMaybe)
 import Data.HashMap.Strict (HashMap)
-import Data.Map            (Map)
 import Data.Vector.Unboxed (Vector)
 import GHC.Generics        (Generic)
 import System.FilePath
@@ -61,7 +60,8 @@ data Cfg =
   , optByAvg     :: Bool
   , predefinedOR :: Maybe AxisPair
   , startOR      :: Maybe AxisPair
-  , symmetries   :: [(PhaseID, Symm)]
+  , parentPhase  :: Maybe (PhaseID, Symm)
+  , productPhase :: (PhaseID, Symm)
   } deriving (Generic, Show)
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
@@ -71,17 +71,23 @@ run cfg@Cfg{..} ebsd_file base_output = do
   printOREvaluation orEval 
   writeUniVTKfile (base_output <.> "vtp") True vtk
 
+getSymmSelector :: Cfg -> (PhaseID -> Maybe Symm)
+getSymmSelector Cfg{..} = case parentPhase of  
+  Just (parentPh, parentSy) -> \ph -> if ph == parentPh then Just parentSy else if ph == fst productPhase then Just (snd productPhase) else Nothing 
+  _                         -> \ph -> if ph == fst productPhase then Just (snd productPhase) else Nothing 
+
 processEBSD :: Cfg -> BSL.ByteString -> IO (OREvaluation, VTK Vec3D)
 processEBSD cfg@Cfg{..} bs = do
   gen <- initTFGen
   let
+    symmSelector = getSymmSelector cfg
     vbq = either error id $ do
       ebsd <- loadEBSD bs
       readEBSDToVoxBox
         (C.rotation &&& (PhaseID . C.phase))
         (A.rotation &&& (PhaseID . A.phaseNum))
         ebsd
-    (gidBox, voxMap) = maybe (error "No grain detected!") id (getGrainID' misoAngle Cubic vbq)
+    (gidBox, voxMap) = maybe (error "No grain detected!") id (getGrainID misoAngle symmSelector vbq)
     getGoods         = U.filter ((5 >) . evalMisoORWithKS)
     mkr              = fst $ getMicroVoxel (gidBox, voxMap)
     qmap             = getGrainAverageQ vbq voxMap

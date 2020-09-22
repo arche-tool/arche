@@ -77,7 +77,8 @@ data Cfg =
   , stepClusterFactor      :: Double
   , badAngle               :: Deg
   , withOR                 :: OR
-  , parentPhaseID          :: Maybe PhaseID
+  , parentPhase            :: Maybe (PhaseID, Symm)
+  , productPhase           :: (PhaseID, Symm)
   , outputANGMap           :: Bool
   , outputCTFMap           :: Bool
   } deriving (Show, Generic)
@@ -87,7 +88,7 @@ data ProductGrain =
   { productVoxelPos       :: !(V.Vector Int)
   , productAvgOrientation :: !QuaternionFZ
   , productAvgPos         :: !Vec3D
-  , productPhase          :: !PhaseID
+  , productPhaseID        :: !PhaseID
   } deriving (Show)
 
 data ParentGrain =
@@ -157,6 +158,11 @@ logParentStats parents = let
 
 -- =======================================================================================
 
+getSymmSelector :: Cfg -> (PhaseID -> Maybe Symm)
+getSymmSelector Cfg{..} = case parentPhase of  
+  Just (parentPh, parentSy) -> \ph -> if ph == parentPh then Just parentSy else if ph == fst productPhase then Just (snd productPhase) else Nothing 
+  _                         -> \ph -> if ph == fst productPhase then Just (snd productPhase) else Nothing 
+
 getGomesConfig :: Cfg -> OR -> Either String EBSDdata -> LoggerSet -> Either String GomesConfig
 getGomesConfig cfg ror maybeEBSD logger = do
   ebsd  <- maybeEBSD 
@@ -165,6 +171,7 @@ getGomesConfig cfg ror maybeEBSD logger = do
           (A.rotation &&& (PhaseID . A.phaseNum))
           ebsd
   let 
+    symmSelector = getSymmSelector cfg
     noIsleGrains = excludeFloatingGrains cfg
     func (gidBox, voxMap) = let
       micro = fst $ getMicroVoxel (gidBox, voxMap)
@@ -181,7 +188,7 @@ getGomesConfig cfg ror maybeEBSD logger = do
         , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
         , stdoutLogger   = logger
         }
-  maybe (Left "No grain detected!") (Right . func) (getGrainID' (misoAngle cfg) Cubic qpBox)
+  maybe (Left "No grain detected!") (Right . func) (getGrainID (misoAngle cfg) symmSelector qpBox)
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
@@ -206,7 +213,7 @@ getTransformedProduct cfg (q, phase) p
   | otherwise              = findBestTransformation ors (parentOrientation p) q
   where
     ors   = realORs cfg
-    phaseRef = parentPhaseID . inputCfg $ cfg
+    phaseRef = fmap fst . parentPhase . inputCfg $ cfg
 
 findBestTransformation ::  Vector OR -> Quaternion -> Quaternion -> Quaternion
 findBestTransformation ors ref q = let
@@ -303,26 +310,28 @@ getProductGrainData vbq gmap = let
            { productVoxelPos       = V.map (boxdim %@) x
            , productAvgOrientation = getAvgQ x
            , productAvgPos         = getAvgPos x
-           , productPhase          = fromMaybe (PhaseID $ -1) (getGrainPhase vbq gmap gid)
+           , productPhaseID        = fromMaybe (PhaseID $ -1) (getGrainPhase vbq gmap gid)
            }
   in HM.mapWithKey func gmap
 
 getParentGrainData :: GomesConfig -> [Int] -> ParentGrain
 getParentGrainData GomesConfig{..} mids = let
+  parentPh = fmap fst . parentPhase $ inputCfg
+
   getInfo mid = HM.lookup mid productGrains >>= \ProductGrain{..} ->
-    return (fromIntegral . V.length $ productVoxelPos, productAvgOrientation, productPhase)
+    return (fromIntegral . V.length $ productVoxelPos, productAvgOrientation, productPhaseID)
 
   -- Calculate parent's properties
   info = U.fromList $ mapMaybe getInfo mids
   wt   = U.foldl' (\acc (w,_,_) -> acc + w) 0 info
 
   --(arche, err) = getWArcheTess (parentPhaseID inputCfg) realORs info
-  (arche, err) = getWArcheKernel orientationGrid (parentPhaseID inputCfg) realORs info
+  (arche, err) = getWArcheKernel orientationGrid parentPh realORs info
 
   getFitInfo :: (Double, QuaternionFZ, PhaseID) -> ParentProductFit
   getFitInfo (wi, qi, phase)
-    | Just phase == parentPhaseID inputCfg = ParentProductFit (wi / wt) 0 (-1, mempty)
-    | otherwise                            = ParentProductFit (wi / wt) gerr nvar
+    | Just phase == parentPh = ParentProductFit (wi / wt) 0 (-1, mempty)
+    | otherwise              = ParentProductFit (wi / wt) gerr nvar
     where
       (gerr, nvar) = singleerrorfunc qi arche realORs
 
@@ -455,7 +464,7 @@ genParentProductFitBitmap nullvalue func = do
   GomesState{..}  <- get
   let
     nvox    = U.length . grainID $ grainIDBox
-    getProd = fmap (V.convert . productVoxelPos &&& productPhase) . flip HM.lookup productGrains
+    getProd = fmap (V.convert . productVoxelPos &&& productPhaseID) . flip HM.lookup productGrains
     fillAllGrains m p = zipWithM_ fillSingleGrain (parentErrorPerProduct p) vis
       where
       vis  = mapMaybe getProd (productMembers p)
@@ -595,7 +604,7 @@ plotVTK base_file = do
 
 genParentEBSD :: (Monad m)=> Gomes m (Either ANGdata CTFdata)
 genParentEBSD = do
-  pp <- asks (parentPhaseID . inputCfg)
+  pp <- asks (fmap fst . parentPhase . inputCfg)
   qs <- U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
   ebsd <- asks inputEBSD
   return $ case ebsd of

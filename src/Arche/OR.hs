@@ -342,11 +342,6 @@ hotStartTesseract ors ms
 
 -- ======================================= Unbox ==========================================
 
-getPhaseSymmetry :: EBSDdata -> [(PhaseID, Symm)] -> PhaseID -> Maybe Symm
-getPhaseSymmetry = undefined
-
--- ======================================= Unbox ==========================================
-
 derivingUnbox "QuaternionFZ"
     [t| QuaternionFZ -> Quaternion |]
     [| \(QuaternionFZ q) -> q |]

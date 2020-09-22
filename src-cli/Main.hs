@@ -16,6 +16,7 @@ import           Options.Applicative
 import           System.FilePath
 
 import           Texture.Orientation         (Deg(..), mkAxisPair, AxisPair)
+import           Texture.Symmetry            (Symm(..))
 import           Linear.Vect
 
 -- ===================================== Data & class ====================================
@@ -136,7 +137,10 @@ instance ParserCmdLine Graph.Cfg where
   validate = testInputFile
 
 parseShowGraph :: Parser Graph.Cfg
-parseShowGraph = Graph.Cfg <$> parseMisoAngle
+parseShowGraph = Graph.Cfg
+  <$> parseMisoAngle
+  <*> optional parseParent
+  <*> parseProduct
 
 -- ======================================= OR Fit All ====================================
 
@@ -150,7 +154,8 @@ parseORFitAll = ORFitAll.Cfg
   <*> parseORbyAvg
   <*> optional parseOR
   <*> optional parseStartOR
-  <*> pure mempty
+  <*> optional parseParent
+  <*> parseProduct
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch
@@ -174,7 +179,8 @@ parseGomesGraph = GomesGraph.Cfg
   <*> parseStepCluster
   <*> parseBadAngle
   <*> (OR.convert <$> parseOR)
-  <*> optional parseParentPhaseID
+  <*> optional parseParent
+  <*> parseProduct
   <*> parseOutputToANG
   <*> parseOutputToCTF
 
@@ -213,12 +219,44 @@ parseBadAngle = ((Deg . abs) <$> option auto
    <> value 5
    <> help "The default error is 5 deg."))
 
+parseParent :: Parser (OR.PhaseID, Symm)
+parseParent = (,) <$> parseParentPhaseID <*> parseParentSymm
+
+parseProduct :: Parser (OR.PhaseID, Symm)
+parseProduct = (,) <$> parseProductPhaseID <*> parseProductSymm
+
 parseParentPhaseID :: Parser OR.PhaseID
 parseParentPhaseID = OR.PhaseID <$> option auto
-   (  long "parentPhaseID"
-   <> short 'g'
+   (  long "parentPhase"
    <> metavar "Int"
-   <> help "ID number of parent phase in the ANG file, if present.")
+   <> help "ID number of parent phase in the ANG/CTF file, if present.")
+
+parseProductPhaseID :: Parser OR.PhaseID
+parseProductPhaseID = OR.PhaseID <$> option auto
+   (  long "productPhase"
+   <> metavar "Int"
+   <> help "ID number of product phase in the ANG/CTF file, if present.")
+
+symmReader :: String -> Maybe Symm
+symmReader x = case x of
+  "cubic"     -> Just Cubic
+  "hexagonal" -> Just Hexagonal
+  "bcc"       -> Just Cubic
+  "fcc"       -> Just Cubic
+  "hcp"       -> Just Hexagonal
+  _           -> Nothing
+
+parseParentSymm :: Parser Symm
+parseParentSymm = option (maybeReader symmReader)
+  (  long "parentSymmetry"
+   <> metavar "symmetry"
+   <> help "Type of symmetry on parent phase.")
+
+parseProductSymm :: Parser Symm
+parseProductSymm = option (maybeReader symmReader)
+  (  long "productSymmetry"
+   <> metavar "symmetry"
+   <> help "Type of symmetry on product phase.")
 
 parseExtMCL :: Parser Bool
 parseExtMCL = switch
