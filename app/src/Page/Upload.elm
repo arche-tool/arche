@@ -13,7 +13,7 @@ module Page.Upload exposing (
   )
 
 import Browser
-import File exposing (File)
+import File exposing (File, name)
 import Html exposing (Html, div, input, progress, button, h1, text)
 import Html.Attributes as A
 import Html.Events as E
@@ -21,6 +21,7 @@ import Http
 import Json.Decode as D
 import Json.Encode as JE
 import Type.EBSD exposing (EBSD, ebsdDecoder)
+import Url exposing (percentEncode)
 
 
 -- =========== MAIN ===========
@@ -79,7 +80,7 @@ type Msg
   | GotFiles (List File)
   | UploadLink File (Result Http.Error StorageLink)
   | GotProgress Http.Progress
-  | Uploaded String (Result Http.Error ())
+  | Uploaded String StorageLink (Result Http.Error ())
   | Inserted (Result Http.Error EBSD)
   | Cancel
 
@@ -121,7 +122,7 @@ update msg model =
               , url = link.signedLink
               , headers = hs
               , body = Http.fileBody file
-              , expect = Http.expectWhatever (Uploaded link.objectName)
+              , expect = Http.expectWhatever (Uploaded (name file) link)
               , timeout = Nothing
               , tracker = Just "upload"
               }
@@ -135,7 +136,7 @@ update msg model =
         Http.Receiving _ ->
           (model, Cmd.none)
 
-    Uploaded objectNane result ->
+    Uploaded name link result ->
       case result of
         Err _    -> ({model | state = Fail}, Cmd.none)
         Ok  _ -> 
@@ -146,9 +147,9 @@ update msg model =
           in ( {model | state = Processing}
             , Http.request
               { method = "POST"
-              , url = "/api/ebsd"
+              , url = "/api/ebsd?alias=" ++ percentEncode name
               , headers = hs
-              , body = Http.jsonBody (JE.object [("objFullName", JE.string objectNane)])
+              , body = Http.jsonBody (JE.object [("objFullName", JE.string link.objectName)])
               , expect = Http.expectJson Inserted ebsdDecoder
               , timeout = Nothing
               , tracker = Just "upload-link"
