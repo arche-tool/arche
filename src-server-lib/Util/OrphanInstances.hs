@@ -39,6 +39,9 @@ instance ToJSON TO.AxisPair
 instance ToJSON TS.Symm
 instance ToJSON TS.SymmAxis
 
+instance ToJSON F.EBSDmeta
+instance ToJSON F.EBSDphase
+
 instance (ToJSON a) => ToJSON (LV.Vec2 a)
 instance (ToJSON a) => ToJSON (LV.Vec3 a)
 instance (ToJSON a) => ToJSON (LV.Vec4 a)
@@ -61,6 +64,9 @@ instance FromJSON TO.Deg
 
 instance FromJSON TS.Symm
 instance FromJSON TS.SymmAxis
+
+instance FromJSON F.EBSDmeta
+instance FromJSON F.EBSDphase
 
 instance (FromJSON a) => FromJSON (LV.Vec2 a)
 instance (FromJSON a) => FromJSON (LV.Vec3 a)
@@ -124,6 +130,8 @@ instance ToDocValue TS.SymmAxis
 instance ToDocValue OR.FitError
 instance ToDocValue OR.OR
 instance ToDocValue OR.PhaseID
+instance ToDocValue F.EBSDmeta
+instance ToDocValue F.EBSDphase
 
 instance (ToDocValue a) => ToDocValue (LV.Vec3 a)
 instance (ToDocValue a) => ToDocValue (LV.Vec2 a)
@@ -142,6 +150,8 @@ instance FromDocValue TS.SymmAxis
 instance FromDocValue OR.FitError
 instance FromDocValue OR.OR
 instance FromDocValue OR.PhaseID
+instance FromDocValue F.EBSDmeta
+instance FromDocValue F.EBSDphase
 
 instance (FromDocValue a) => FromDocValue (LV.Vec3 a)
 instance (FromDocValue a) => FromDocValue (LV.Vec2 a)

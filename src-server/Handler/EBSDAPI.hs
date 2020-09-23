@@ -12,6 +12,7 @@ import Control.Monad.IO.Class       (liftIO)
 import Control.Monad.Trans.Resource (throwM)
 import Data.Maybe                   (mapMaybe)
 import Data.String                  (fromString)
+import Data.Text                    (Text)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
 import Servant
@@ -24,7 +25,7 @@ import qualified Network.Google           as Google
 import qualified Network.Google.FireStore as FireStore
 import qualified Network.Google.Storage   as Storage
 
-import File.EBSD (loadEBSD, EBSDdata(ANG, CTF))
+import File.EBSD (loadEBSD, getEBSDmeta)
 
 import Type.API
 import Type.Storage
@@ -93,22 +94,21 @@ getEBSDs user = do
   resp <- Google.send (FireStore.projectsDatabasesDocumentsRunQuery db commitReq)
   return . mapMaybe (fmap (either error id . fromDoc) . view FireStore.rDocument) $ resp
 
-uploadEbsdAPI :: User -> StorageObjectName -> Handler EBSD
-uploadEbsdAPI user obj = runGCPWith $ do
+uploadEbsdAPI :: User -> StorageObjectName -> Maybe Text -> Handler EBSD
+uploadEbsdAPI user obj alias = runGCPWith $ do
   logGGInfo $ logMsg ("Starting to process upload from user" :: String) (id_number user)
   bs       <- readEBSD landingZoneBucket obj
   ebsdBlob <- either shout400 return (loadEBSD bs)
-  let ebsdHash = calculateHashEBSD ebsdBlob 
+  let
+    ebsdHash = calculateHashEBSD ebsdBlob 
+    metadata = getEBSDmeta ebsdBlob
   logGGInfo $ logMsg ("Submiting EBSD map with hash" :: String) ebsdHash
-  case ebsdBlob of
-    CTF _ -> do
-      saveEBSD ebsdBucket ebsdHash bs
-    ANG _ -> do
-      saveEBSD ebsdBucket ebsdHash bs
+  saveEBSD ebsdBucket ebsdHash bs
   let ebsd = EBSD
-           { alias     = ""
+           { alias     = maybe "" id alias
            , hashEBSD  = ebsdHash
            , createdBy = user
+           , info      = metadata
            }
   writeEBSD ebsd 
   writePermissionEBSD user ebsdHash 

@@ -14,6 +14,7 @@ import qualified Arche.Strategy.ORFitAll   as OF
 import qualified Arche.OR                  as OR
 import qualified Texture.Orientation       as TO
 import qualified Texture.Symmetry          as TS
+import qualified File.EBSD                 as FE
 
 import Type.Storage (
     HashEBSD(..),
@@ -29,6 +30,7 @@ import Util.OrphanInstances ()
 data EBSD
     = EBSD
     { alias     :: Text
+    , info      :: FE.EBSDmeta
     , hashEBSD  :: HashEBSD
     , createdBy :: User
     } deriving (Show, Generic)

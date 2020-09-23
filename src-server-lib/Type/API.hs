@@ -37,10 +37,10 @@ type API = "api" :>
 -- GET  /ebsd/hash/{ebsd_hash} EBSD
 -- GET  /ebsd/upload-link StorageLink
 type EBSDAPI = "ebsd" :>
-  ( ReqBody '[JSON] StorageObjectName         :> Post '[JSON] EBSD
-  :<|> "hash" :> Capture "ebsd_hash" HashEBSD :> Get  '[JSON] EBSD
-  :<|> "upload-link"                          :> Get  '[JSON] StorageLink
-  :<|>                                           Get  '[JSON] [EBSD]
+  ( ReqBody '[JSON] StorageObjectName :> QueryParam "alias" Text :> Post '[JSON] EBSD
+  :<|> "hash" :> Capture "ebsd_hash" HashEBSD                    :> Get  '[JSON] EBSD
+  :<|> "upload-link"                                             :> Get  '[JSON] StorageLink
+  :<|>                                                              Get  '[JSON] [EBSD]
   )
 
 -- ==<< Orientation relationship handling >>==

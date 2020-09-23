@@ -62,7 +62,7 @@ data EBSDApiClient m
   { getEBSDs      :: m [EBSD]
   , getEBSD       :: HashEBSD -> m EBSD
   , getUploadLink :: m StorageLink
-  , postEBSD      :: StorageObjectName -> m EBSD
+  , postEBSD      :: StorageObjectName -> Maybe Text -> m EBSD
   }
 
 data ApiClient m
