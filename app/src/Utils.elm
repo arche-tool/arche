@@ -2,6 +2,7 @@ module Utils exposing
     ( floatToText
     , intToText
     , degToText
+    , symmToText
     , maybe
     , filterMaybes
     )
@@ -9,7 +10,7 @@ module Utils exposing
 import FormatNumber exposing (format)
 import FormatNumber.Locales exposing (Decimals(..), base)
 
-import Type.Texture exposing (Deg)
+import Type.Texture exposing (Deg, Symm(..))
 
 -- =========== Formatters ===========
 floatToText : Float -> String
@@ -29,3 +30,8 @@ filterMaybes l = case l of
     (Just x)::ms -> x::filterMaybes ms 
     Nothing::ms  -> filterMaybes ms 
     _            -> []
+
+symmToText : Symm -> String
+symmToText v = case v of
+    Cubic -> "Cubic"
+    Hexagonal -> "Hexagonal"

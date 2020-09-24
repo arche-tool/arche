@@ -43,7 +43,7 @@ import Type.Arche exposing (
   archeCfgEncoder,
   archeListDecoder)
 
-import Type.Texture exposing (Deg)
+import Type.Texture exposing (Deg, Symm(..))
 
 import Type.ArcheTree as ArcheTree
 import Type.ArcheTree exposing (ArcheTree)
@@ -96,6 +96,9 @@ defaultORCfg =
   { misoAngle = { unDeg = 5.0 }
   , optByAvg = False
   , predefinedOR = Nothing
+  , startOR = Nothing
+  , parentPhase = Nothing
+  , productPhase = (1, Cubic)
   }
 
 defaultArcheCfg : ArcheCfg
@@ -106,7 +109,8 @@ defaultArcheCfg =
   , initClusterFactor      = 1.25
   , stepClusterFactor      = 1.2
   , badAngle               = Deg 15.0
-  , parentPhaseID          = Nothing
+  , parentPhase            = Nothing
+  , productPhase           = (1, Cubic)
   }
 
 -- =========== UPDATE ===========
@@ -390,20 +394,35 @@ renderArches model =
     ] (input :: cols)
 
 renderEbsd : EBSD -> Bool -> Element Msg
-renderEbsd ebsd isSelected = column
-  (Element.Events.onClick (SelectedEBSD ebsd.hashEBSD) :: boxShape isSelected)
-  [ text ebsd.alias
-  , text ebsd.hashEBSD
-  , text (Maybe.withDefault "" ebsd.createdBy.name)
-  ]
+renderEbsd ebsd isSelected =
+  let
+    (sx, sy) = ebsd.info.xystep
+  in column
+    (Element.Events.onClick (SelectedEBSD ebsd.hashEBSD) :: boxShape isSelected)
+    [ cardEnrty "name" ebsd.alias
+    , cardEnrty "id" <| ebsd.hashEBSD
+    , cardEnrty "cols" <| intToText ebsd.info.cols
+    , cardEnrty "rows" <| intToText ebsd.info.rows
+    , cardEnrty "step size" <| floatToText (max sx sy) 
+    , cardEnrty "upload by" <| Maybe.withDefault "" ebsd.createdBy.name
+    ]
 
 renderOREval : OREval -> Bool -> Element Msg
-renderOREval orEval isSelected = column
-  (Element.Events.onClick (SelectedOR orEval.hashOR) :: boxShape isSelected)
-  [ cardEnrty "avg. angular misfit" <| degToText orEval.resultOR.misfitError.avgError ++ "°"
-  , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.planeDeviation ++ "°"
-  , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.axisDeviation ++ "°"
-  ]
+renderOREval orEval isSelected = 
+  let
+    (prodPhase, prodSymm) = orEval.cfgOR.productPhase
+    parenPhase = Maybe.map Tuple.first orEval.cfgOR.parentPhase
+    parenSymm = Maybe.map Tuple.second orEval.cfgOR.parentPhase
+  in column
+    (Element.Events.onClick (SelectedOR orEval.hashOR) :: boxShape isSelected)
+    [ cardEnrty "avg. angular misfit" <| degToText orEval.resultOR.misfitError.avgError ++ "°"
+    , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.planeDeviation ++ "°"
+    , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.axisDeviation ++ "°"
+    , cardEnrty "parent phase ID" <| intToText prodPhase
+    , cardEnrty "parent symmetry" <| symmToText prodSymm
+    , maybe Element.none (cardEnrty "product phase ID" << intToText) parenPhase
+    , maybe Element.none (cardEnrty "product symmetry" << symmToText) parenSymm
+    ]
 
 cardEnrty : String -> String -> Element Msg
 cardEnrty field value = row
@@ -458,10 +477,33 @@ renderORInput model =
       , value = orCfg.misoAngle.unDeg
       , thumb = Input.defaultThumb
       }
+    phaseSel name orCfg getter setter = Input.radio
+      []
+      { onChange = \phid -> SetORConfig <| Just (setter orCfg phid)
+      , selected = getter orCfg
+      , label = Input.labelAbove [] (text <| "Phase ID (" ++ name ++ ")")
+      , options = maybe [] (.info >> .phases >> Array.toList >> List.map (\x -> Input.option x.numID (text x.name)))
+               <| ArcheTree.getEBSDFocus model.archeTree
+      }
+ 
+    symmSel name orCfg getter setter = Input.radio
+      []
+      { onChange = \symm -> SetORConfig <| Just (setter orCfg symm)
+      , selected = getter orCfg
+      , label = Input.labelAbove [] (text <| "Symmetry (" ++ name ++ ")")
+      , options =
+          [ Input.option Hexagonal (text "hcp")
+          , Input.option Cubic     (text "bcc/fcc")
+          ]
+      }
   in case model.orCfgInput of
     Just orCfg -> column
       boxInputShape
-      [ isAvgCheckbox orCfg
+      [ phaseSel "parent"  orCfg (.parentPhase >> Maybe.map Tuple.first)  (\x phid -> {x | parentPhase = Just (phid, maybe Cubic Tuple.second x.parentPhase)})
+      , symmSel  "parent"  orCfg (.parentPhase >> Maybe.map Tuple.second) (\x symm -> {x | parentPhase = Just (maybe 1 Tuple.first x.parentPhase, symm)})
+      , phaseSel "product" orCfg (.productPhase >> Tuple.first >> Just)   (\x phid -> {x | productPhase = (phid, Tuple.second x.productPhase)})
+      , symmSel  "product" orCfg (.productPhase >> Tuple.second >> Just)  (\x symm -> {x | productPhase = (Tuple.first x.productPhase, symm)})
+      , isAvgCheckbox orCfg
       , misoSlider orCfg
       , submitButton (SubmitORConfig orCfg)
       , toogleInput SetORConfig Nothing

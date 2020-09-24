@@ -6,8 +6,12 @@ import Array exposing (Array)
 
 import Type.Texture exposing
   ( Deg
+  , PhaseID
+  , Symm
   , degDecoder
   , degEncoder
+  , symmPhaseDecoder
+  , symmPhaseEncoder
   )
 
 type alias Arche =
@@ -27,10 +31,6 @@ type alias PublicLink =
   , publicLink : String
   }
 
-type alias PhaseID =
-  { phaseId: Int
-  }
-
 type alias ArcheCfg = 
   { misoAngle              : Deg
   , excludeFloatingGrains  : Bool
@@ -38,7 +38,8 @@ type alias ArcheCfg =
   , initClusterFactor      : Float
   , stepClusterFactor      : Float
   , badAngle               : Deg
-  , parentPhaseID          : Maybe PhaseID
+  , parentPhase            : Maybe (PhaseID, Symm)
+  , productPhase           : (PhaseID, Symm)
   }
 
 archeCfgEncoder : ArcheCfg -> JE.Value
@@ -51,23 +52,23 @@ archeCfgEncoder cfg =
       , ("initClusterFactor", JE.float cfg.initClusterFactor)
       , ("stepClusterFactor", JE.float cfg.stepClusterFactor)
       , ("badAngle", degEncoder cfg.badAngle)
-      ] ++ Maybe.withDefault [] maybeAp 
-    maybeAp = Maybe.map (\pid -> [("parentPhaseID",JE.int pid.phaseId)]) cfg.parentPhaseID
-  in JE.object ls
+      , ("parentPhase", maybeEncode symmPhaseEncoder cfg.parentPhase)
+      , ("productPhase", symmPhaseEncoder cfg.productPhase)
+      ]
+    maybeEncode enc x = Maybe.withDefault JE.null <| Maybe.map enc x
+  in JE.object <| List.filter (\x -> JE.null /= Tuple.second x) ls
 
 archeCfgDecoder : D.Decoder ArcheCfg
 archeCfgDecoder =
-    D.map7 ArcheCfg
+    D.map8 ArcheCfg
       (D.field "misoAngle" degDecoder)
       (D.field "excludeFloatingGrains" D.bool)
       (D.field "refinementSteps" D.int)
       (D.field "initClusterFactor" D.float)
       (D.field "stepClusterFactor" D.float)
       (D.field "badAngle" degDecoder)
-      (D.field "parentPhaseID" <| D.maybe phaseIdDecoder)
-
-phaseIdDecoder : D.Decoder PhaseID
-phaseIdDecoder = D.map PhaseID (D.field "phaseId" D.int)
+      (D.field "parentPhase" <| D.maybe symmPhaseDecoder)
+      (D.field "productPhase" <| symmPhaseDecoder)
 
 archeDecoder : D.Decoder Arche
 archeDecoder = D.map3 Arche
