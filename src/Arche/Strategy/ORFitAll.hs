@@ -60,8 +60,8 @@ data Cfg =
   , optByAvg     :: Bool
   , predefinedOR :: Maybe AxisPair
   , startOR      :: Maybe AxisPair
-  , parentPhase  :: Maybe PhaseID
-  , productPhase :: PhaseID
+  , parentPhase  :: Maybe Phase
+  , productPhase :: Phase
   } deriving (Generic, Show)
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
@@ -71,11 +71,11 @@ run cfg@Cfg{..} ebsd_file base_output = do
   printOREvaluation orEval 
   writeUniVTKfile (base_output <.> "vtp") True vtk
 
-getPhaseSelector :: Cfg -> (Int -> PhaseID)
+getPhaseSelector :: Cfg -> (Int -> Phase)
 getPhaseSelector Cfg{..} = let
   in case parentPhase of  
-    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
-    _           -> \ph -> if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
+    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
+    _           -> \ph -> if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
 
 processEBSD :: Cfg -> BSL.ByteString -> IO (OREvaluation, VTK Vec3D)
 processEBSD cfg@Cfg{..} bs = do
@@ -103,18 +103,18 @@ processEBSD cfg@Cfg{..} bs = do
 
   return (orEval, vtk)
 
-renderVTK :: Cfg -> VoxBox (Quaternion, PhaseID) -> HashMap Int (Quaternion, PhaseID) -> MicroVoxel -> OR -> VTK Vec3D
+renderVTK :: Cfg -> VoxBox (Quaternion, Phase) -> HashMap Int (Quaternion, Phase) -> MicroVoxel -> OR -> VTK Vec3D
 renderVTK Cfg{..} vbq qmap mkr ror
   | optByAvg  = renderGBOR        ror vbq qmap mkr
   | otherwise = renderFaceVoxelOR ror vbq      mkr
 
 -- ================================== Find OR ============================================
 
-evalMisoORWithKS :: ((Quaternion, PhaseID), (Quaternion, PhaseID)) -> Deg
+evalMisoORWithKS :: ((Quaternion, Phase), (Quaternion, Phase)) -> Deg
 evalMisoORWithKS (q1, q2) = toAngle $ evalMisoOR ksORs q1 q2
 
-getGBbySegments :: VoxBox (Quaternion, PhaseID) -> MicroVoxel -> TFGen
-                -> Int -> Vector ((Quaternion, PhaseID), (Quaternion, PhaseID))
+getGBbySegments :: VoxBox (Quaternion, Phase) -> MicroVoxel -> TFGen
+                -> Int -> Vector ((Quaternion, Phase), (Quaternion, Phase))
 getGBbySegments vbq micro gen n = let
   gs = HM.elems $ microFaces micro
   fs = V.concat $ mapMaybe getPropValue gs
@@ -129,8 +129,8 @@ getFaceVoxels (Fx pos) = (pos, pos #+# (VoxelPos (-1) 0 0))
 getFaceVoxels (Fy pos) = (pos, pos #+# (VoxelPos 0 (-1) 0))
 getFaceVoxels (Fz pos) = (pos, pos #+# (VoxelPos 0 0 (-1)))
 
-getGBbyAverage :: HashMap Int (Quaternion, PhaseID) -> MicroVoxel -> TFGen
-               -> Int -> Vector ((Quaternion, PhaseID), (Quaternion, PhaseID))
+getGBbyAverage :: HashMap Int (Quaternion, Phase) -> MicroVoxel -> TFGen
+               -> Int -> Vector ((Quaternion, Phase), (Quaternion, Phase))
 getGBbyAverage qmap micro gen n = let
   fs = V.fromList $ HM.keys $ microFaces micro
   rs = take n $ randomRs (0, V.length fs - 1) gen
@@ -142,13 +142,13 @@ getGBbyAverage qmap micro gen n = let
       return (q1, q2)
   in U.fromList $ mapMaybe (foo . (fs V.!)) rs
 
-getGrainAverageQ :: VoxBox (Quaternion, PhaseID)->
+getGrainAverageQ :: VoxBox (Quaternion, Phase)->
                     HashMap Int (V.Vector VoxelPos) ->
-                    HashMap Int (Quaternion, PhaseID)
+                    HashMap Int (Quaternion, Phase)
 getGrainAverageQ vbq gmap = let
   getAvgQ gid vs = let
     q = averageQuaternion $ V.map (fst . (vbq #!)) vs
-    p = maybe (PhaseID (-1) CubicPhase) id (getGrainPhase vbq gmap gid)
+    p = maybe (Phase (-1) CubicPhase) id (getGrainPhase vbq gmap gid)
     in (q, p)
   in HM.mapWithKey getAvgQ gmap
 
@@ -168,7 +168,7 @@ avgVector x
   where
     n = fromIntegral $ V.length x
 
-renderFaceVoxelOR :: OR -> VoxBox (Quaternion, PhaseID) -> MicroVoxel -> VTK Vec3D
+renderFaceVoxelOR :: OR -> VoxBox (Quaternion, Phase) -> MicroVoxel -> VTK Vec3D
 renderFaceVoxelOR ror vbq micro = let
   gs  = mapMaybe (getPropValue) $ HM.elems $ microFaces micro
   fs  = V.concat gs
@@ -179,7 +179,7 @@ renderFaceVoxelOR ror vbq micro = let
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoORAvg" func)
 
-renderGBOR :: OR -> VoxBox (Quaternion, PhaseID) -> HashMap Int (Quaternion, PhaseID)
+renderGBOR :: OR -> VoxBox (Quaternion, Phase) -> HashMap Int (Quaternion, Phase)
            -> MicroVoxel -> VTK Vec3D
 renderGBOR ror vbq qmap micro = let
   fids = HM.keys  $ microFaces micro
@@ -192,14 +192,14 @@ renderGBOR ror vbq qmap micro = let
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoOR" func)
 
-faceVoxelMisoOR :: U.Vector OR -> VoxBox (Quaternion, PhaseID) -> FaceVoxelPos -> Double
+faceVoxelMisoOR :: U.Vector OR -> VoxBox (Quaternion, Phase) -> FaceVoxelPos -> Double
 faceVoxelMisoOR ors vbq face = let
   (v1, v2) = getFaceVoxels face
   q1 = vbq #! v1
   q2 = vbq #! v2
   in evalMisoOR ors q1 q2
 
-faceMisoOR :: U.Vector OR -> HashMap Int (Quaternion, PhaseID) -> FaceID -> Double
+faceMisoOR :: U.Vector OR -> HashMap Int (Quaternion, Phase) -> FaceID -> Double
 faceMisoOR ors qmap face = maybe pi id getM
   where
     (v1, v2) = unFaceID face
@@ -235,7 +235,7 @@ data OREvaluation
   , misfitError :: !FitError
   } deriving (Generic, Show)
 
-evaluateOR :: OR -> Vector ((Quaternion, PhaseID), (Quaternion, PhaseID)) -> OREvaluation
+evaluateOR :: OR -> Vector ((Quaternion, Phase), (Quaternion, Phase)) -> OREvaluation
 evaluateOR ror segs = OREvaluation
   { orientationRelationship = mkOrientationRelationship ror
   , ksDeviation = calculateKSDeviation ror

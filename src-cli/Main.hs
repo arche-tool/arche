@@ -219,11 +219,11 @@ parseBadAngle = ((Deg . abs) <$> option auto
    <> value 5
    <> help "The default error is 5 deg."))
 
-parseParent :: Parser OR.PhaseID
-parseParent = OR.PhaseID <$> parseParentPhaseID <*> parseParentSymm
+parseParent :: Parser OR.Phase
+parseParent = OR.Phase <$> parseParentPhaseID <*> parseParentSymm
 
-parseProduct :: Parser OR.PhaseID
-parseProduct = OR.PhaseID <$> parseProductPhaseID <*> parseProductSymm
+parseProduct :: Parser OR.Phase
+parseProduct = OR.Phase <$> parseProductPhaseID <*> parseProductSymm
 
 parseParentPhaseID :: Parser Int
 parseParentPhaseID = option auto

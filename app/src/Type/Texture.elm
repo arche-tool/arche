@@ -1,7 +1,7 @@
 module Type.Texture exposing
   ( Deg
   , AxisPair
-  , PhaseID
+  , Phase
   , PhaseSymm(..)
   , degEncoder
   , axisPairEncoder
@@ -32,7 +32,7 @@ type PhaseSymm
     = HexagonalPhase
     | CubicPhase
 
-type alias PhaseID =
+type alias Phase =
   { phaseId : Int
   , phaseSymm : PhaseSymm
   }
@@ -57,7 +57,7 @@ symmEncoder s =
       CubicPhase     -> JE.string "CubicPhase"
   in core 
 
-phaseEncoder : PhaseID -> JE.Value
+phaseEncoder : Phase -> JE.Value
 phaseEncoder p = JE.object
   [ ("phaseId", JE.int p.phaseId)
   , ("phaseSymm", symmEncoder p.phaseSymm)
@@ -78,8 +78,8 @@ symmDecoder =
       some        -> D.fail <| "Unknown Symmetry: " ++ some
   in D.string |> D.andThen match
 
-phaseDecoder : D.Decoder PhaseID
-phaseDecoder = D.map2 PhaseID (D.field "phaseId" D.int) (D.field "phaseSymm" symmDecoder)
+phaseDecoder : D.Decoder Phase
+phaseDecoder = D.map2 Phase (D.field "phaseId" D.int) (D.field "phaseSymm" symmDecoder)
 
 tuple3Fdec : D.Decoder (Float, Float, Float)
 tuple3Fdec = D.map3 (\a b c -> (a,b,c)) (D.index 0 D.float) (D.index 1 D.float) (D.index 2 D.float)

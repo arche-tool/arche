@@ -30,8 +30,8 @@ import Arche.OR
 data Cfg =
   Cfg
   { misoAngle   :: Deg
-  , parentPhase  :: Maybe PhaseID
-  , productPhase :: PhaseID
+  , parentPhase  :: Maybe Phase
+  , productPhase :: Phase
   } deriving (Show)
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
@@ -54,11 +54,11 @@ run cfg ebsd_file base_output = do
       writeUniVTKfile (base_output ++ "_edges.vtp")  True $ renderMicroEdgesVTK  gids micro
       writeUniVTKfile (base_output ++ "_vertex.vtp") True $ renderMicroVertexVTK gids micro
 
-getPhaseSelector :: Cfg -> (Int -> PhaseID)
+getPhaseSelector :: Cfg -> (Int -> Phase)
 getPhaseSelector Cfg{..} = let
   in case parentPhase of  
-    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
-    _           -> \ph -> if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
+    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
+    _           -> \ph -> if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
 
 processEBSD :: Cfg -> BSL.ByteString -> Either String (VoxBox GrainID, MicroVoxel, [VTKAttrPoint a])
 processEBSD cfg@Cfg{..} bs = do

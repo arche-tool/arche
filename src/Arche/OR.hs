@@ -37,7 +37,7 @@ module Arche.OR
   , getQinFZ
   , convert
     -- * Phases
-  , PhaseID (..)
+  , Phase (..)
   , PhaseSymm (..)
   , getPhaseSymm
     -- * Test functions
@@ -98,8 +98,8 @@ data PhaseSymm
   | HexagonalPhase
   deriving (Show, Enum, Eq, Ord, Generic)
 
-data PhaseID
-  = PhaseID
+data Phase
+  = Phase
   { phaseId   :: Int
   , phaseSymm :: PhaseSymm
   } deriving (Show, Eq, Ord, Generic)
@@ -143,7 +143,7 @@ misoSingleOR ors symOps q1 q2 = let
   ks = U.map (getMisoAngleFaster symOps q1 . (q2 #<=) . qOR) ors
   in U.minimum ks
 
-getPhaseSymm :: PhaseID -> Symm
+getPhaseSymm :: Phase -> Symm
 getPhaseSymm ph = case phaseSymm ph of
   CubicPhase     -> Cubic
   HexagonalPhase -> Hexagonal
@@ -169,7 +169,7 @@ evalMisoOR ors (qa, pa) (qb, pb)
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
 -- fundamental zone.
-faceerrorfunc :: Vector ((Quaternion, PhaseID), (Quaternion, PhaseID)) -> Vector OR -> FitError
+faceerrorfunc :: Vector ((Quaternion, Phase), (Quaternion, Phase)) -> Vector OR -> FitError
 faceerrorfunc ms ors
   | n == 0 = FitError
     { avgError = toAngle 0.0
@@ -198,7 +198,7 @@ deltaVec3 func v = let
   d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
   in (x, Vec3 d1 d2 d3)
 
-findORFace :: Vector ((Quaternion, PhaseID), (Quaternion, PhaseID)) -> OR -> OR
+findORFace :: Vector ((Quaternion, Phase), (Quaternion, Phase)) -> OR -> OR
 findORFace qs t0 = let
   func = fromAngle . avgError . faceerrorfunc qs .
          genTS . OR . toQuaternion . mkUnsafeRodrigues
@@ -365,10 +365,10 @@ derivingUnbox "OR"
     [| \(OR q) -> q |]
     [| OR |]
 
-derivingUnbox "PhaseID"
-    [t| PhaseID -> (Int, Int) |]
+derivingUnbox "Phase"
+    [t| Phase -> (Int, Int) |]
     [| \x -> (phaseId x, fromEnum $ phaseSymm x) |]
-    [| \(p, s) -> PhaseID p (toEnum s) |]
+    [| \(p, s) -> Phase p (toEnum s) |]
 
 -- ================================= Test Function =======================================
 

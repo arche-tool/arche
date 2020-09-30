@@ -77,8 +77,8 @@ data Cfg =
   , stepClusterFactor      :: Double
   , badAngle               :: Deg
   , withOR                 :: OR
-  , parentPhase            :: Maybe PhaseID
-  , productPhase           :: PhaseID
+  , parentPhase            :: Maybe Phase
+  , productPhase           :: Phase
   , outputANGMap           :: Bool
   , outputCTFMap           :: Bool
   } deriving (Show, Generic)
@@ -88,7 +88,7 @@ data ProductGrain =
   { productVoxelPos       :: !(V.Vector Int)
   , productAvgOrientation :: !QuaternionFZ
   , productAvgPos         :: !Vec3D
-  , productPhaseID        :: !PhaseID
+  , productPhaseID        :: !Phase
   } deriving (Show)
 
 data ParentGrain =
@@ -112,7 +112,7 @@ data GomesConfig
   , realOR          :: OR
   , realORs         :: Vector OR
   , inputEBSD       :: EBSDdata
-  , orientationBox  :: VoxBox (Quaternion, PhaseID)
+  , orientationBox  :: VoxBox (Quaternion, Phase)
   , grainIDBox      :: VoxBox GrainID
   , structureGraph  :: MicroVoxel
   , productGrains   :: HashMap Int ProductGrain
@@ -158,11 +158,11 @@ logParentStats parents = let
 
 -- =======================================================================================
 
-getPhaseSelector :: Cfg -> (Int -> PhaseID)
+getPhaseSelector :: Cfg -> (Int -> Phase)
 getPhaseSelector Cfg{..} = let
   in case parentPhase of  
-    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
-    _           -> \ph -> if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
+    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
+    _           -> \ph -> if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
 
 getGomesConfig :: Cfg -> OR -> Either String EBSDdata -> LoggerSet -> Either String GomesConfig
 getGomesConfig cfg ror maybeEBSD logger = do
@@ -208,7 +208,7 @@ grainClustering = do
            , mclFactor    = mclFactor * stepClusterFactor inputCfg
            }
 
-getTransformedProduct :: GomesConfig -> (Quaternion, PhaseID) -> ParentGrain -> Quaternion
+getTransformedProduct :: GomesConfig -> (Quaternion, Phase) -> ParentGrain -> Quaternion
 getTransformedProduct cfg (q, phase) p
   | Just phase == phaseRef = q
   | otherwise              = findBestTransformation ors (parentOrientation p) q
@@ -261,7 +261,7 @@ filterIsleGrains Graph{..} = let
   clean2  = L.foldl' foo clean1 singles
   in Graph clean2
 
-getFaceIDmisOR :: VoxBox (Quaternion, PhaseID) -> MicroVoxel -> Vector OR
+getFaceIDmisOR :: VoxBox (Quaternion, Phase) -> MicroVoxel -> Vector OR
                -> FaceID -> Maybe Double
 getFaceIDmisOR vbq micro ors fid = let
   facelist = getFaceProp fid micro >>= getPropValue
@@ -271,7 +271,7 @@ getFaceIDmisOR vbq micro ors fid = let
     in (t / n) :: Double
   in func <$> facelist
 
-getFaceVoxelmisOR :: VoxBox (Quaternion, PhaseID) -> Vector OR -> FaceVoxelPos -> Double
+getFaceVoxelmisOR :: VoxBox (Quaternion, Phase) -> Vector OR -> FaceVoxelPos -> Double
 getFaceVoxelmisOR vbq ors face = let
   (v1, v2) = getFaceVoxels face
   q1 = vbq #! v1
@@ -285,7 +285,7 @@ getFaceVoxels (Fx pos) = (pos, pos #+# VoxelPos (-1) 0 0)
 getFaceVoxels (Fy pos) = (pos, pos #+# VoxelPos 0 (-1) 0)
 getFaceVoxels (Fz pos) = (pos, pos #+# VoxelPos 0 0 (-1))
 
-graphWeight :: Bool -> VoxBox (Quaternion, PhaseID) -> MicroVoxel -> OR -> Graph Int Double
+graphWeight :: Bool -> VoxBox (Quaternion, Phase) -> MicroVoxel -> OR -> Graph Int Double
 graphWeight noIsleGrains vbq micro withOR = let
   fs    = HM.keys $ microFaces micro
   ors   = genTS withOR
@@ -299,7 +299,7 @@ graphWeight noIsleGrains vbq micro withOR = let
 
 -- ================================== Grain Data ===================================
 
-getProductGrainData :: VoxBox (Quaternion, PhaseID) -> HashMap Int (V.Vector VoxelPos) -> HashMap Int ProductGrain
+getProductGrainData :: VoxBox (Quaternion, Phase) -> HashMap Int (V.Vector VoxelPos) -> HashMap Int ProductGrain
 getProductGrainData vbq gmap = let
   getAvgQ = getQinFZ . averageQuaternionWithSymm Cubic . V.map (fst . (vbq #!))
   getAvgPos v = let
@@ -311,7 +311,7 @@ getProductGrainData vbq gmap = let
            { productVoxelPos       = V.map (boxdim %@) x
            , productAvgOrientation = getAvgQ x
            , productAvgPos         = getAvgPos x
-           , productPhaseID        = fromMaybe (PhaseID (-1) CubicPhase) (getGrainPhase vbq gmap gid)
+           , productPhaseID        = fromMaybe (Phase (-1) CubicPhase) (getGrainPhase vbq gmap gid)
            }
   in HM.mapWithKey func gmap
 
@@ -329,7 +329,7 @@ getParentGrainData GomesConfig{..} mids = let
   --(arche, err) = getWArcheTess (parentPhaseID inputCfg) realORs info
   (arche, err) = getWArcheKernel orientationGrid parentPh realORs info
 
-  getFitInfo :: (Double, QuaternionFZ, PhaseID) -> ParentProductFit
+  getFitInfo :: (Double, QuaternionFZ, Phase) -> ParentProductFit
   getFitInfo (wi, qi, phase)
     | Just phase == parentPh = ParentProductFit (wi / wt) 0 (-1, mempty)
     | otherwise              = ParentProductFit (wi / wt) gerr nvar
@@ -346,7 +346,7 @@ getParentGrainData GomesConfig{..} mids = let
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
-getWArcheKernel :: ODF -> Maybe PhaseID -> Vector OR -> Vector (Double, QuaternionFZ, PhaseID) -> (Quaternion, FitError)
+getWArcheKernel :: ODF -> Maybe Phase -> Vector OR -> Vector (Double, QuaternionFZ, Phase) -> (Quaternion, FitError)
 getWArcheKernel odf phaseID ors xs = (arche, err)
   where
     (was, wms) = U.partition (\(_,_,p) -> Just p == phaseID) xs
@@ -459,7 +459,7 @@ genProductGrainBitmap nullvalue func = do
     mapM_ (fill v) (HM.toList productGrains)
     return v
 
-genParentProductFitBitmap :: (Monad m)=> (U.Unbox a)=> a -> ((Quaternion, PhaseID) -> ParentGrain -> ParentProductFit -> a) -> Gomes m (U.Vector a)
+genParentProductFitBitmap :: (Monad m)=> (U.Unbox a)=> a -> ((Quaternion, Phase) -> ParentGrain -> ParentProductFit -> a) -> Gomes m (U.Vector a)
 genParentProductFitBitmap nullvalue func = do
   GomesConfig{..} <- ask
   GomesState{..}  <- get
@@ -537,7 +537,7 @@ genVoxBoxAttr name func qBox = mkPointAttr name (func . (grainID qBox U.!))
 genProductVTKAttr :: (Monad m)=> (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ProductGrain) -> a) -> String -> Gomes m (VTKAttrPoint b)
 genProductVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genProductGrainBitmap nul func
 
-genProductFitVTKAttr :: (Monad m)=> (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Quaternion, PhaseID) -> ParentGrain -> ParentProductFit -> a) -> String -> Gomes m (VTKAttrPoint b)
+genProductFitVTKAttr :: (Monad m)=> (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Quaternion, Phase) -> ParentGrain -> ParentProductFit -> a) -> String -> Gomes m (VTKAttrPoint b)
 genProductFitVTKAttr nul func name = (mkPointAttr name . (U.!)) <$> genParentProductFitBitmap nul func
 
 genParentVTKAttr :: (Monad m)=> (RenderElemVTK a, U.Unbox a, RenderElemVTK b)=> a -> ((Int, ParentGrain) -> a) -> String -> Gomes m (VTKAttrPoint b)
@@ -612,7 +612,7 @@ genParentEBSD = do
     ANG ang -> Left  . genParentANG qs pp $ ang
     CTF ctf -> Right . genParentCTF qs pp $ ctf
   where
-    genParentANG :: V.Vector Quaternion -> Maybe PhaseID -> ANGdata -> ANGdata
+    genParentANG :: V.Vector Quaternion -> Maybe Phase -> ANGdata -> ANGdata
     genParentANG qs parentPhase ang = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
       where
         insRotation q angPoint = angPoint {
@@ -620,7 +620,7 @@ genParentEBSD = do
           A.phaseNum = maybe (A.phaseNum angPoint) phaseId parentPhase
           }
 
-    genParentCTF :: V.Vector Quaternion -> Maybe PhaseID -> CTFdata -> CTFdata
+    genParentCTF :: V.Vector Quaternion -> Maybe Phase -> CTFdata -> CTFdata
     genParentCTF qs parentPhase ang = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
       where
         insRotation q ctfPoint = ctfPoint {

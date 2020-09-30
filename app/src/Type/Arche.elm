@@ -6,7 +6,7 @@ import Array exposing (Array)
 
 import Type.Texture exposing
   ( Deg
-  , PhaseID
+  , Phase
   , degDecoder
   , degEncoder
   , phaseDecoder
@@ -37,8 +37,8 @@ type alias ArcheCfg =
   , initClusterFactor      : Float
   , stepClusterFactor      : Float
   , badAngle               : Deg
-  , parentPhase            : Maybe PhaseID
-  , productPhase           : PhaseID
+  , parentPhase            : Maybe Phase
+  , productPhase           : Phase
   }
 
 archeCfgEncoder : ArcheCfg -> JE.Value

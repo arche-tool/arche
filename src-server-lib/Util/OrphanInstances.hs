@@ -30,7 +30,7 @@ instance ToJSON OF.OREvaluation
 
 instance ToJSON OR.FitError
 instance ToJSON OR.PhaseSymm
-instance ToJSON OR.PhaseID
+instance ToJSON OR.Phase
 instance ToJSON OR.OR
 
 instance ToJSON TO.Deg
@@ -57,7 +57,7 @@ instance FromJSON OF.OREvaluation
 
 instance FromJSON OR.FitError
 instance FromJSON OR.PhaseSymm
-instance FromJSON OR.PhaseID
+instance FromJSON OR.Phase
 instance FromJSON OR.OR
 
 instance FromJSON TO.AxisPair
@@ -112,7 +112,7 @@ instance (Hashable a) => Hashable (Vector a) where
     hashWithSalt i = hashWithSalt i .toList 
 
 instance Hashable OR.PhaseSymm
-instance Hashable OR.PhaseID
+instance Hashable OR.Phase
 instance Hashable OR.OR
 
 instance Hashable GG.Cfg
@@ -133,7 +133,7 @@ instance ToDocValue TS.SymmAxis
 instance ToDocValue OR.FitError
 instance ToDocValue OR.OR
 instance ToDocValue OR.PhaseSymm
-instance ToDocValue OR.PhaseID
+instance ToDocValue OR.Phase
 instance ToDocValue F.EBSDmeta
 instance ToDocValue F.EBSDphase
 
@@ -154,7 +154,7 @@ instance FromDocValue TS.SymmAxis
 instance FromDocValue OR.FitError
 instance FromDocValue OR.OR
 instance FromDocValue OR.PhaseSymm
-instance FromDocValue OR.PhaseID
+instance FromDocValue OR.Phase
 instance FromDocValue F.EBSDmeta
 instance FromDocValue F.EBSDphase
 

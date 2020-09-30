@@ -19,7 +19,7 @@ import Arche.OR
 
 getGrainID
   :: Deg
-  -> VoxBox (Quaternion, PhaseID)
+  -> VoxBox (Quaternion, Phase)
   -> Maybe (VoxBox GrainID, HashMap Int (Vector VoxelPos))
 getGrainID !mis vbox = let
   isGrain (!qa, !pa) (!qb, !pb)
@@ -30,10 +30,10 @@ getGrainID !mis vbox = let
   in resetGrainIDs <$> grainFinder isGrain vbox
 
 getGrainPhase
-  :: VoxBox (Quaternion, PhaseID)
+  :: VoxBox (Quaternion, Phase)
   -> HashMap Int (V.Vector VoxelPos)
   -> Int
-  -> Maybe PhaseID
+  -> Maybe Phase
 getGrainPhase vbqp gmap gid = HM.lookup gid gmap >>= func
   where func vs
           | V.null vs = Nothing

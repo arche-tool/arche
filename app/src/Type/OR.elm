@@ -7,7 +7,7 @@ import Array exposing (Array)
 import Type.Texture exposing
   ( Deg
   , AxisPair
-  , PhaseID
+  , Phase
   , degDecoder
   , degEncoder
   , axisPairDecoder
@@ -22,8 +22,8 @@ type alias ORConfig =
   , optByAvg: Bool
   , predefinedOR: Maybe AxisPair
   , startOR: Maybe AxisPair
-  , parentPhase: Maybe PhaseID
-  , productPhase: PhaseID
+  , parentPhase: Maybe Phase
+  , productPhase: Phase
   }
 
 
