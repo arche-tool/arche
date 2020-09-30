@@ -7,11 +7,10 @@ import Array exposing (Array)
 import Type.Texture exposing
   ( Deg
   , PhaseID
-  , Symm
   , degDecoder
   , degEncoder
-  , symmPhaseDecoder
-  , symmPhaseEncoder
+  , phaseDecoder
+  , phaseEncoder
   )
 
 type alias Arche =
@@ -38,8 +37,8 @@ type alias ArcheCfg =
   , initClusterFactor      : Float
   , stepClusterFactor      : Float
   , badAngle               : Deg
-  , parentPhase            : Maybe (PhaseID, Symm)
-  , productPhase           : (PhaseID, Symm)
+  , parentPhase            : Maybe PhaseID
+  , productPhase           : PhaseID
   }
 
 archeCfgEncoder : ArcheCfg -> JE.Value
@@ -52,8 +51,8 @@ archeCfgEncoder cfg =
       , ("initClusterFactor", JE.float cfg.initClusterFactor)
       , ("stepClusterFactor", JE.float cfg.stepClusterFactor)
       , ("badAngle", degEncoder cfg.badAngle)
-      , ("parentPhase", maybeEncode symmPhaseEncoder cfg.parentPhase)
-      , ("productPhase", symmPhaseEncoder cfg.productPhase)
+      , ("parentPhase", maybeEncode phaseEncoder cfg.parentPhase)
+      , ("productPhase", phaseEncoder cfg.productPhase)
       ]
     maybeEncode enc x = Maybe.withDefault JE.null <| Maybe.map enc x
   in JE.object <| List.filter (\x -> JE.null /= Tuple.second x) ls
@@ -67,8 +66,8 @@ archeCfgDecoder =
       (D.field "initClusterFactor" D.float)
       (D.field "stepClusterFactor" D.float)
       (D.field "badAngle" degDecoder)
-      (D.field "parentPhase" <| D.maybe symmPhaseDecoder)
-      (D.field "productPhase" <| symmPhaseDecoder)
+      (D.field "parentPhase" <| D.maybe phaseDecoder)
+      (D.field "productPhase" <| phaseDecoder)
 
 archeDecoder : D.Decoder Arche
 archeDecoder = D.map3 Arche

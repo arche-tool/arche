@@ -13,7 +13,6 @@ import GHC.Word      (Word8)
 import qualified Arche.Strategy.ORFitAll   as OF
 import qualified Arche.OR                  as OR
 import qualified Texture.Orientation       as TO
-import qualified Texture.Symmetry          as TS
 import qualified File.EBSD                 as FE
 
 import Type.Storage (
@@ -77,8 +76,8 @@ data ArcheCfg = ArcheCfg
   , initClusterFactor      :: Double
   , stepClusterFactor      :: Double
   , badAngle               :: TO.Deg
-  , productPhase           :: (OR.PhaseID, TS.Symm) 
-  , parentPhase            :: Maybe (OR.PhaseID, TS.Symm)
+  , productPhase           :: OR.PhaseID
+  , parentPhase            :: Maybe OR.PhaseID
   } deriving (Show, Generic)
 
 instance Functor Arche where

@@ -38,6 +38,8 @@ module Arche.OR
   , convert
     -- * Phases
   , PhaseID (..)
+  , PhaseSymm (..)
+  , getPhaseSymm
     -- * Test functions
   , testArcheFit
   , testFindArche
@@ -91,9 +93,15 @@ newtype OR
   { qOR :: Quaternion
   } deriving (Show, Semigroup, Monoid, Generic, Group, Rot, NFData)
 
-newtype PhaseID
+data PhaseSymm
+  = CubicPhase
+  | HexagonalPhase
+  deriving (Show, Enum, Eq, Ord, Generic)
+
+data PhaseID
   = PhaseID
-  { phaseId :: Int
+  { phaseId   :: Int
+  , phaseSymm :: PhaseSymm
   } deriving (Show, Eq, Ord, Generic)
 
 mkOR :: Vec3D -> Deg -> OR
@@ -134,6 +142,11 @@ misoSingleOR :: Vector OR -> Vector SymmOp -> Quaternion -> Quaternion -> Double
 misoSingleOR ors symOps q1 q2 = let
   ks = U.map (getMisoAngleFaster symOps q1 . (q2 #<=) . qOR) ors
   in U.minimum ks
+
+getPhaseSymm :: PhaseID -> Symm
+getPhaseSymm ph = case phaseSymm ph of
+  CubicPhase     -> Cubic
+  HexagonalPhase -> Hexagonal
 
 data FitError
   = FitError
@@ -353,9 +366,9 @@ derivingUnbox "OR"
     [| OR |]
 
 derivingUnbox "PhaseID"
-    [t| PhaseID -> Int |]
-    [| phaseId |]
-    [| PhaseID |]
+    [t| PhaseID -> (Int, Int) |]
+    [| \x -> (phaseId x, fromEnum $ phaseSymm x) |]
+    [| \(p, s) -> PhaseID p (toEnum s) |]
 
 -- ================================= Test Function =======================================
 

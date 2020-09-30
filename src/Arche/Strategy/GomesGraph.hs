@@ -77,8 +77,8 @@ data Cfg =
   , stepClusterFactor      :: Double
   , badAngle               :: Deg
   , withOR                 :: OR
-  , parentPhase            :: Maybe (PhaseID, Symm)
-  , productPhase           :: (PhaseID, Symm)
+  , parentPhase            :: Maybe PhaseID
+  , productPhase           :: PhaseID
   , outputANGMap           :: Bool
   , outputCTFMap           :: Bool
   } deriving (Show, Generic)
@@ -158,20 +158,21 @@ logParentStats parents = let
 
 -- =======================================================================================
 
-getSymmSelector :: Cfg -> (PhaseID -> Maybe Symm)
-getSymmSelector Cfg{..} = case parentPhase of  
-  Just (parentPh, parentSy) -> \ph -> if ph == parentPh then Just parentSy else if ph == fst productPhase then Just (snd productPhase) else Nothing 
-  _                         -> \ph -> if ph == fst productPhase then Just (snd productPhase) else Nothing 
+getPhaseSelector :: Cfg -> (Int -> PhaseID)
+getPhaseSelector Cfg{..} = let
+  in case parentPhase of  
+    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
+    _           -> \ph -> if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
 
 getGomesConfig :: Cfg -> OR -> Either String EBSDdata -> LoggerSet -> Either String GomesConfig
 getGomesConfig cfg ror maybeEBSD logger = do
+  let phaseSelector = getPhaseSelector cfg
   ebsd  <- maybeEBSD 
   qpBox <- readEBSDToVoxBox
-          (C.rotation &&& (PhaseID . C.phase))
-          (A.rotation &&& (PhaseID . A.phaseNum))
+          (C.rotation &&& (phaseSelector . C.phase))
+          (A.rotation &&& (phaseSelector . A.phaseNum))
           ebsd
   let 
-    symmSelector = getSymmSelector cfg
     noIsleGrains = excludeFloatingGrains cfg
     func (gidBox, voxMap) = let
       micro = fst $ getMicroVoxel (gidBox, voxMap)
@@ -188,7 +189,7 @@ getGomesConfig cfg ror maybeEBSD logger = do
         , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
         , stdoutLogger   = logger
         }
-  maybe (Left "No grain detected!") (Right . func) (getGrainID (misoAngle cfg) symmSelector qpBox)
+  maybe (Left "No grain detected!") (Right . func) (getGrainID (misoAngle cfg) qpBox)
 
 getInitState :: GomesConfig -> GomesState
 getInitState GomesConfig{..} = let
@@ -213,7 +214,7 @@ getTransformedProduct cfg (q, phase) p
   | otherwise              = findBestTransformation ors (parentOrientation p) q
   where
     ors   = realORs cfg
-    phaseRef = fmap fst . parentPhase . inputCfg $ cfg
+    phaseRef = parentPhase . inputCfg $ cfg
 
 findBestTransformation ::  Vector OR -> Quaternion -> Quaternion -> Quaternion
 findBestTransformation ors ref q = let
@@ -310,13 +311,13 @@ getProductGrainData vbq gmap = let
            { productVoxelPos       = V.map (boxdim %@) x
            , productAvgOrientation = getAvgQ x
            , productAvgPos         = getAvgPos x
-           , productPhaseID        = fromMaybe (PhaseID $ -1) (getGrainPhase vbq gmap gid)
+           , productPhaseID        = fromMaybe (PhaseID (-1) CubicPhase) (getGrainPhase vbq gmap gid)
            }
   in HM.mapWithKey func gmap
 
 getParentGrainData :: GomesConfig -> [Int] -> ParentGrain
 getParentGrainData GomesConfig{..} mids = let
-  parentPh = fmap fst . parentPhase $ inputCfg
+  parentPh = parentPhase $ inputCfg
 
   getInfo mid = HM.lookup mid productGrains >>= \ProductGrain{..} ->
     return (fromIntegral . V.length $ productVoxelPos, productAvgOrientation, productPhaseID)
@@ -604,7 +605,7 @@ plotVTK base_file = do
 
 genParentEBSD :: (Monad m)=> Gomes m (Either ANGdata CTFdata)
 genParentEBSD = do
-  pp <- asks (fmap fst . parentPhase . inputCfg)
+  pp <- asks (parentPhase . inputCfg)
   qs <- U.convert <$> genParentGrainBitmap mempty (parentOrientation . snd)
   ebsd <- asks inputEBSD
   return $ case ebsd of

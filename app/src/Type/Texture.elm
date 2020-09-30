@@ -2,17 +2,15 @@ module Type.Texture exposing
   ( Deg
   , AxisPair
   , PhaseID
-  , Symm(..)
+  , PhaseSymm(..)
   , degEncoder
   , axisPairEncoder
   , degDecoder
   , axisPairDecoder
   , symmEncoder
-  , symmPhaseEncoder
-  , phaseIdEncoder
+  , phaseEncoder
   , symmDecoder
-  , symmPhaseDecoder 
-  , phaseIdDecoder
+  , phaseDecoder
   , tuple2Fdec
   , tuple3Idec
   , tuple3Fdec
@@ -30,11 +28,14 @@ type alias AxisPair =
   , angle: Float
   }
 
-type Symm
-    = Hexagonal
-    | Cubic
+type PhaseSymm
+    = HexagonalPhase
+    | CubicPhase
 
-type alias PhaseID = Int
+type alias PhaseID =
+  { phaseId : Int
+  , phaseSymm : PhaseSymm
+  }
 
 degEncoder : Deg -> JE.Value
 degEncoder deg = JE.object
@@ -48,20 +49,19 @@ axisPairEncoder ap =
       [ ("axisAngle", JE.list identity [JE.list JE.float [x, y, z], JE.float ap.angle])
     ] 
 
-symmEncoder : Symm -> JE.Value
+symmEncoder : PhaseSymm -> JE.Value
 symmEncoder s =
   let
     core = case s of
-      Hexagonal -> JE.string "Hexgonal"
-      Cubic     -> JE.string "Cubic"
-  in JE.object [("tag", core)] 
+      HexagonalPhase -> JE.string "HexgonalPhase"
+      CubicPhase     -> JE.string "CubicPhase"
+  in core 
 
-phaseIdEncoder : PhaseID -> JE.Value
-phaseIdEncoder phaseId = JE.object
-  [ ("phaseId", JE.int phaseId) ]
-
-symmPhaseEncoder : (PhaseID, Symm) -> JE.Value
-symmPhaseEncoder (ph, sy) = JE.list identity [phaseIdEncoder ph, symmEncoder sy]
+phaseEncoder : PhaseID -> JE.Value
+phaseEncoder p = JE.object
+  [ ("phaseId", JE.int p.phaseId)
+  , ("phaseSymm", symmEncoder p.phaseSymm)
+  ]
 
 degDecoder : D.Decoder Deg
 degDecoder = D.map Deg (D.field "unDeg" D.float)
@@ -69,20 +69,17 @@ degDecoder = D.map Deg (D.field "unDeg" D.float)
 axisPairDecoder : D.Decoder AxisPair
 axisPairDecoder = D.field "axisAngle" (D.map2 AxisPair tuple3Fdec D.float)
 
-symmDecoder : D.Decoder Symm
+symmDecoder : D.Decoder PhaseSymm
 symmDecoder =
   let
     match str = case str of
-      "Cubic"     -> D.succeed Cubic
-      "Hexagonal" -> D.succeed Hexagonal
+      "CubicPhase"     -> D.succeed CubicPhase
+      "HexagonalPhase" -> D.succeed HexagonalPhase
       some        -> D.fail <| "Unknown Symmetry: " ++ some
-  in D.field "tag" (D.string |> D.andThen match)
+  in D.string |> D.andThen match
 
-phaseIdDecoder : D.Decoder PhaseID
-phaseIdDecoder = D.field "phaseId" D.int
-
-symmPhaseDecoder : D.Decoder (PhaseID, Symm)
-symmPhaseDecoder = D.map2 (\a b -> (a, b)) (D.index 0 phaseIdDecoder) (D.index 1 symmDecoder)
+phaseDecoder : D.Decoder PhaseID
+phaseDecoder = D.map2 PhaseID (D.field "phaseId" D.int) (D.field "phaseSymm" symmDecoder)
 
 tuple3Fdec : D.Decoder (Float, Float, Float)
 tuple3Fdec = D.map3 (\a b c -> (a,b,c)) (D.index 0 D.float) (D.index 1 D.float) (D.index 2 D.float)

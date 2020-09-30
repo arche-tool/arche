@@ -219,40 +219,40 @@ parseBadAngle = ((Deg . abs) <$> option auto
    <> value 5
    <> help "The default error is 5 deg."))
 
-parseParent :: Parser (OR.PhaseID, Symm)
-parseParent = (,) <$> parseParentPhaseID <*> parseParentSymm
+parseParent :: Parser OR.PhaseID
+parseParent = OR.PhaseID <$> parseParentPhaseID <*> parseParentSymm
 
-parseProduct :: Parser (OR.PhaseID, Symm)
-parseProduct = (,) <$> parseProductPhaseID <*> parseProductSymm
+parseProduct :: Parser OR.PhaseID
+parseProduct = OR.PhaseID <$> parseProductPhaseID <*> parseProductSymm
 
-parseParentPhaseID :: Parser OR.PhaseID
-parseParentPhaseID = OR.PhaseID <$> option auto
+parseParentPhaseID :: Parser Int
+parseParentPhaseID = option auto
    (  long "parentPhase"
    <> metavar "Int"
    <> help "ID number of parent phase in the ANG/CTF file, if present.")
 
-parseProductPhaseID :: Parser OR.PhaseID
-parseProductPhaseID = OR.PhaseID <$> option auto
+parseProductPhaseID :: Parser Int
+parseProductPhaseID = option auto
    (  long "productPhase"
    <> metavar "Int"
    <> help "ID number of product phase in the ANG/CTF file, if present.")
 
-symmReader :: String -> Maybe Symm
+symmReader :: String -> Maybe OR.PhaseSymm
 symmReader x = case x of
-  "cubic"     -> Just Cubic
-  "hexagonal" -> Just Hexagonal
-  "bcc"       -> Just Cubic
-  "fcc"       -> Just Cubic
-  "hcp"       -> Just Hexagonal
+  "cubic"     -> Just OR.CubicPhase
+  "hexagonal" -> Just OR.HexagonalPhase
+  "bcc"       -> Just OR.CubicPhase
+  "fcc"       -> Just OR.CubicPhase
+  "hcp"       -> Just OR.HexagonalPhase
   _           -> Nothing
 
-parseParentSymm :: Parser Symm
+parseParentSymm :: Parser OR.PhaseSymm
 parseParentSymm = option (maybeReader symmReader)
   (  long "parentSymmetry"
    <> metavar "symmetry"
    <> help "Type of symmetry on parent phase.")
 
-parseProductSymm :: Parser Symm
+parseProductSymm :: Parser OR.PhaseSymm
 parseProductSymm = option (maybeReader symmReader)
   (  long "productSymmetry"
    <> metavar "symmetry"

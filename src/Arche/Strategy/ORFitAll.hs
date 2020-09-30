@@ -60,8 +60,8 @@ data Cfg =
   , optByAvg     :: Bool
   , predefinedOR :: Maybe AxisPair
   , startOR      :: Maybe AxisPair
-  , parentPhase  :: Maybe (PhaseID, Symm)
-  , productPhase :: (PhaseID, Symm)
+  , parentPhase  :: Maybe PhaseID
+  , productPhase :: PhaseID
   } deriving (Generic, Show)
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
@@ -71,23 +71,24 @@ run cfg@Cfg{..} ebsd_file base_output = do
   printOREvaluation orEval 
   writeUniVTKfile (base_output <.> "vtp") True vtk
 
-getSymmSelector :: Cfg -> (PhaseID -> Maybe Symm)
-getSymmSelector Cfg{..} = case parentPhase of  
-  Just (parentPh, parentSy) -> \ph -> if ph == parentPh then Just parentSy else if ph == fst productPhase then Just (snd productPhase) else Nothing 
-  _                         -> \ph -> if ph == fst productPhase then Just (snd productPhase) else Nothing 
+getPhaseSelector :: Cfg -> (Int -> PhaseID)
+getPhaseSelector Cfg{..} = let
+  in case parentPhase of  
+    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
+    _           -> \ph -> if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
 
 processEBSD :: Cfg -> BSL.ByteString -> IO (OREvaluation, VTK Vec3D)
 processEBSD cfg@Cfg{..} bs = do
   gen <- initTFGen
   let
-    symmSelector = getSymmSelector cfg
+    symmSelector = getPhaseSelector cfg
     vbq = either error id $ do
       ebsd <- loadEBSD bs
       readEBSDToVoxBox
-        (C.rotation &&& (PhaseID . C.phase))
-        (A.rotation &&& (PhaseID . A.phaseNum))
+        (C.rotation &&& (symmSelector . C.phase))
+        (A.rotation &&& (symmSelector . A.phaseNum))
         ebsd
-    (gidBox, voxMap) = maybe (error "No grain detected!") id (getGrainID misoAngle symmSelector vbq)
+    (gidBox, voxMap) = maybe (error "No grain detected!") id (getGrainID misoAngle vbq)
     getGoods         = U.filter ((5 >) . evalMisoORWithKS)
     mkr              = fst $ getMicroVoxel (gidBox, voxMap)
     qmap             = getGrainAverageQ vbq voxMap
@@ -147,7 +148,7 @@ getGrainAverageQ :: VoxBox (Quaternion, PhaseID)->
 getGrainAverageQ vbq gmap = let
   getAvgQ gid vs = let
     q = averageQuaternion $ V.map (fst . (vbq #!)) vs
-    p = maybe (PhaseID $ -1) id (getGrainPhase vbq gmap gid)
+    p = maybe (PhaseID (-1) CubicPhase) id (getGrainPhase vbq gmap gid)
     in (q, p)
   in HM.mapWithKey getAvgQ gmap
 

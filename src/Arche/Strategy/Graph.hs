@@ -1,5 +1,6 @@
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Arche.Strategy.Graph
        ( run
@@ -29,8 +30,8 @@ import Arche.OR
 data Cfg =
   Cfg
   { misoAngle   :: Deg
-  , parentPhase  :: Maybe (PhaseID, Symm)
-  , productPhase :: (PhaseID, Symm)
+  , parentPhase  :: Maybe PhaseID
+  , productPhase :: PhaseID
   } deriving (Show)
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
@@ -53,19 +54,21 @@ run cfg ebsd_file base_output = do
       writeUniVTKfile (base_output ++ "_edges.vtp")  True $ renderMicroEdgesVTK  gids micro
       writeUniVTKfile (base_output ++ "_vertex.vtp") True $ renderMicroVertexVTK gids micro
 
-getSymmSelector :: Cfg -> (PhaseID -> Maybe Symm)
-getSymmSelector Cfg{..} = case parentPhase of  
-  Just (parentPh, parentSy) -> \ph -> if ph == parentPh then Just parentSy else if ph == fst productPhase then Just (snd productPhase) else Nothing 
-  _                         -> \ph -> if ph == fst productPhase then Just (snd productPhase) else Nothing 
+getPhaseSelector :: Cfg -> (Int -> PhaseID)
+getPhaseSelector Cfg{..} = let
+  in case parentPhase of  
+    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
+    _           -> \ph -> if ph == phaseId productPhase then productPhase else PhaseID ph CubicPhase 
 
 processEBSD :: Cfg -> BSL.ByteString -> Either String (VoxBox GrainID, MicroVoxel, [VTKAttrPoint a])
 processEBSD cfg@Cfg{..} bs = do
+  let phaseSelector = getPhaseSelector cfg
   ebsd <- loadEBSD bs
   vbq <- readEBSDToVoxBox
-    (C.rotation &&& (PhaseID . C.phase))
-    (A.rotation &&& (PhaseID . A.phaseNum))
+    (C.rotation &&& (phaseSelector . C.phase))
+    (A.rotation &&& (phaseSelector . A.phaseNum))
     ebsd
-  case getGrainID misoAngle (getSymmSelector cfg) vbq of
+  case getGrainID misoAngle vbq of
     Nothing -> Left "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg

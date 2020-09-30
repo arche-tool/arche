@@ -10,7 +10,7 @@ module Utils exposing
 import FormatNumber exposing (format)
 import FormatNumber.Locales exposing (Decimals(..), base)
 
-import Type.Texture exposing (Deg, Symm(..))
+import Type.Texture exposing (Deg, PhaseSymm(..))
 
 -- =========== Formatters ===========
 floatToText : Float -> String
@@ -31,7 +31,7 @@ filterMaybes l = case l of
     Nothing::ms  -> filterMaybes ms 
     _            -> []
 
-symmToText : Symm -> String
+symmToText : PhaseSymm -> String
 symmToText v = case v of
-    Cubic -> "Cubic"
-    Hexagonal -> "Hexagonal"
+    CubicPhase     -> "Cubic"
+    HexagonalPhase -> "Hexagonal"

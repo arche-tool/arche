@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Arche.Grains
   ( getGrainID
   , getGrainPhase
@@ -18,16 +19,13 @@ import Arche.OR
 
 getGrainID
   :: Deg
-  -> (PhaseID -> Maybe Symm)
   -> VoxBox (Quaternion, PhaseID)
   -> Maybe (VoxBox GrainID, HashMap Int (Vector VoxelPos))
-getGrainID mis getSymm vbox = let
-  isGrain (qa, pa) (qb, pb)
-    | pa == pb = case getSymm pa of
-      Just symm -> let
-        omega = getMisoAngle symm qa qb
+getGrainID !mis vbox = let
+  isGrain (!qa, !pa) (!qb, !pb)
+    | pa == pb = let
+        !omega = getMisoAngle (getPhaseSymm pa) qa qb
         in abs (fromAngle mis) > omega
-      _ -> False
     | otherwise = False
   in resetGrainIDs <$> grainFinder isGrain vbox
 

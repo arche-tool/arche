@@ -43,7 +43,7 @@ import Type.Arche exposing (
   archeCfgEncoder,
   archeListDecoder)
 
-import Type.Texture exposing (Deg, Symm(..))
+import Type.Texture exposing (Deg, PhaseSymm(..))
 
 import Type.ArcheTree as ArcheTree
 import Type.ArcheTree exposing (ArcheTree)
@@ -93,12 +93,12 @@ init _ =
 
 defaultORCfg : ORConfig
 defaultORCfg =
-  { misoAngle = { unDeg = 5.0 }
-  , optByAvg = False
+  { misoAngle    = { unDeg = 5.0 }
+  , optByAvg     = False
   , predefinedOR = Nothing
-  , startOR = Nothing
-  , parentPhase = Nothing
-  , productPhase = (1, Cubic)
+  , startOR      = Nothing
+  , parentPhase  = Nothing
+  , productPhase = {phaseId = 1, phaseSymm = CubicPhase}
   }
 
 defaultArcheCfg : ArcheCfg
@@ -110,7 +110,7 @@ defaultArcheCfg =
   , stepClusterFactor      = 1.2
   , badAngle               = Deg 15.0
   , parentPhase            = Nothing
-  , productPhase           = (1, Cubic)
+  , productPhase           = {phaseId = 1, phaseSymm = CubicPhase}
   }
 
 -- =========== UPDATE ===========
@@ -410,16 +410,16 @@ renderEbsd ebsd isSelected =
 renderOREval : OREval -> Bool -> Element Msg
 renderOREval orEval isSelected = 
   let
-    (prodPhase, prodSymm) = orEval.cfgOR.productPhase
-    parenPhase = Maybe.map Tuple.first orEval.cfgOR.parentPhase
-    parenSymm = Maybe.map Tuple.second orEval.cfgOR.parentPhase
+    product = orEval.cfgOR.productPhase
+    parenPhase = Maybe.map .phaseId orEval.cfgOR.parentPhase
+    parenSymm = Maybe.map .phaseSymm orEval.cfgOR.parentPhase
   in column
     (Element.Events.onClick (SelectedOR orEval.hashOR) :: boxShape isSelected)
     [ cardEnrty "avg. angular misfit" <| degToText orEval.resultOR.misfitError.avgError ++ "°"
     , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.planeDeviation ++ "°"
     , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.axisDeviation ++ "°"
-    , cardEnrty "parent phase ID" <| intToText prodPhase
-    , cardEnrty "parent symmetry" <| symmToText prodSymm
+    , cardEnrty "parent phase ID" <| intToText product.phaseId
+    , cardEnrty "parent symmetry" <| symmToText product.phaseSymm
     , maybe Element.none (cardEnrty "product phase ID" << intToText) parenPhase
     , maybe Element.none (cardEnrty "product symmetry" << symmToText) parenSymm
     ]
@@ -492,17 +492,17 @@ renderORInput model =
       , selected = getter orCfg
       , label = Input.labelAbove [] (text <| "Symmetry (" ++ name ++ ")")
       , options =
-          [ Input.option Hexagonal (text "hcp")
-          , Input.option Cubic     (text "bcc/fcc")
+          [ Input.option HexagonalPhase (text "hcp")
+          , Input.option CubicPhase     (text "bcc/fcc")
           ]
       }
   in case model.orCfgInput of
     Just orCfg -> column
       boxInputShape
-      [ phaseSel "parent"  orCfg (.parentPhase >> Maybe.map Tuple.first)  (\x phid -> {x | parentPhase = Just (phid, maybe Cubic Tuple.second x.parentPhase)})
-      , symmSel  "parent"  orCfg (.parentPhase >> Maybe.map Tuple.second) (\x symm -> {x | parentPhase = Just (maybe 1 Tuple.first x.parentPhase, symm)})
-      , phaseSel "product" orCfg (.productPhase >> Tuple.first >> Just)   (\x phid -> {x | productPhase = (phid, Tuple.second x.productPhase)})
-      , symmSel  "product" orCfg (.productPhase >> Tuple.second >> Just)  (\x symm -> {x | productPhase = (Tuple.first x.productPhase, symm)})
+      [ phaseSel "parent"  orCfg (.parentPhase >> Maybe.map .phaseId)   (\x phid -> {x | parentPhase = Just <| {phaseId = phid, phaseSymm = maybe CubicPhase .phaseSymm x.parentPhase}})
+      , symmSel  "parent"  orCfg (.parentPhase >> Maybe.map .phaseSymm) (\x symm -> {x | parentPhase = Just <| {phaseId = maybe 1 .phaseId x.parentPhase, phaseSymm = symm}})
+      , phaseSel "product" orCfg (.productPhase >> .phaseId >> Just)    (\x phid -> {x | productPhase = {phaseId = phid, phaseSymm = .phaseSymm x.productPhase}})
+      , symmSel  "product" orCfg (.productPhase >> .phaseSymm >> Just)  (\x symm -> {x | productPhase = {phaseId = .phaseId x.productPhase, phaseSymm = symm}})
       , isAvgCheckbox orCfg
       , misoSlider orCfg
       , submitButton (SubmitORConfig orCfg)

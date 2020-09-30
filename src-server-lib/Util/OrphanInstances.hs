@@ -29,6 +29,7 @@ instance ToJSON OF.KSDeviation
 instance ToJSON OF.OREvaluation
 
 instance ToJSON OR.FitError
+instance ToJSON OR.PhaseSymm
 instance ToJSON OR.PhaseID
 instance ToJSON OR.OR
 
@@ -55,6 +56,7 @@ instance FromJSON OF.KSDeviation
 instance FromJSON OF.OREvaluation
 
 instance FromJSON OR.FitError
+instance FromJSON OR.PhaseSymm
 instance FromJSON OR.PhaseID
 instance FromJSON OR.OR
 
@@ -109,6 +111,7 @@ instance (Hashable a) => Hashable (LV.Vec4 a)
 instance (Hashable a) => Hashable (Vector a) where
     hashWithSalt i = hashWithSalt i .toList 
 
+instance Hashable OR.PhaseSymm
 instance Hashable OR.PhaseID
 instance Hashable OR.OR
 
@@ -129,6 +132,7 @@ instance ToDocValue TS.Symm
 instance ToDocValue TS.SymmAxis
 instance ToDocValue OR.FitError
 instance ToDocValue OR.OR
+instance ToDocValue OR.PhaseSymm
 instance ToDocValue OR.PhaseID
 instance ToDocValue F.EBSDmeta
 instance ToDocValue F.EBSDphase
@@ -149,6 +153,7 @@ instance FromDocValue TS.Symm
 instance FromDocValue TS.SymmAxis
 instance FromDocValue OR.FitError
 instance FromDocValue OR.OR
+instance FromDocValue OR.PhaseSymm
 instance FromDocValue OR.PhaseID
 instance FromDocValue F.EBSDmeta
 instance FromDocValue F.EBSDphase
