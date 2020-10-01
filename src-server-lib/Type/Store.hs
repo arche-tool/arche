@@ -77,7 +77,7 @@ data ArcheCfg = ArcheCfg
   , stepClusterFactor      :: Double
   , badAngle               :: TO.Deg
   , productPhase           :: OR.Phase
-  , parentPhase            :: Maybe OR.Phase
+  , parentPhase            :: Either OR.Phase OR.PhaseSymm
   } deriving (Show, Generic)
 
 instance Functor Arche where

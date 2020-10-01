@@ -60,7 +60,7 @@ data Cfg =
   , optByAvg     :: Bool
   , predefinedOR :: Maybe AxisPair
   , startOR      :: Maybe AxisPair
-  , parentPhase  :: Maybe Phase
+  , parentPhase  :: Either Phase PhaseSymm
   , productPhase :: Phase
   } deriving (Generic, Show)
 
@@ -74,7 +74,7 @@ run cfg@Cfg{..} ebsd_file base_output = do
 getPhaseSelector :: Cfg -> (Int -> Phase)
 getPhaseSelector Cfg{..} = let
   in case parentPhase of  
-    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
+    Left parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
     _           -> \ph -> if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
 
 processEBSD :: Cfg -> BSL.ByteString -> IO (OREvaluation, VTK Vec3D)

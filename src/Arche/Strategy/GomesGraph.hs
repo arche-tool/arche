@@ -69,18 +69,18 @@ import Arche.OR
 
 data Cfg =
   Cfg
-  { misoAngle              :: Deg
-  , useExternalMCL         :: Bool
-  , excludeFloatingGrains  :: Bool
-  , refinementSteps        :: Word8
-  , initClusterFactor      :: Double
-  , stepClusterFactor      :: Double
-  , badAngle               :: Deg
-  , withOR                 :: OR
-  , parentPhase            :: Maybe Phase
-  , productPhase           :: Phase
-  , outputANGMap           :: Bool
-  , outputCTFMap           :: Bool
+  { misoAngle             :: Deg
+  , useExternalMCL        :: Bool
+  , excludeFloatingGrains :: Bool
+  , refinementSteps       :: Word8
+  , initClusterFactor     :: Double
+  , stepClusterFactor     :: Double
+  , badAngle              :: Deg
+  , withOR                :: OR
+  , productPhase          :: Phase
+  , parentPhase           :: Either Phase PhaseSymm
+  , outputANGMap          :: Bool
+  , outputCTFMap          :: Bool
   } deriving (Show, Generic)
 
 data ProductGrain =
@@ -161,7 +161,7 @@ logParentStats parents = let
 getPhaseSelector :: Cfg -> (Int -> Phase)
 getPhaseSelector Cfg{..} = let
   in case parentPhase of  
-    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
+    Left parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
     _           -> \ph -> if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
 
 getGomesConfig :: Cfg -> OR -> Either String EBSDdata -> LoggerSet -> Either String GomesConfig
@@ -210,7 +210,7 @@ grainClustering = do
 
 getTransformedProduct :: GomesConfig -> (Quaternion, Phase) -> ParentGrain -> Quaternion
 getTransformedProduct cfg (q, phase) p
-  | Just phase == phaseRef = q
+  | Left phase == phaseRef = q
   | otherwise              = findBestTransformation ors (parentOrientation p) q
   where
     ors   = realORs cfg
@@ -331,7 +331,7 @@ getParentGrainData GomesConfig{..} mids = let
 
   getFitInfo :: (Double, QuaternionFZ, Phase) -> ParentProductFit
   getFitInfo (wi, qi, phase)
-    | Just phase == parentPh = ParentProductFit (wi / wt) 0 (-1, mempty)
+    | Left phase == parentPh = ParentProductFit (wi / wt) 0 (-1, mempty)
     | otherwise              = ParentProductFit (wi / wt) gerr nvar
     where
       (gerr, nvar) = singleerrorfunc qi arche realORs
@@ -346,10 +346,10 @@ getParentGrainData GomesConfig{..} mids = let
 -- | Find the parent orientation from an set of products and remained parents. It takes
 -- an set of symmetric equivalent ORs, a list of weights for each grain, list remained
 -- parent orientation and a list of product orientations.
-getWArcheKernel :: ODF -> Maybe Phase -> Vector OR -> Vector (Double, QuaternionFZ, Phase) -> (Quaternion, FitError)
+getWArcheKernel :: ODF -> Either Phase PhaseSymm -> Vector OR -> Vector (Double, QuaternionFZ, Phase) -> (Quaternion, FitError)
 getWArcheKernel odf phaseID ors xs = (arche, err)
   where
-    (was, wms) = U.partition (\(_,_,p) -> Just p == phaseID) xs
+    (was, wms) = U.partition (\(_,_,p) -> Left p == phaseID) xs
     (!arche, !err) = archeFinderKernel odf ors as ms
     (_, as, _) = U.unzip3 was
     (_, ms, _) = U.unzip3 wms
@@ -612,20 +612,20 @@ genParentEBSD = do
     ANG ang -> Left  . genParentANG qs pp $ ang
     CTF ctf -> Right . genParentCTF qs pp $ ctf
   where
-    genParentANG :: V.Vector Quaternion -> Maybe Phase -> ANGdata -> ANGdata
+    genParentANG :: V.Vector Quaternion -> Either Phase PhaseSymm -> ANGdata -> ANGdata
     genParentANG qs parentPhase ang = ang {A.nodes = V.zipWith insRotation qs (A.nodes ang)}
       where
         insRotation q angPoint = angPoint {
           A.rotation = q,
-          A.phaseNum = maybe (A.phaseNum angPoint) phaseId parentPhase
+          A.phaseNum = either phaseId (const $ A.phaseNum angPoint) parentPhase
           }
 
-    genParentCTF :: V.Vector Quaternion -> Maybe Phase -> CTFdata -> CTFdata
+    genParentCTF :: V.Vector Quaternion -> Either Phase PhaseSymm -> CTFdata -> CTFdata
     genParentCTF qs parentPhase ang = ang {C.nodes = V.zipWith insRotation qs (C.nodes ang)}
       where
         insRotation q ctfPoint = ctfPoint {
           C.rotation = q,
-          C.phase = maybe (C.phase ctfPoint) phaseId parentPhase
+          C.phase = either phaseId (const $ C.phase ctfPoint) parentPhase
           }
 
 -- ========================================== Debugging ==========================================

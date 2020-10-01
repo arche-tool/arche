@@ -16,7 +16,6 @@ import           Options.Applicative
 import           System.FilePath
 
 import           Texture.Orientation         (Deg(..), mkAxisPair, AxisPair)
-import           Texture.Symmetry            (Symm(..))
 import           Linear.Vect
 
 -- ===================================== Data & class ====================================
@@ -139,7 +138,7 @@ instance ParserCmdLine Graph.Cfg where
 parseShowGraph :: Parser Graph.Cfg
 parseShowGraph = Graph.Cfg
   <$> parseMisoAngle
-  <*> optional parseParent
+  <*> parseParent
   <*> parseProduct
 
 -- ======================================= OR Fit All ====================================
@@ -154,7 +153,7 @@ parseORFitAll = ORFitAll.Cfg
   <*> parseORbyAvg
   <*> optional parseOR
   <*> optional parseStartOR
-  <*> optional parseParent
+  <*> parseParent
   <*> parseProduct
 
 parseORbyAvg :: Parser Bool
@@ -179,8 +178,8 @@ parseGomesGraph = GomesGraph.Cfg
   <*> parseStepCluster
   <*> parseBadAngle
   <*> (OR.convert <$> parseOR)
-  <*> optional parseParent
   <*> parseProduct
+  <*> parseParent
   <*> parseOutputToANG
   <*> parseOutputToCTF
 
@@ -219,8 +218,11 @@ parseBadAngle = ((Deg . abs) <$> option auto
    <> value 5
    <> help "The default error is 5 deg."))
 
-parseParent :: Parser OR.Phase
-parseParent = OR.Phase <$> parseParentPhaseID <*> parseParentSymm
+parseParent :: Parser (Either OR.Phase OR.PhaseSymm)
+parseParent = let
+  left  = fmap Left  $ OR.Phase <$> parseParentPhaseID <*> parseParentSymm
+  right = fmap Right $ parseParentSymm
+  in left <|> right
 
 parseProduct :: Parser OR.Phase
 parseProduct = OR.Phase <$> parseProductPhaseID <*> parseProductSymm

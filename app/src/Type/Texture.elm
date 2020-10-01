@@ -3,14 +3,19 @@ module Type.Texture exposing
   , AxisPair
   , Phase
   , PhaseSymm(..)
+  , Either(..)
   , degEncoder
-  , axisPairEncoder
   , degDecoder
+  , axisPairEncoder
   , axisPairDecoder
   , symmEncoder
-  , phaseEncoder
   , symmDecoder
   , phaseDecoder
+  , phaseEncoder
+  , eitherEncoder
+  , eitherDecoder
+  , eitherSymmPhaseEncoder
+  , eitherSymmPhaseDecoder
   , tuple2Fdec
   , tuple3Idec
   , tuple3Fdec
@@ -36,6 +41,10 @@ type alias Phase =
   { phaseId : Int
   , phaseSymm : PhaseSymm
   }
+
+type Either a b
+    = Left a
+    | Right b
 
 degEncoder : Deg -> JE.Value
 degEncoder deg = JE.object
@@ -63,6 +72,14 @@ phaseEncoder p = JE.object
   , ("phaseSymm", symmEncoder p.phaseSymm)
   ]
 
+eitherEncoder : (a -> JE.Value) -> (b -> JE.Value) -> Either a b -> JE.Value
+eitherEncoder aEnc bEnc x = case x of
+   Left  a -> JE.object [("Left",  aEnc a)]
+   Right b -> JE.object [("Right", bEnc b)]
+
+eitherSymmPhaseEncoder : Either Phase PhaseSymm -> JE.Value
+eitherSymmPhaseEncoder = eitherEncoder phaseEncoder symmEncoder
+
 degDecoder : D.Decoder Deg
 degDecoder = D.map Deg (D.field "unDeg" D.float)
 
@@ -80,6 +97,15 @@ symmDecoder =
 
 phaseDecoder : D.Decoder Phase
 phaseDecoder = D.map2 Phase (D.field "phaseId" D.int) (D.field "phaseSymm" symmDecoder)
+
+eitherDecoder : D.Decoder a -> D.Decoder b -> D.Decoder (Either a b)
+eitherDecoder aDec bDec = D.oneOf
+  [ D.map Left  (D.field "Left"  aDec)
+  , D.map Right (D.field "Right" bDec)
+  ]
+
+eitherSymmPhaseDecoder : D.Decoder (Either Phase PhaseSymm)
+eitherSymmPhaseDecoder = eitherDecoder phaseDecoder symmDecoder
 
 tuple3Fdec : D.Decoder (Float, Float, Float)
 tuple3Fdec = D.map3 (\a b c -> (a,b,c)) (D.index 0 D.float) (D.index 1 D.float) (D.index 2 D.float)

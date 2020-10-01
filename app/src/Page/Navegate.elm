@@ -43,7 +43,7 @@ import Type.Arche exposing (
   archeCfgEncoder,
   archeListDecoder)
 
-import Type.Texture exposing (Deg, PhaseSymm(..))
+import Type.Texture exposing (Deg, PhaseSymm(..), Either(..))
 
 import Type.ArcheTree as ArcheTree
 import Type.ArcheTree exposing (ArcheTree)
@@ -97,7 +97,7 @@ defaultORCfg =
   , optByAvg     = False
   , predefinedOR = Nothing
   , startOR      = Nothing
-  , parentPhase  = Nothing
+  , parentPhase  = Right CubicPhase
   , productPhase = {phaseId = 1, phaseSymm = CubicPhase}
   }
 
@@ -109,7 +109,7 @@ defaultArcheCfg =
   , initClusterFactor      = 1.25
   , stepClusterFactor      = 1.2
   , badAngle               = Deg 15.0
-  , parentPhase            = Nothing
+  , parentPhase            = Right CubicPhase
   , productPhase           = {phaseId = 1, phaseSymm = CubicPhase}
   }
 
@@ -411,8 +411,8 @@ renderOREval : OREval -> Bool -> Element Msg
 renderOREval orEval isSelected = 
   let
     product = orEval.cfgOR.productPhase
-    parenPhase = Maybe.map .phaseId orEval.cfgOR.parentPhase
-    parenSymm = Maybe.map .phaseSymm orEval.cfgOR.parentPhase
+    parenPhase = either (.phaseId >> Just) (\_ -> Nothing) orEval.cfgOR.parentPhase
+    parenSymm = either .phaseSymm identity orEval.cfgOR.parentPhase
   in column
     (Element.Events.onClick (SelectedOR orEval.hashOR) :: boxShape isSelected)
     [ cardEnrty "avg. angular misfit" <| degToText orEval.resultOR.misfitError.avgError ++ "°"
@@ -421,7 +421,7 @@ renderOREval orEval isSelected =
     , cardEnrty "parent phase ID" <| intToText product.phaseId
     , cardEnrty "parent symmetry" <| symmToText product.phaseSymm
     , maybe Element.none (cardEnrty "product phase ID" << intToText) parenPhase
-    , maybe Element.none (cardEnrty "product symmetry" << symmToText) parenSymm
+    , cardEnrty "product symmetry" <| symmToText parenSymm
     ]
 
 cardEnrty : String -> String -> Element Msg
@@ -499,10 +499,18 @@ renderORInput model =
   in case model.orCfgInput of
     Just orCfg -> column
       boxInputShape
-      [ phaseSel "parent"  orCfg (.parentPhase >> Maybe.map .phaseId)   (\x phid -> {x | parentPhase = Just <| {phaseId = phid, phaseSymm = maybe CubicPhase .phaseSymm x.parentPhase}})
-      , symmSel  "parent"  orCfg (.parentPhase >> Maybe.map .phaseSymm) (\x symm -> {x | parentPhase = Just <| {phaseId = maybe 1 .phaseId x.parentPhase, phaseSymm = symm}})
-      , phaseSel "product" orCfg (.productPhase >> .phaseId >> Just)    (\x phid -> {x | productPhase = {phaseId = phid, phaseSymm = .phaseSymm x.productPhase}})
-      , symmSel  "product" orCfg (.productPhase >> .phaseSymm >> Just)  (\x symm -> {x | productPhase = {phaseId = .phaseId x.productPhase, phaseSymm = symm}})
+      [ phaseSel "parent"  orCfg
+          (.parentPhase >> either (.phaseId >> Just) (\_ -> Nothing))
+          (\x phid -> {x | parentPhase = either (\y -> Left {y | phaseId = phid}) (\s -> Left {phaseId = phid, phaseSymm = s}) x.parentPhase })
+      , symmSel  "parent"  orCfg
+          (.parentPhase >> either .phaseSymm identity >> Just)
+          (\x symm -> {x | parentPhase = either (\y -> Left {y | phaseSymm = symm}) (\_ -> Right symm) x.parentPhase })
+      , phaseSel "product" orCfg
+          (.productPhase >> .phaseId >> Just)
+          (\x phid -> {x | productPhase = {phaseId = phid, phaseSymm = .phaseSymm x.productPhase}})
+      , symmSel  "product" orCfg
+          (.productPhase >> .phaseSymm >> Just)
+          (\x symm -> {x | productPhase = {phaseId = .phaseId x.productPhase, phaseSymm = symm}})
       , isAvgCheckbox orCfg
       , misoSlider orCfg
       , submitButton (SubmitORConfig orCfg)

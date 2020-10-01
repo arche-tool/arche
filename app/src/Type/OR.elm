@@ -8,10 +8,14 @@ import Type.Texture exposing
   ( Deg
   , AxisPair
   , Phase
+  , PhaseSymm
+  , Either
   , degDecoder
   , degEncoder
   , axisPairDecoder
   , axisPairEncoder
+  , eitherSymmPhaseEncoder
+  , eitherSymmPhaseDecoder
   , phaseEncoder
   , phaseDecoder
   , tuple3Idec
@@ -22,7 +26,7 @@ type alias ORConfig =
   , optByAvg: Bool
   , predefinedOR: Maybe AxisPair
   , startOR: Maybe AxisPair
-  , parentPhase: Maybe Phase
+  , parentPhase: Either Phase PhaseSymm
   , productPhase: Phase
   }
 
@@ -35,7 +39,7 @@ orCfgEncoder cfg =
       , ("optByAvg", JE.bool cfg.optByAvg)
       , ("predefinedOR", maybeEncode axisPairEncoder cfg.predefinedOR)
       , ("startOR", maybeEncode axisPairEncoder cfg.startOR)
-      , ("parentPhase", maybeEncode phaseEncoder cfg.parentPhase)
+      , ("parentPhase", eitherSymmPhaseEncoder cfg.parentPhase)
       , ("productPhase", phaseEncoder cfg.productPhase)
       ]
     maybeEncode enc x = Maybe.withDefault JE.null <| Maybe.map enc x
@@ -44,11 +48,11 @@ orCfgEncoder cfg =
 orCfgDecoder : D.Decoder ORConfig
 orCfgDecoder =
     D.map6 ORConfig
-      (D.field "misoAngle" degDecoder)
-      (D.field "optByAvg" D.bool)
+      (D.field "misoAngle"    <| degDecoder)
+      (D.field "optByAvg"     <| D.bool)
       (D.field "predefinedOR" <| D.maybe axisPairDecoder)
-      (D.field "startOR" <| D.maybe axisPairDecoder)
-      (D.field "parentPhase" <| D.maybe phaseDecoder)
+      (D.field "startOR"      <| D.maybe axisPairDecoder)
+      (D.field "parentPhase"  <| eitherSymmPhaseDecoder)
       (D.field "productPhase" <| phaseDecoder)
 
 type alias OREval =

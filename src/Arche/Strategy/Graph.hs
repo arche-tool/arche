@@ -29,8 +29,8 @@ import Arche.OR
 
 data Cfg =
   Cfg
-  { misoAngle   :: Deg
-  , parentPhase  :: Maybe Phase
+  { misoAngle    :: Deg
+  , parentPhase  :: Either Phase PhaseSymm
   , productPhase :: Phase
   } deriving (Show)
 
@@ -57,7 +57,7 @@ run cfg ebsd_file base_output = do
 getPhaseSelector :: Cfg -> (Int -> Phase)
 getPhaseSelector Cfg{..} = let
   in case parentPhase of  
-    Just parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
+    Left parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
     _           -> \ph -> if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
 
 processEBSD :: Cfg -> BSL.ByteString -> Either String (VoxBox GrainID, MicroVoxel, [VTKAttrPoint a])
