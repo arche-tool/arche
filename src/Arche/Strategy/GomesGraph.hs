@@ -174,19 +174,19 @@ getGomesConfig cfg ror maybeEBSD logger = do
           ebsd
   let 
     noIsleGrains = excludeFloatingGrains cfg
-    parentSymm   = either getPhaseSymm getSymm (parentPhase cfg)
+    productSymm   = getPhaseSymm (productPhase cfg)
     func (gidBox, voxMap) = let
       micro = fst $ getMicroVoxel (gidBox, voxMap)
       in GomesConfig
         { inputCfg       = cfg
         , realOR         = ror
-        , realORs        = genTS parentSymm ror
+        , realORs        = genTS productSymm ror
         , inputEBSD      = ebsd
         , orientationBox = qpBox
         , grainIDBox     = gidBox
         , productGrains  = getProductGrainData qpBox voxMap
         , structureGraph = micro
-        , productGraph   = graphWeight noIsleGrains qpBox micro parentSymm ror
+        , productGraph   = graphWeight noIsleGrains qpBox micro productSymm ror
         , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
         , stdoutLogger   = logger
         }
@@ -287,9 +287,9 @@ getFaceVoxels (Fy pos) = (pos, pos #+# VoxelPos 0 (-1) 0)
 getFaceVoxels (Fz pos) = (pos, pos #+# VoxelPos 0 0 (-1))
 
 graphWeight :: Bool -> VoxBox (Quaternion, Phase) -> MicroVoxel -> Symm -> OR -> Graph Int Double
-graphWeight noIsleGrains vbq micro parentSymm withOR = let
+graphWeight noIsleGrains vbq micro productSymm withOR = let
   fs    = HM.keys $ microFaces micro
-  ors   = genTS parentSymm withOR
+  ors   = genTS productSymm withOR
   ms    = map (getFaceIDmisOR vbq micro ors) fs
   weight x = let
     k = -300

@@ -203,17 +203,17 @@ deltaVec3 func v = let
   in (x, Vec3 d1 d2 d3)
 
 findORFace :: Symm -> Vector ((Quaternion, Phase), (Quaternion, Phase)) -> OR -> OR
-findORFace parentSymm qs t0 = let
+findORFace productSymm qs t0 = let
   func = fromAngle . avgError . faceerrorfunc qs .
-         genTS parentSymm . OR . toQuaternion . mkUnsafeRodrigues
+         genTS productSymm . OR . toQuaternion . mkUnsafeRodrigues
   guess = rodriVec $ fromQuaternion $ qOR t0
   in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS (deltaVec3 func) guess
 
 findOR :: Symm -> ErrorFunc -> Quaternion -> OR -> OR
-findOR parentSymm errf ga t0 = let
+findOR productSymm errf ga t0 = let
   func v = let
     t = OR . toQuaternion $ mkUnsafeRodrigues v
-    in fromAngle . avgError . errf ga $ genTS parentSymm t
+    in fromAngle . avgError . errf ga $ genTS productSymm t
   guess = rodriVec $ fromQuaternion $ qOR t0
   in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS (deltaVec3 func) guess
 
@@ -239,7 +239,7 @@ hotStartArche errf = let
   in qs V.! i
 
 hotStartOR :: Symm -> ErrorFunc -> Quaternion -> OR
-hotStartOR parentSymm errf q = let
+hotStartOR productSymm errf q = let
   ks   = rodriVec . fromQuaternion . qOR $ brOR
   func = OR . toQuaternion . mkUnsafeRodrigues . (ks &+)
   ts = V.fromList
@@ -248,7 +248,7 @@ hotStartOR parentSymm errf q = let
        , r2 <- [-0.2, 0.02 .. 0.2]
        , r3 <- [-0.2, 0.02 .. 0.2]
        ]
-  foo = fromAngle . avgError . errf q . genTS parentSymm
+  foo = fromAngle . avgError . errf q . genTS productSymm
   i = V.minIndex $ V.map foo ts
   in ts V.! i
 

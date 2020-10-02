@@ -82,7 +82,7 @@ processEBSD cfg@Cfg{..} bs = do
   gen <- initTFGen
   let
     symmSelector = getPhaseSelector cfg
-    parentSymm   = either getPhaseSymm getSymm parentPhase
+    productSymm  = getPhaseSymm productPhase
     vbq = either error id $ do
       ebsd <- loadEBSD bs
       readEBSDToVoxBox
@@ -97,19 +97,19 @@ processEBSD cfg@Cfg{..} bs = do
       | optByAvg  = getGoods $ getGBbyAverage  qmap mkr gen 1000
       | otherwise = getGoods $ getGBbySegments vbq  mkr gen 1000
 
-    realOR = findORFace parentSymm segs $ maybe brOR (OR . toQuaternion) startOR
+    realOR = findORFace productSymm segs $ maybe brOR (OR . toQuaternion) startOR
     !ror = maybe realOR (OR . toQuaternion) predefinedOR
-    !orEval = evaluateOR parentSymm ror segs
+    !orEval = evaluateOR productSymm ror segs
     vtk = renderVTK cfg vbq qmap mkr ror
 
   return (orEval, vtk)
 
 renderVTK :: Cfg -> VoxBox (Quaternion, Phase) -> HashMap Int (Quaternion, Phase) -> MicroVoxel -> OR -> VTK Vec3D
 renderVTK Cfg{..} vbq qmap mkr ror
-  | optByAvg  = renderGBOR        parentSymm ror vbq qmap mkr
-  | otherwise = renderFaceVoxelOR parentSymm ror vbq      mkr
+  | optByAvg  = renderGBOR        productSymm ror vbq qmap mkr
+  | otherwise = renderFaceVoxelOR productSymm ror vbq      mkr
   where
-    parentSymm = either getPhaseSymm getSymm parentPhase
+    productSymm = getPhaseSymm productPhase
 
 -- ================================== Find OR ============================================
 
@@ -172,11 +172,11 @@ avgVector x
     n = fromIntegral $ V.length x
 
 renderFaceVoxelOR :: Symm -> OR -> VoxBox (Quaternion, Phase) -> MicroVoxel -> VTK Vec3D
-renderFaceVoxelOR parentSymm ror vbq micro = let
+renderFaceVoxelOR productSymm ror vbq micro = let
   gs  = mapMaybe (getPropValue) $ HM.elems $ microFaces micro
   fs  = V.concat gs
   ms  = V.concat $ map (avgVector . getM) gs
-  ts  = genTS parentSymm ror
+  ts  = genTS productSymm ror
   vtk = renderVoxElemListVTK vbq (V.toList fs)
   getM = V.map (((180/pi) *) . faceVoxelMisoOR ts vbq)
   func i _ _ = ms V.! i
@@ -188,11 +188,11 @@ renderGBOR :: Symm
            -> HashMap Int (Quaternion, Phase)
            -> MicroVoxel
            -> VTK Vec3D
-renderGBOR parentSymm ror vbq qmap micro = let
+renderGBOR productSymm ror vbq qmap micro = let
   fids = HM.keys  $ microFaces micro
   vs   = HM.elems $ microFaces micro
   fs   = mapMaybe getPropValue vs
-  ts   = genTS parentSymm ror
+  ts   = genTS productSymm ror
   ms   = V.concat $ zipWith foo fids fs
   vtk  = renderVoxElemListVTK vbq (concatMap V.toList fs)
   foo fid vf = V.replicate (V.length vf) ((180/pi) * faceMisoOR ts qmap fid)
@@ -243,10 +243,10 @@ data OREvaluation
   } deriving (Generic, Show)
 
 evaluateOR :: Symm -> OR -> Vector ((Quaternion, Phase), (Quaternion, Phase)) -> OREvaluation
-evaluateOR parentSymm ror segs = OREvaluation
+evaluateOR productSymm ror segs = OREvaluation
   { orientationRelationship = mkOrientationRelationship ror
-  , ksDeviation = calculateKSDeviation parentSymm ror
-  , misfitError = faceerrorfunc segs (genTS parentSymm ror)
+  , ksDeviation = calculateKSDeviation productSymm ror
+  , misfitError = faceerrorfunc segs (genTS productSymm ror)
   }
 
 mkOrientationRelationship :: OR -> OrientationRelationship
@@ -261,8 +261,8 @@ mkOrientationRelationship ror = let
     }
 
 calculateKSDeviation :: Symm -> OR -> KSDeviation
-calculateKSDeviation parentSymm ror = let
-  rors = genTS parentSymm ror
+calculateKSDeviation productSymm ror = let
+  rors = genTS productSymm ror
 
   evalManyOR :: (OR -> Double) -> Deg
   evalManyOR func = toAngle $ U.minimum $ U.map func rors
