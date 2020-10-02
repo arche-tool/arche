@@ -30,8 +30,8 @@ module Arche.OR
     -- * Orientation Relationship
   , OR (..)
   , mkOR
-  , ksORs
-  , ksOR
+  , brORs
+  , brOR
   , genTS
   , QuaternionFZ (qFZ)
   , getQinFZ
@@ -39,6 +39,7 @@ module Arche.OR
     -- * Phases
   , Phase (..)
   , PhaseSymm (..)
+  , getSymm
   , getPhaseSymm
     -- * Test functions
   , testArcheFit
@@ -113,20 +114,20 @@ convert = fromQuaternion . toQuaternion
 getQinFZ :: Quaternion -> QuaternionFZ
 getQinFZ = QuaternionFZ . toFZ Hexagonal
 
-ksOR :: OR
-ksOR = OR $ toQuaternion $ mkAxisPair (Vec3 23 1 3) (Deg 43.5)
+brOR :: OR
+brOR = OR $ toQuaternion $ mkAxisPair (Vec3 23 1 3) (Deg 43.5)
 
-ksORs :: Vector OR
-ksORs = genTS ksOR
+brORs :: Vector OR
+brORs = genTS Hexagonal brOR
 
-genTS :: OR -> Vector OR
-genTS (OR t) = let
+genTS :: Symm -> OR -> Vector OR
+genTS symm (OR t) = let
   (w, v) = splitQuaternion t
-  vs = V.convert $ getAllSymmVec (getSymmOps Hexagonal) v
+  vs = V.convert $ getAllSymmVec (getSymmOps symm) v
   in G.map (OR . mergeQuaternion . (,) w) vs
 
 misoDoubleKS :: Vector SymmOp -> Quaternion -> Quaternion -> Double
-misoDoubleKS = misoDoubleOR ksORs
+misoDoubleKS = misoDoubleOR brORs
 
 misoDoubleOR :: Vector OR -> Vector SymmOp -> Quaternion -> Quaternion -> Double
 misoDoubleOR ors symOps q1 q2 = let
@@ -144,7 +145,10 @@ misoSingleOR ors symOps q1 q2 = let
   in U.minimum ks
 
 getPhaseSymm :: Phase -> Symm
-getPhaseSymm ph = case phaseSymm ph of
+getPhaseSymm = getSymm . phaseSymm
+
+getSymm :: PhaseSymm -> Symm
+getSymm symm = case symm of
   CubicPhase     -> Cubic
   HexagonalPhase -> Hexagonal
 
@@ -159,12 +163,12 @@ instance NFData FitError
 
 type ErrorFunc = Quaternion -> Vector OR -> FitError
 
-evalMisoOR :: (Eq a)=> Vector OR -> (Quaternion, a) -> (Quaternion, a) -> Double
+evalMisoOR :: Vector OR -> (Quaternion, Phase) -> (Quaternion, Phase) -> Double
 evalMisoOR ors (qa, pa) (qb, pb)
-  | pa == pb  = misoDoubleOR ors symOps qa qb
-  | otherwise = misoSingleOR ors symOps qa qb
+  | pa == pb  = misoDoubleOR ors aSymOps qa qb
+  | otherwise = misoSingleOR ors aSymOps qa qb
   where
-    symOps = getSymmOps Hexagonal
+    aSymOps = getSymmOps (getPhaseSymm pa)
 
 -- | Evaluates the average angular error in rad between given parent and product
 -- orientations and given orientation relationship. The list of products is given in the
@@ -198,18 +202,18 @@ deltaVec3 func v = let
   d3 = (func (v &+ Vec3 0 0 k) - func (v &- Vec3 0 0 k)) / (2*k)
   in (x, Vec3 d1 d2 d3)
 
-findORFace :: Vector ((Quaternion, Phase), (Quaternion, Phase)) -> OR -> OR
-findORFace qs t0 = let
+findORFace :: Symm -> Vector ((Quaternion, Phase), (Quaternion, Phase)) -> OR -> OR
+findORFace parentSymm qs t0 = let
   func = fromAngle . avgError . faceerrorfunc qs .
-         genTS . OR . toQuaternion . mkUnsafeRodrigues
+         genTS parentSymm . OR . toQuaternion . mkUnsafeRodrigues
   guess = rodriVec $ fromQuaternion $ qOR t0
   in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS (deltaVec3 func) guess
 
-findOR :: ErrorFunc -> Quaternion -> OR -> OR
-findOR errf ga t0 = let
+findOR :: Symm -> ErrorFunc -> Quaternion -> OR -> OR
+findOR parentSymm errf ga t0 = let
   func v = let
     t = OR . toQuaternion $ mkUnsafeRodrigues v
-    in fromAngle $ avgError $ errf ga (genTS t)
+    in fromAngle . avgError . errf ga $ genTS parentSymm t
   guess = rodriVec $ fromQuaternion $ qOR t0
   in OR $ toQuaternion $ mkUnsafeRodrigues $ bfgs defaultBFGS (deltaVec3 func) guess
 
@@ -230,13 +234,13 @@ hotStartArche errf = let
        , _phi  <- [0.0, 3 .. 90]
        , _phi2 <- [0.0, 3 .. 90]
        ]
-  func q = fromAngle $ avgError $ errf q ksORs
+  func q = fromAngle $ avgError $ errf q brORs
   i = V.minIndex $ V.map func qs
   in qs V.! i
 
-hotStartOR :: ErrorFunc -> Quaternion -> OR
-hotStartOR errf q = let
-  ks   = rodriVec . fromQuaternion . qOR $ ksOR
+hotStartOR :: Symm -> ErrorFunc -> Quaternion -> OR
+hotStartOR parentSymm errf q = let
+  ks   = rodriVec . fromQuaternion . qOR $ brOR
   func = OR . toQuaternion . mkUnsafeRodrigues . (ks &+)
   ts = V.fromList
        [ func (Vec3 r1 r2 r3)
@@ -244,7 +248,7 @@ hotStartOR errf q = let
        , r2 <- [-0.2, 0.02 .. 0.2]
        , r3 <- [-0.2, 0.02 .. 0.2]
        ]
-  foo t = fromAngle $ avgError $ errf q (genTS t)
+  foo = fromAngle . avgError . errf q . genTS parentSymm
   i = V.minIndex $ V.map foo ts
   in ts V.! i
 
@@ -375,7 +379,7 @@ derivingUnbox "Phase"
 testArcheFit :: Quaternion -> Vector Quaternion -> OR -> (FitError, FitError)
 testArcheFit ga gs t = let
   gms = G.map getQinFZ gs
-  m1  = uniformerrorfunc gms ga (genTS t)
+  m1  = uniformerrorfunc gms ga (genTS Cubic t)
   m2  = errorfuncSlowButSure ga gs (qOR t)
   in (m1, m2)
 
@@ -386,12 +390,12 @@ testFindOR = do
     products   = G.map ((a #<=) . qOR) ts
     productsFZ = G.map getQinFZ products
     t  = mkOR (Vec3 26 1 3) (Deg 43.5)
-    ts = genTS t
-    t' = findOR errf a t
+    ts = genTS Cubic t
+    t' = findOR Cubic errf a t
     errf = uniformerrorfunc productsFZ
   print (convert t  :: AxisPair)
   print (convert t' :: AxisPair)
-  print ((convert $ hotStartOR errf a) :: AxisPair)
+  print ((convert $ hotStartOR Cubic errf a) :: AxisPair)
 
 testFindArche :: IO ()
 testFindArche = randomIO >>= plotErrFunc
@@ -399,16 +403,16 @@ testFindArche = randomIO >>= plotErrFunc
 plotErrFunc :: Quaternion -> IO ()
 plotErrFunc parent = let
   parentFZ   = toFZ Hexagonal parent
-  products   = G.map ((parent #<=) . qOR) ksORs
+  products   = G.map ((parent #<=) . qOR) brORs
   productsFZ = G.map getQinFZ products
   errF = uniformerrorfunc productsFZ
   (grid, vtk) = mkSO3 35 35 35
-  es = G.map (\s -> fromAngle $ avgError $ errF (so3ToQuaternion s) ksORs) grid
+  es = G.map (\s -> fromAngle $ avgError $ errF (so3ToQuaternion s) brORs) grid
   attr = mkPointValueAttr "Error function" (\ix _ -> es U.! ix)
   vtk' = addPointValueAttr vtk attr
 
   parentGuess = so3ToQuaternion $ grid U.! (U.minIndex es)
-  parentFound = findArche errF mempty ksORs
+  parentFound = findArche errF mempty brORs
   parentGuessFZ = toFZ Hexagonal parentGuess
   parentFoundFZ = toFZ Hexagonal parentFound
 
@@ -417,7 +421,7 @@ plotErrFunc parent = let
     putStrLn "=================="
     putStrLn $ "Expect: " ++ show parentFZ
     putStrLn . show $ test parentFZ parentFoundFZ
-    putStrLn . show $ testArcheFit parentFound products ksOR
+    putStrLn . show $ testArcheFit parentFound products brOR
     putStrLn $ "start point: " ++ show parentGuessFZ
     putStrLn $ "final point: " ++ show parentFoundFZ
 
@@ -481,7 +485,7 @@ testPPODF :: FilePath -> IO ()
 testPPODF dir = do
   qg1 <- randomIO
   qg2 <- applyDeviation (Deg 15) qg1
-  ors <- U.mapM (fmap OR . applyDeviation (Deg 4) . qOR) ksORs
+  ors <- U.mapM (fmap OR . applyDeviation (Deg 4) . qOR) brORs
   let
     arche1 = qFZ $ getQinFZ qg1
     arche2 = qFZ $ getQinFZ qg2
@@ -493,8 +497,8 @@ testPPODF dir = do
     (g2, i2, _, ppodf2) = oneStepDeconvulition ppodf1
     (g3, i3, _, ppodf3) = oneStepDeconvulition ppodf2
     ps = U.fromList [arche1, arche2, g1, g2, g3]
-  print $ uniformerrorfunc ms1 arche1 ksORs
-  print $ uniformerrorfunc ms2 arche2 ksORs
+  print $ uniformerrorfunc ms1 arche1 brORs
+  print $ uniformerrorfunc ms2 arche2 brORs
   print (arche1, arche2, g1, g2, g3)
   print (i1, i2, i3)
   writeUniVTKfile (dir ++ "/tess-fittest-ODF0.vtu"  ) True (renderODFVTK ppodf0)
@@ -506,14 +510,14 @@ testPPODF dir = do
 testTesseractFitting :: FilePath -> IO ()
 testTesseractFitting dir = do
   qg  <- randomIO
-  ors <- U.mapM (applyDeviation (Deg 5) . qOR) ksORs
+  ors <- U.mapM (applyDeviation (Deg 5) . qOR) brORs
   let
     arche = qFZ $ getQinFZ qg
     ms    = G.map (getQinFZ . (arche #<=) . toQuaternion) (U.map OR ors)
-    (gt, et, tt)  = hotStartTesseract ksORs ms
-    --(gf, ef, orf) = getWArcheOR       ksOR ws (G.map qFZ ms)
+    (gt, et, tt)  = hotStartTesseract brORs ms
+    --(gf, ef, orf) = getWArcheOR       brOR ws (G.map qFZ ms)
     ps = U.fromList [arche, gt]
-  print $ uniformerrorfunc ms arche ksORs
+  print $ uniformerrorfunc ms arche brORs
   print arche
   print (gt, et)
   --print $ (gf, ef)

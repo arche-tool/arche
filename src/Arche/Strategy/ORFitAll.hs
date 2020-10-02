@@ -82,6 +82,7 @@ processEBSD cfg@Cfg{..} bs = do
   gen <- initTFGen
   let
     symmSelector = getPhaseSelector cfg
+    parentSymm   = either getPhaseSymm getSymm parentPhase
     vbq = either error id $ do
       ebsd <- loadEBSD bs
       readEBSDToVoxBox
@@ -96,22 +97,24 @@ processEBSD cfg@Cfg{..} bs = do
       | optByAvg  = getGoods $ getGBbyAverage  qmap mkr gen 1000
       | otherwise = getGoods $ getGBbySegments vbq  mkr gen 1000
 
-    realOR = findORFace segs $ maybe ksOR (OR . toQuaternion) startOR
+    realOR = findORFace parentSymm segs $ maybe brOR (OR . toQuaternion) startOR
     !ror = maybe realOR (OR . toQuaternion) predefinedOR
-    !orEval = evaluateOR ror segs
+    !orEval = evaluateOR parentSymm ror segs
     vtk = renderVTK cfg vbq qmap mkr ror
 
   return (orEval, vtk)
 
 renderVTK :: Cfg -> VoxBox (Quaternion, Phase) -> HashMap Int (Quaternion, Phase) -> MicroVoxel -> OR -> VTK Vec3D
 renderVTK Cfg{..} vbq qmap mkr ror
-  | optByAvg  = renderGBOR        ror vbq qmap mkr
-  | otherwise = renderFaceVoxelOR ror vbq      mkr
+  | optByAvg  = renderGBOR        parentSymm ror vbq qmap mkr
+  | otherwise = renderFaceVoxelOR parentSymm ror vbq      mkr
+  where
+    parentSymm = either getPhaseSymm getSymm parentPhase
 
 -- ================================== Find OR ============================================
 
 evalMisoORWithKS :: ((Quaternion, Phase), (Quaternion, Phase)) -> Deg
-evalMisoORWithKS (q1, q2) = toAngle $ evalMisoOR ksORs q1 q2
+evalMisoORWithKS (q1, q2) = toAngle $ evalMisoOR brORs q1 q2
 
 getGBbySegments :: VoxBox (Quaternion, Phase) -> MicroVoxel -> TFGen
                 -> Int -> Vector ((Quaternion, Phase), (Quaternion, Phase))
@@ -168,24 +171,28 @@ avgVector x
   where
     n = fromIntegral $ V.length x
 
-renderFaceVoxelOR :: OR -> VoxBox (Quaternion, Phase) -> MicroVoxel -> VTK Vec3D
-renderFaceVoxelOR ror vbq micro = let
+renderFaceVoxelOR :: Symm -> OR -> VoxBox (Quaternion, Phase) -> MicroVoxel -> VTK Vec3D
+renderFaceVoxelOR parentSymm ror vbq micro = let
   gs  = mapMaybe (getPropValue) $ HM.elems $ microFaces micro
   fs  = V.concat gs
   ms  = V.concat $ map (avgVector . getM) gs
-  ts  = genTS ror
+  ts  = genTS parentSymm ror
   vtk = renderVoxElemListVTK vbq (V.toList fs)
   getM = V.map (((180/pi) *) . faceVoxelMisoOR ts vbq)
   func i _ _ = ms V.! i
   in addCellAttr vtk (mkCellAttr "misoORAvg" func)
 
-renderGBOR :: OR -> VoxBox (Quaternion, Phase) -> HashMap Int (Quaternion, Phase)
-           -> MicroVoxel -> VTK Vec3D
-renderGBOR ror vbq qmap micro = let
+renderGBOR :: Symm
+           -> OR
+           -> VoxBox (Quaternion, Phase)
+           -> HashMap Int (Quaternion, Phase)
+           -> MicroVoxel
+           -> VTK Vec3D
+renderGBOR parentSymm ror vbq qmap micro = let
   fids = HM.keys  $ microFaces micro
   vs   = HM.elems $ microFaces micro
   fs   = mapMaybe getPropValue vs
-  ts   = genTS ror
+  ts   = genTS parentSymm ror
   ms   = V.concat $ zipWith foo fids fs
   vtk  = renderVoxElemListVTK vbq (concatMap V.toList fs)
   foo fid vf = V.replicate (V.length vf) ((180/pi) * faceMisoOR ts qmap fid)
@@ -235,11 +242,11 @@ data OREvaluation
   , misfitError :: !FitError
   } deriving (Generic, Show)
 
-evaluateOR :: OR -> Vector ((Quaternion, Phase), (Quaternion, Phase)) -> OREvaluation
-evaluateOR ror segs = OREvaluation
+evaluateOR :: Symm -> OR -> Vector ((Quaternion, Phase), (Quaternion, Phase)) -> OREvaluation
+evaluateOR parentSymm ror segs = OREvaluation
   { orientationRelationship = mkOrientationRelationship ror
-  , ksDeviation = calculateKSDeviation ror
-  , misfitError = faceerrorfunc segs (genTS ror)
+  , ksDeviation = calculateKSDeviation parentSymm ror
+  , misfitError = faceerrorfunc segs (genTS parentSymm ror)
   }
 
 mkOrientationRelationship :: OR -> OrientationRelationship
@@ -253,9 +260,9 @@ mkOrientationRelationship ror = let
     , orAngle = toAngle w
     }
 
-calculateKSDeviation :: OR -> KSDeviation
-calculateKSDeviation ror = let
-  rors = genTS ror
+calculateKSDeviation :: Symm -> OR -> KSDeviation
+calculateKSDeviation parentSymm ror = let
+  rors = genTS parentSymm ror
 
   evalManyOR :: (OR -> Double) -> Deg
   evalManyOR func = toAngle $ U.minimum $ U.map func rors
@@ -266,7 +273,7 @@ calculateKSDeviation ror = let
 
   devPlane = evalVecRot (Vec3 1 1 0) (Vec3 1 1 1)
   devDir   = evalVecRot (Vec3 1 1 1) (Vec3 1 1 0)
-  dev      = getMisoAngle Cubic (qOR ksOR) . qOR
+  dev      = getMisoAngle Cubic (qOR brOR) . qOR
   in KSDeviation
     { directDeviation = evalManyOR dev
     , planeDeviation = evalManyOR devPlane
