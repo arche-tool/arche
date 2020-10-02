@@ -501,7 +501,7 @@ renderORInput model =
       boxInputShape
       [ phaseSel "parent"  orCfg
           (.parentPhase >> either (.phaseId >> Just) (\_ -> Nothing))
-          (\x phid -> {x | parentPhase = either (\y -> Left {y | phaseId = phid}) (\s -> Left {phaseId = phid, phaseSymm = s}) x.parentPhase })
+          (\x phid -> {x | parentPhase = either (\y -> if y.phaseId == phid then Right y.phaseSymm else Left {y | phaseId = phid}) (\s -> Left {phaseId = phid, phaseSymm = s}) x.parentPhase })
       , symmSel  "parent"  orCfg
           (.parentPhase >> either .phaseSymm identity >> Just)
           (\x symm -> {x | parentPhase = either (\y -> Left {y | phaseSymm = symm}) (\_ -> Right symm) x.parentPhase })
