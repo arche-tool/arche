@@ -75,20 +75,6 @@ import Texture.TesseractGrid
 
 newtype QuaternionFZ = QuaternionFZ {qFZ :: Quaternion} deriving (Show)
 
-instance Semigroup QuaternionFZ where
-  (<>) p q = fromQuaternion (qFZ p `mappend` qFZ q)
-
-instance Monoid QuaternionFZ where
-  mempty      = QuaternionFZ mempty
-
-instance Group QuaternionFZ where
-  invert = fromQuaternion . invert . qFZ
-
-instance Rot QuaternionFZ where
-  toQuaternion   = qFZ
-  fromQuaternion = getQinFZ
-  getOmega       = getOmega . qFZ
-
 newtype OR
   = OR
   { qOR :: Quaternion
@@ -111,8 +97,8 @@ mkOR v = OR . toQuaternion . mkAxisPair v
 convert :: (Rot a, Rot b) => a -> b
 convert = fromQuaternion . toQuaternion
 
-getQinFZ :: Quaternion -> QuaternionFZ
-getQinFZ = QuaternionFZ . toFZ Hexagonal
+getQinFZ :: Symm -> Quaternion -> QuaternionFZ
+getQinFZ symm = QuaternionFZ . toFZ symm 
 
 brOR :: OR
 brOR = OR $ toQuaternion $ mkAxisPair (Vec3 23 1 3) (Deg 43.5)
@@ -378,7 +364,7 @@ derivingUnbox "Phase"
 
 testArcheFit :: Quaternion -> Vector Quaternion -> OR -> (FitError, FitError)
 testArcheFit ga gs t = let
-  gms = G.map getQinFZ gs
+  gms = G.map (getQinFZ Cubic) gs
   m1  = uniformerrorfunc gms ga (genTS Cubic t)
   m2  = errorfuncSlowButSure ga gs (qOR t)
   in (m1, m2)
@@ -388,7 +374,7 @@ testFindOR = do
   a <- randomIO
   let
     products   = G.map ((a #<=) . qOR) ts
-    productsFZ = G.map getQinFZ products
+    productsFZ = G.map (getQinFZ Cubic) products
     t  = mkOR (Vec3 26 1 3) (Deg 43.5)
     ts = genTS Cubic t
     t' = findOR Cubic errf a t
@@ -404,7 +390,7 @@ plotErrFunc :: Quaternion -> IO ()
 plotErrFunc parent = let
   parentFZ   = toFZ Hexagonal parent
   products   = G.map ((parent #<=) . qOR) brORs
-  productsFZ = G.map getQinFZ products
+  productsFZ = G.map (getQinFZ Cubic) products
   errF = uniformerrorfunc productsFZ
   (grid, vtk) = mkSO3 35 35 35
   es = G.map (\s -> fromAngle $ avgError $ errF (so3ToQuaternion s) brORs) grid
@@ -487,10 +473,10 @@ testPPODF dir = do
   qg2 <- applyDeviation (Deg 15) qg1
   ors <- U.mapM (fmap OR . applyDeviation (Deg 4) . qOR) brORs
   let
-    arche1 = qFZ $ getQinFZ qg1
-    arche2 = qFZ $ getQinFZ qg2
-    ms1    = G.map (getQinFZ . (arche1 #<=) . toQuaternion) ors
-    ms2    = G.map (getQinFZ . (arche2 #<=) . toQuaternion) ors
+    arche1 = qFZ $ getQinFZ Cubic qg1
+    arche2 = qFZ $ getQinFZ Cubic qg2
+    ms1    = G.map (getQinFZ Cubic . (arche1 #<=) . toQuaternion) ors
+    ms2    = G.map (getQinFZ Cubic . (arche2 #<=) . toQuaternion) ors
     odf0   = buildEmptyODF 3 Hexagonal (Deg 5)
     ppodf0 = genPPODF odf0 ors U.empty (ms1 G.++ ms2)
     (g1, i1, _, ppodf1) = oneStepDeconvulition ppodf0
@@ -512,8 +498,8 @@ testTesseractFitting dir = do
   qg  <- randomIO
   ors <- U.mapM (applyDeviation (Deg 5) . qOR) brORs
   let
-    arche = qFZ $ getQinFZ qg
-    ms    = G.map (getQinFZ . (arche #<=) . toQuaternion) (U.map OR ors)
+    arche = qFZ $ getQinFZ Cubic qg
+    ms    = G.map (getQinFZ Cubic . (arche #<=) . toQuaternion) (U.map OR ors)
     (gt, et, tt)  = hotStartTesseract brORs ms
     --(gf, ef, orf) = getWArcheOR       brOR ws (G.map qFZ ms)
     ps = U.fromList [arche, gt]

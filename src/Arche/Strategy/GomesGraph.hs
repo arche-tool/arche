@@ -174,7 +174,8 @@ getGomesConfig cfg ror maybeEBSD logger = do
           ebsd
   let 
     noIsleGrains = excludeFloatingGrains cfg
-    productSymm   = getPhaseSymm (productPhase cfg)
+    productSymm  = getPhaseSymm (productPhase cfg)
+    parentSymm   = either getPhaseSymm getSymm (parentPhase cfg)
     func (gidBox, voxMap) = let
       micro = fst $ getMicroVoxel (gidBox, voxMap)
       in GomesConfig
@@ -184,10 +185,10 @@ getGomesConfig cfg ror maybeEBSD logger = do
         , inputEBSD      = ebsd
         , orientationBox = qpBox
         , grainIDBox     = gidBox
-        , productGrains  = getProductGrainData qpBox voxMap
+        , productGrains  = getProductGrainData productSymm qpBox voxMap
         , structureGraph = micro
         , productGraph   = graphWeight noIsleGrains qpBox micro productSymm ror
-        , orientationGrid = buildEmptyODF (Deg 2.5) Cubic (Deg 2.5)
+        , orientationGrid = buildEmptyODF (Deg 2.5) parentSymm (Deg 2.5)
         , stdoutLogger   = logger
         }
   maybe (Left "No grain detected!") (Right . func) (getGrainID (misoAngle cfg) qpBox)
@@ -212,17 +213,18 @@ grainClustering = do
 getTransformedProduct :: GomesConfig -> (Quaternion, Phase) -> ParentGrain -> Quaternion
 getTransformedProduct cfg (q, phase) p
   | Left phase == phaseRef = q
-  | otherwise              = findBestTransformation ors (parentOrientation p) q
+  | otherwise              = findBestTransformation productSymm ors (parentOrientation p) q
   where
-    ors   = realORs cfg
-    phaseRef = parentPhase . inputCfg $ cfg
+    ors         = realORs cfg
+    phaseRef    = parentPhase . inputCfg $ cfg
+    productSymm = getPhaseSymm . productPhase .inputCfg $ cfg
 
-findBestTransformation ::  Vector OR -> Quaternion -> Quaternion -> Quaternion
-findBestTransformation ors ref q = let
-  qs  = U.map ((qFZ (getQinFZ q) #<=) . qOR) ors
-  ms  = U.map (fst . splitQuaternion . qFZ . getQinFZ . (-#- ref)) qs
+findBestTransformation :: Symm -> Vector OR -> Quaternion -> Quaternion -> Quaternion
+findBestTransformation symm ors ref q = let
+  qs  = U.map ((qFZ (getQinFZ symm q) #<=) . qOR) ors
+  ms  = U.map (fst . splitQuaternion . qFZ . getQinFZ symm . (-#- ref)) qs
   i   = U.maxIndex ms
-  in qFZ . getQinFZ $ qs U.! i
+  in qFZ . getQinFZ symm $ qs U.! i
 
 run :: Cfg -> FilePath -> FilePath -> IO ()
 run cfg ebsd_file base_output = do
@@ -300,9 +302,9 @@ graphWeight noIsleGrains vbq micro productSymm withOR = let
 
 -- ================================== Grain Data ===================================
 
-getProductGrainData :: VoxBox (Quaternion, Phase) -> HashMap Int (V.Vector VoxelPos) -> HashMap Int ProductGrain
-getProductGrainData vbq gmap = let
-  getAvgQ = getQinFZ . averageQuaternionWithSymm Cubic . V.map (fst . (vbq #!))
+getProductGrainData :: Symm -> VoxBox (Quaternion, Phase) -> HashMap Int (V.Vector VoxelPos) -> HashMap Int ProductGrain
+getProductGrainData symm vbq gmap = let
+  getAvgQ = getQinFZ symm . averageQuaternionWithSymm symm . V.map (fst . (vbq #!))
   getAvgPos v = let
     t = V.foldl' (&+) zero $ V.map (evalCentralVoxelPos vbq) v
     n = V.length v
@@ -579,7 +581,7 @@ plotVTK base_file = do
   attrLocErr <- genProductFitVTKAttr (-1) (const $ const (unDeg . misfitAngle)) "Product Error Fit [deg]"
 
   attrAvgGIPF <- genParentVTKAttr     (255,255,255) (getCubicIPFColor . parentOrientation . snd)                 "Parent Orientation [IPF]"
-  attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . productAvgOrientation . snd)             "Product Orientation [IPF]"
+  attrAvgAIPF <- genProductVTKAttr    (255,255,255) (getCubicIPFColor . qFZ . productAvgOrientation . snd)       "Product Orientation [IPF]"
   attrGIPF    <- genProductFitVTKAttr (255,255,255) (\a b _ -> getCubicIPFColor $ getTransformedProduct cfg a b) "Product Parent Orientation Component [IPF]"
   let
     attrVoxAIPF  = genVoxBoxAttr "Voxel Product Orientation [IPF]" (getCubicIPFColor . fst) orientationBox
@@ -647,7 +649,7 @@ _plotOrientations base_file gid = do
       getProductOrientations = V.map getQ . productVoxelPos
       getQ = fst . (grainID orientationBox U.!)
   forM_ ((,,) <$> mProductGrain <*> mParentGrain <*> mFit)  $ \(productGrain, parentGrain, _fit) -> do
-    let qs = V.convert . V.map (qFZ . getQinFZ) . getProductOrientations $ productGrain
+    let qs = V.convert . V.map (qFZ . getQinFZ Cubic) . getProductOrientations $ productGrain
     liftIO $ do
       renderQuaternions inputCfg (base_file <> "_product") qs
       renderQuaternions inputCfg (base_file <> "_parent" ) $ U.fromList [parentOrientation parentGrain]
