@@ -1,7 +1,6 @@
 resolver: lts-14.27
 
 nix:
-  enable: true
   packages: [pkgconfig zlib]
 
 packages:
