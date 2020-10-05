@@ -9,4 +9,5 @@
 .stack-root/
 .stack-work/
 .vscode/
+.envrc
 .credentials.json

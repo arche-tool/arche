@@ -1,5 +1,6 @@
 with (import <nixpkgs> {});
 mkShell {
+  name = "arche-backend";
   buildInputs = [
     gnumake
     docker
