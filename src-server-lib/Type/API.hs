@@ -48,18 +48,21 @@ type EBSDAPI = "ebsd" :>
 
 -- ==<< Orientation relationship handling >>==
 -- POST /ebsd/hash/{ebsd_hash}/orfit ORFitCfg ORFit
+-- POST /ebsd/hash/{ebsd_hash}/orfit/async ORFitCfg Text
 -- GET  /ebsd/hash/{ebsd_hash}/orfit [ORFit]
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash} ORFit
 type ORAPI = "ebsd" :> "hash" :> Capture "ebsd_hash" HashEBSD
   :> "orfit" :>
-  (                                           Get  '[JSON] (CacheHeader [OR])
-  :<|> "hash" :> Capture "or_hash" HashOR  :> Get  '[JSON] OR
-  :<|> ReqBody '[JSON] OR.Cfg              :> Post '[JSON] OR
+  (                                          Get  '[JSON] (CacheHeader [OR])
+  :<|> "hash" :> Capture "or_hash" HashOR :> Get  '[JSON] OR
+  :<|>            ReqBody '[JSON] OR.Cfg  :> Post '[JSON] OR
+  :<|> "async" :> ReqBody '[JSON] OR.Cfg  :> Post '[JSON] Text
   )
 
 
 -- ==<< Reconstruction handling >>==
 -- POST /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche ArcheCfg Arche
+-- POST /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche/async ArcheCfg Text
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche [Arche]
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche/hash/{arche_hash} Arche
 type ArcheAPI = "ebsd" :> "hash" :> Capture "ebsd_hash" HashEBSD

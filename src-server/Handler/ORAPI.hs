@@ -37,24 +37,34 @@ import Util.FireStore
 import Util.Hash
 import Util.Logger    (logGGInfo, logMsg)
 
+import qualified Util.Auth   as Auth
+import qualified Util.Client as Client
+import qualified Util.Tasks  as SelfTasks
+
 --type ORAPI = "ebsd" :> Capture "hash" HashEBSD :> "orfit" :>
 --  (                              Get  '[JSON] [OR]
 --  :<|> Capture "hash" HashOR  :> Get  '[JSON] OR
 --  :<|> ReqBody '[JSON] OR.Cfg :> Post '[JSON] NoContent
 --  )
 
-orApi :: User -> Server ORAPI
-orApi user = \hashebsd ->
+orApi :: Auth.BearerToken -> User -> Server ORAPI
+orApi tk user = \hashebsd ->
        (runGCPWith $ addHeader private15sCache <$> getORs hashebsd)
   :<|> (runGCPWith . getOR user hashebsd)
-  :<|> (\cfg -> runGCPWith $ orFitHandler hashebsd cfg "ebsd" )
+  :<|> (\cfg -> runGCPWith $ runORFitHandler hashebsd cfg ebsdBucket)
+  :<|> (\cfg -> runGCPWith $ runAsyncORFitHandler tk hashebsd cfg)
   where
     private15sCache = "private, max-age=15, s-maxage=15" :: String
 
+runAsyncORFitHandler :: Auth.BearerToken -> HashEBSD -> OR.Cfg -> Google.Google GCP Text
+runAsyncORFitHandler tk hashE orCfg = let
+  archeapi = (Client.orApiClient Client.mkApiClient) hashE
+  in SelfTasks.submitSelfTask orFitQueue tk ((Client.postOR archeapi) orCfg)
 
-orFitHandler :: HashEBSD -> OR.Cfg -> Text -> Google.Google GCP OR
-orFitHandler hashebsd@(HashEBSD hash) cfg bucket = do
-  stream <- Google.download (Storage.objectsGet bucket hash)
+runORFitHandler :: HashEBSD -> OR.Cfg -> StorageBucket -> Google.Google GCP OR
+runORFitHandler hashebsd@(HashEBSD hash) cfg bucket = do
+  let bucketName = bktName bucket
+  stream <- Google.download (Storage.objectsGet bucketName hash)
   ang    <- liftResourceT (runConduit (stream .| Conduit.sinkLbs))
 
   -- Force strictness on OR calculation otherwise the data
@@ -65,7 +75,7 @@ orFitHandler hashebsd@(HashEBSD hash) cfg bucket = do
     body = Google.GBody ("application" // "octet-stream") (RequestBodyLBS $ renderUniVTK True vtk)
     vox_key = hash <> ".vtk"
   
-  void $ Google.upload (Storage.objectsInsert bucket Storage.object' & Storage.oiName ?~ vox_key) body
+  void $ Google.upload (Storage.objectsInsert bucketName Storage.object' & Storage.oiName ?~ vox_key) body
 
   let orship = OR
          { hashOR   = calculateHashOR cfg

@@ -48,9 +48,10 @@ data ArcheApiClient m
 
 data ORApiClient m
   = ORApiClient 
-  { getORs :: m (CacheHeader[OR])
-  , getOR  :: HashOR -> m OR
-  , postOR :: OR.Cfg  -> m OR
+  { getORs      :: m (CacheHeader[OR])
+  , getOR       :: HashOR -> m OR
+  , postOR      :: OR.Cfg  -> m OR
+  , postORAsync :: OR.Cfg  -> m Text
   }
 
 -- ============================================
@@ -85,7 +86,7 @@ mkApiClient = ApiClient{..}
     orApiClient :: HashEBSD -> ORApiClient (Free ClientF)
     orApiClient hashE = ORApiClient{..}
       where
-        (getORs :<|> getOR :<|> postOR) = orEndpoints hashE
+        (getORs :<|> getOR :<|> postOR :<|> postORAsync) = orEndpoints hashE
     
     archeApiClient :: HashEBSD -> HashOR -> ArcheApiClient (Free ClientF)
     archeApiClient hashE hashO = ArcheApiClient{..}

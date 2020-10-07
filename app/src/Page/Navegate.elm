@@ -171,7 +171,7 @@ update msg model =
               in ( model
                  , Http.request
                  { method = "POST"
-                 , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit"
+                 , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/async"
                  , headers = hs
                  , body = Http.jsonBody <| orCfgEncoder orCfg
                  , expect = Http.expectJson (ReceivedNewOR ebsdHash) orEvalDecoder
