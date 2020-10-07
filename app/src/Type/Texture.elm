@@ -62,7 +62,7 @@ symmEncoder : PhaseSymm -> JE.Value
 symmEncoder s =
   let
     core = case s of
-      HexagonalPhase -> JE.string "HexgonalPhase"
+      HexagonalPhase -> JE.string "HexagonalPhase"
       CubicPhase     -> JE.string "CubicPhase"
   in core 
 
