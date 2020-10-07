@@ -55,10 +55,12 @@ import qualified Util.Client as Client
 -- GET  /ebsd/hash/{ebsd_hash}/orfit/hash/{or_hash}/arche/hash/{arche_hash} Arche
 archeApi :: Auth.BearerToken -> User -> Server ArcheAPI
 archeApi tk user = \hashE hashO ->
-       (runGCPWith $ getArches hashE hashO)
+       (runGCPWith $ addHeader private15sCache <$> getArches hashE hashO)
   :<|> (runGCPWith . getArche user hashE hashO)
   :<|> (\cfg -> runGCPWith $ runArcheHandler user hashE hashO cfg)
   :<|> (\cfg -> runGCPWith $ runAsyncArcheHandler tk hashE hashO cfg)
+  where
+    private15sCache = "private, max-age=15, s-maxage=15" :: String
 
 
 fetchEbsdData :: HashEBSD -> Google.Google GCP BSL.ByteString

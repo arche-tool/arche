@@ -45,9 +45,11 @@ import Util.Logger    (logGGInfo, logMsg)
 
 orApi :: User -> Server ORAPI
 orApi user = \hashebsd ->
-       (runGCPWith $ getORs hashebsd)
+       (runGCPWith $ addHeader private15sCache <$> getORs hashebsd)
   :<|> (runGCPWith . getOR user hashebsd)
   :<|> (\cfg -> runGCPWith $ orFitHandler hashebsd cfg "ebsd" )
+  where
+    private15sCache = "private, max-age=15, s-maxage=15" :: String
 
 
 orFitHandler :: HashEBSD -> OR.Cfg -> Text -> Google.Google GCP OR

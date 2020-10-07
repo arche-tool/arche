@@ -36,7 +36,7 @@ import Type.Store
 
 data ArcheApiClient m
   = ArcheApiClient 
-  { getArches      :: m [Arche StoragePublicLink]
+  { getArches      :: m (CacheHeader [Arche StoragePublicLink])
   , getArche       :: HashArche -> m (Arche StoragePublicLink)
   , postArche      :: ArcheCfg  -> m (Arche StoragePublicLink)
   , postArcheAsync :: ArcheCfg  -> m Text
@@ -48,7 +48,7 @@ data ArcheApiClient m
 
 data ORApiClient m
   = ORApiClient 
-  { getORs :: m [OR]
+  { getORs :: m (CacheHeader[OR])
   , getOR  :: HashOR -> m OR
   , postOR :: OR.Cfg  -> m OR
   }
@@ -59,7 +59,7 @@ data ORApiClient m
 
 data EBSDApiClient m
   = EBSDApiClient 
-  { getEBSDs      :: m [EBSD]
+  { getEBSDs      :: m (CacheHeader [EBSD])
   , getEBSD       :: HashEBSD -> m EBSD
   , getUploadLink :: m StorageLink
   , postEBSD      :: StorageObjectName -> Maybe Text -> m EBSD

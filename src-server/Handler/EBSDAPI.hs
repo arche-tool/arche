@@ -45,9 +45,11 @@ import Util.Storage   (StorageLinkBuilder(..))
 ebsdApi :: StorageLinkBuilder -> User -> Server EBSDAPI
 ebsdApi linkBuilder user = let
   post = uploadEbsdAPI user
-  gets = runGCPWith (getEBSDs user)
+  gets = runGCPWith (addHeader private15sCache <$> getEBSDs user)
   get  = runGCPWith . getEBSD user
   in (post :<|> get :<|> genUploadLink linkBuilder user :<|> gets)
+  where
+    private15sCache = "private, max-age=15, s-maxage=15" :: String
 
 getEBSD :: User -> HashEBSD -> Google.Google GCP EBSD
 getEBSD user (HashEBSD hash) = do
