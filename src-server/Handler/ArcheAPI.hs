@@ -17,7 +17,6 @@ import Control.Monad.Trans.Class    (lift)
 import Control.Monad.Trans.Resource (liftResourceT)
 import Data.Conduit                 (runConduit, (.|))
 import Data.Maybe                   (mapMaybe)
-import Data.Text                    (Text)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
 
@@ -169,10 +168,13 @@ savePngImage bucket (HashResult ebsdR) bs = let
     logGGInfo $ logMsg ("Saved image blob with hash" :: String) ebsdR
     return obj
 
-runAsyncArcheHandler :: Auth.BearerToken -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP Text
+runAsyncArcheHandler :: Auth.BearerToken -> HashEBSD -> HashOR -> ArcheCfg -> Google.Google GCP HashArche
 runAsyncArcheHandler tk hashE hashO archeCfg = let
   archeapi = (Client.archeApiClient Client.mkApiClient) hashE hashO
-  in SelfTasks.submitSelfTask reconstructionQueue tk ((Client.postArche archeapi) archeCfg)
+  hashA    = calculateHashArche archeCfg
+  in do
+    _ <- SelfTasks.submitSelfTask reconstructionQueue tk ((Client.postArche archeapi) archeCfg)
+    return hashA
 
 getResultLink :: Arche StorageObject -> Arche StoragePublicLink
 getResultLink results = fmap getPublicLink results

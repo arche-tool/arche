@@ -56,7 +56,7 @@ type ORAPI = "ebsd" :> "hash" :> Capture "ebsd_hash" HashEBSD
   (                                          Get  '[JSON] (CacheHeader [OR])
   :<|> "hash" :> Capture "or_hash" HashOR :> Get  '[JSON] OR
   :<|>            ReqBody '[JSON] OR.Cfg  :> Post '[JSON] OR
-  :<|> "async" :> ReqBody '[JSON] OR.Cfg  :> Post '[JSON] Text
+  :<|> "async" :> ReqBody '[JSON] OR.Cfg  :> Post '[JSON] HashOR
   )
 
 
@@ -70,5 +70,5 @@ type ArcheAPI = "ebsd" :> "hash" :> Capture "ebsd_hash" HashEBSD
   (                                                  Get  '[JSON] (CacheHeader [Arche StoragePublicLink])
   :<|> "hash"  :> Capture "arche_hash" HashArche  :> Get  '[JSON] (Arche StoragePublicLink)
   :<|>            ReqBody '[JSON] ArcheCfg        :> Post '[JSON] (Arche StoragePublicLink)
-  :<|> "async" :> ReqBody '[JSON] ArcheCfg        :> Post '[JSON] Text
+  :<|> "async" :> ReqBody '[JSON] ArcheCfg        :> Post '[JSON] HashArche
   )

@@ -16,7 +16,6 @@ import Control.Monad.Trans.Resource (liftResourceT)
 import Control.Monad.IO.Class       (liftIO)
 import Data.Conduit                 (runConduit, (.|))
 import Data.Maybe                   (mapMaybe)
-import Data.Text                    (Text)
 import Network.HTTP.Conduit         (RequestBody(..))
 import Network.HTTP.Media.MediaType ((//))
 
@@ -56,10 +55,13 @@ orApi tk user = \hashebsd ->
   where
     private15sCache = "private, max-age=15, s-maxage=15" :: String
 
-runAsyncORFitHandler :: Auth.BearerToken -> HashEBSD -> OR.Cfg -> Google.Google GCP Text
+runAsyncORFitHandler :: Auth.BearerToken -> HashEBSD -> OR.Cfg -> Google.Google GCP HashOR
 runAsyncORFitHandler tk hashE orCfg = let
   archeapi = (Client.orApiClient Client.mkApiClient) hashE
-  in SelfTasks.submitSelfTask orFitQueue tk ((Client.postOR archeapi) orCfg)
+  hashO    = calculateHashOR orCfg
+  in do
+    _ <- SelfTasks.submitSelfTask orFitQueue tk ((Client.postOR archeapi) orCfg)
+    return hashO
 
 runORFitHandler :: HashEBSD -> OR.Cfg -> StorageBucket -> Google.Google GCP OR
 runORFitHandler hashebsd@(HashEBSD hash) cfg bucket = do

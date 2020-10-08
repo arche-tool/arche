@@ -39,7 +39,7 @@ data ArcheApiClient m
   { getArches      :: m (CacheHeader [Arche StoragePublicLink])
   , getArche       :: HashArche -> m (Arche StoragePublicLink)
   , postArche      :: ArcheCfg  -> m (Arche StoragePublicLink)
-  , postArcheAsync :: ArcheCfg  -> m Text
+  , postArcheAsync :: ArcheCfg  -> m HashArche
   }
 
 -- ============================================
@@ -51,7 +51,7 @@ data ORApiClient m
   { getORs      :: m (CacheHeader[OR])
   , getOR       :: HashOR -> m OR
   , postOR      :: OR.Cfg  -> m OR
-  , postORAsync :: OR.Cfg  -> m Text
+  , postORAsync :: OR.Cfg  -> m HashOR
   }
 
 -- ============================================
