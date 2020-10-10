@@ -144,6 +144,7 @@ Library arche-server-lib
     , cryptonite
     , cryptostore
     , free
+    , exceptions
     , gogol
     , gogol-firestore
     , gogol-storage
