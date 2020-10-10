@@ -63,6 +63,7 @@ import Widget.ArcheResultExplorer exposing
   )
 
 import API
+import Process
 
 -- =========== MAIN ===========
 main : Program () Model Msg
@@ -131,8 +132,10 @@ type Msg
   | RefreshORs String
   | RefreshArches String String
 
-  | CheckAsyncORs    String String
-  | CheckAsyncArches String String String
+  | CheckAsyncORs      String String
+  | CheckAsyncArches   String String String
+  | ReCheckAsyncORs    String String        (Result Http.Error OREval)
+  | ReCheckAsyncArches String String String (Result Http.Error Arche)
 
   | SelectedEBSD String
   | SelectedOR String
@@ -155,8 +158,8 @@ type Msg
   | AsyncArcheProcess String String (Result Http.Error String)
 
 
-inNsecs : Int -> Task.Task a Time.Posix
-inNsecs secs = Task.map (Time.posixToMillis >> (+) (1000 * secs) >> Time.millisToPosix) Time.now 
+inNsecs : Int -> Task.Task a ()
+inNsecs secs = Process.sleep (1000.0 * toFloat secs)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -229,22 +232,66 @@ update msg model =
    
     SetResultType resTy -> ({model | archeResultView = Maybe.map (updateType resTy) model.archeResultView}, Cmd.none)
 
-    CheckAsyncArches _ _ _ -> (model, Cmd.none)
-    CheckAsyncORs    _ _   -> (model, Cmd.none)
-
+    -- ====================== OR fit async ======================
     AsyncORProcess hashE res -> case res of
       Err err  -> (model, Cmd.none)
       Ok hashO -> (
         { model | runningORProcesses = Dict.insert hashO {ebsdHash = hashE, count = 1} model.runningORProcesses},
-        Cmd.batch [Task.perform (\_ -> CheckAsyncORs hashE hashO) (inNsecs 15)]
+        Cmd.batch [Task.perform (\_ -> CheckAsyncORs hashE hashO) (inNsecs 45)]
         )
 
+    CheckAsyncORs hashE hashO ->
+      let
+        bump = Maybe.map (\v -> { v | count = v.count + 1})
+        updated = Dict.update hashO bump model.runningORProcesses
+      in case model.token of
+        Just tk -> ({ model | runningORProcesses = updated}, API.fetchOR {token = tk, ebsdHash = hashE, orHash = hashO} (ReCheckAsyncORs hashE hashO))
+        _       -> ({ model | runningORProcesses = updated}, Cmd.none)
+
+    ReCheckAsyncORs hashE hashO res ->
+      let
+        recheck = case Dict.get hashO model.runningORProcesses of
+          Just {ebsdHash, count} -> if (count < 5) && (ebsdHash == hashE)
+            then Task.perform (\_ -> CheckAsyncORs hashE hashO) (inNsecs 30)
+            else Cmd.none
+          _ -> Cmd.none
+      in case model.token of
+        Just tk -> case res of
+          Err (Http.BadStatus 404) -> (model, recheck)
+          _                        -> (model, Cmd.none)
+        _      -> (model, Cmd.none)
+
+    -- ====================== OR Arche async ======================
     AsyncArcheProcess hashE hashO res -> case res of
       Err err  -> (model, Cmd.none)
       Ok hashA -> (
         { model | runningArcheProcesses = Dict.insert hashA {ebsdHash = hashE, orHash = hashO, count = 1} model.runningArcheProcesses},
-        Cmd.batch [Task.perform (\_ -> CheckAsyncArches hashE hashO hashA) (inNsecs 15)]
+        Cmd.batch [Task.perform (\_ -> CheckAsyncArches hashE hashO hashA) (inNsecs 45)]
         )
+
+    CheckAsyncArches hashE hashO hashA ->
+      let
+        bump = Maybe.map (\v -> { v | count = v.count + 1})
+        updated = Dict.update hashA bump model.runningArcheProcesses
+      in case model.token of
+        Just tk -> (
+          { model | runningArcheProcesses = updated},
+          API.fetchArche {token = tk, ebsdHash = hashE, orHash = hashO, archeHash = hashA} (ReCheckAsyncArches hashE hashO hashA)
+          )
+        _       -> ({ model | runningArcheProcesses = updated}, Cmd.none)
+
+    ReCheckAsyncArches hashE hashO hashA res ->
+      let
+        recheck = case Dict.get hashA model.runningArcheProcesses of
+          Just {ebsdHash, orHash, count} -> if (count < 5) && (ebsdHash == hashE) && (orHash == hashO)
+            then Task.perform (\_ -> CheckAsyncArches hashE hashO hashA) (inNsecs 30)
+            else Cmd.none
+          _ -> Cmd.none
+      in case model.token of
+        Just tk -> case res of
+          Err (Http.BadStatus 404) -> (model, recheck)
+          _                        -> (model, Cmd.none)
+        _      -> (model, Cmd.none)
 
     ReceivedORs ebsdHash result ->
       case result of

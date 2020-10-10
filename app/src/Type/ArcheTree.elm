@@ -69,6 +69,25 @@ refreshArche at hashE hashO lor = case FocusedList.find at hashE of
             in FocusedList.update at {nodeO | ors = FocusedList.update nodeO.ors newNodeE}
         Nothing -> at
 
+appendOR : ArcheTree -> EbsdHash -> OREval -> ArcheTree
+appendOR at hash lor = case FocusedList.find at hash of 
+    Nothing -> at
+    Just node ->
+        let
+            newArcheNode = FocusedList.fromArray Array.empty (\o -> o.archeResult.hashArche)
+            newNode = {node | ors = FocusedList.appendIfNew node.ors {orEvaluation = lor, arches = newArcheNode}}
+        in FocusedList.update at newNode
+
+appendArche : ArcheTree -> EbsdHash -> OrHash -> Arche -> ArcheTree
+appendArche at hashE hashO newor = case FocusedList.find at hashE of 
+    Nothing -> at
+    Just nodeO -> case FocusedList.find nodeO.ors hashO of
+        Just nodeE ->
+            let
+                newNodeE = {nodeE | arches = FocusedList.appendIfNew nodeE.arches {archeResult = newor}}
+            in FocusedList.update at {nodeO | ors = FocusedList.update nodeO.ors newNodeE}
+        Nothing -> at
+
 listEBSDWithFocus : ArcheTree -> (EBSD -> Bool -> b) -> List b 
 listEBSDWithFocus at foo = FocusedList.listWithFocus at (\a b -> foo a.ebsd b)
 

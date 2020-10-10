@@ -6,6 +6,7 @@ module Utils exposing
     , maybe
     , either
     , filterMaybes
+    , result
     )
 
 import FormatNumber exposing (format)
@@ -30,6 +31,11 @@ either : (a -> c) -> (b -> c) -> Either a b -> c
 either fa fb e = case e of
    Left a  -> fa a
    Right b -> fb b
+
+result : (err -> b) -> (a -> b) -> Result err a -> b
+result ferr func res = case res of
+   Err e -> ferr e
+   Ok  x -> func x
 
 filterMaybes : List (Maybe a) -> List a
 filterMaybes l = case l of

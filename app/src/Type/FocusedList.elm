@@ -33,6 +33,17 @@ update (FocusedList fl) value =
         then FocusedList {fl | mapping = Dict.insert key value fl.mapping}
         else FocusedList fl
 
+appendIfNew : FocusedList a -> a -> FocusedList a
+appendIfNew (FocusedList fl) value =
+    let
+        key = fl.keyFoo value
+    in if Dict.member key fl.mapping
+        then FocusedList fl
+        else FocusedList {fl
+            | mapping = Dict.insert key value fl.mapping
+            , arr = Array.append (Array.fromList [key]) fl.arr
+            }
+
 find : FocusedList a -> String -> Maybe a
 find (FocusedList fl) key = Dict.get key fl.mapping 
 
