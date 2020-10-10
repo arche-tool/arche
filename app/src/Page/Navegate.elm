@@ -11,6 +11,8 @@ module Page.Navegate exposing (
 
 import Array exposing (Array)
 import Browser
+import Dict exposing (Dict)
+import Dict as Dict
 import Element exposing (Element, column, text, layout, row, el)
 import Element.Background as BG
 import Element.Border
@@ -22,6 +24,7 @@ import Http
 import Task
 import Time
 
+import Json.Decode as D
 import Globals as G
 
 import Type.EBSD exposing (
@@ -59,6 +62,8 @@ import Widget.ArcheResultExplorer exposing
   , ResultType (..)
   )
 
+import API
+
 -- =========== MAIN ===========
 main : Program () Model Msg
 main =
@@ -77,6 +82,8 @@ type alias Model =
   , uploadInput: Maybe Upload.Model
   , orCfgInput: Maybe ORConfig
   , archeCfgInput: Maybe ArcheCfg
+  , runningORProcesses: Dict String { ebsdHash : String, count : Int }
+  , runningArcheProcesses: Dict String { ebsdHash : String, orHash : String, count : Int }
   }
 
 init : () -> (Model, Cmd Msg)
@@ -87,6 +94,8 @@ init _ =
     , uploadInput = Nothing
     , orCfgInput = Nothing
     , archeCfgInput = Nothing
+    , runningORProcesses = Dict.empty
+    , runningArcheProcesses = Dict.empty
     }
   , Cmd.none
   )
@@ -122,6 +131,9 @@ type Msg
   | RefreshORs String
   | RefreshArches String String
 
+  | CheckAsyncORs    String String
+  | CheckAsyncArches String String String
+
   | SelectedEBSD String
   | SelectedOR String
   | SelectedArche String
@@ -139,84 +151,38 @@ type Msg
   | ReceivedORs    String        (Result Http.Error (Array OREval))
   | ReceivedArches String String (Result Http.Error (Array Arche))
 
-  | ReceivedNewOR String (Result Http.Error OREval)
+  | AsyncORProcess    String        (Result Http.Error String)
+  | AsyncArcheProcess String String (Result Http.Error String)
+
+
+inNsecs : Int -> Task.Task a Time.Posix
+inNsecs secs = Task.map (Time.posixToMillis >> (+) (1000 * secs) >> Time.millisToPosix) Time.now 
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     RefreshEBSDs ->
-        let
-          hs = case model.token of
-            Just tk -> [Http.header "Authorization" ("Bearer " ++ tk)]
-            _       -> []
-        in ( model
-          , Http.request
-            { method = "GET"
-            , url = "/api/ebsd"
-            , headers = hs
-            , body = Http.emptyBody
-            , expect = Http.expectJson ReceivedEBSDs ebsdListDecoder
-            , timeout = Nothing
-            , tracker = Nothing
-            }
-        )
+      case model.token of
+        Just tk -> (model, API.fetchEbsdList {token = tk} ReceivedEBSDs)
+        _       -> (model, Cmd.none)
 
     SubmitORConfig orCfg ->
       case model.token of
         Just tk ->
           case ArcheTree.getEBSDFocusKey model.archeTree of
-            Just ebsdHash ->
-              let
-                hs = [Http.header "Authorization" ("Bearer " ++ tk)]
-              in ( model
-                 , Http.request
-                 { method = "POST"
-                 , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/async"
-                 , headers = hs
-                 , body = Http.jsonBody <| orCfgEncoder orCfg
-                 , expect = Http.expectJson (ReceivedNewOR ebsdHash) orEvalDecoder
-                 , timeout = Nothing
-                 , tracker = Nothing
-                 }
-                 )
-            _ -> (model, Cmd.none)
-        _ -> (model, Cmd.none)
+            Just ebsdHash -> (model, API.sendASyncORfit {token = tk, ebsdHash = ebsdHash} orCfg (AsyncORProcess ebsdHash))
+            _             -> (model, Cmd.none)
+        _             -> (model, Cmd.none)
 
     RefreshORs ebsdHash ->
       case model.token of
-        Just tk ->
-          let
-            hs = [Http.header "Authorization" ("Bearer " ++ tk)]
-          in ( model
-              , Http.request
-              { method = "GET"
-              , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit"
-              , headers = hs
-              , body = Http.emptyBody
-              , expect = Http.expectJson (ReceivedORs ebsdHash) orEvalListDecoder
-              , timeout = Nothing
-              , tracker = Nothing
-              }
-              )
-        _ -> (model, Cmd.none)
+        Just tk -> (model, API.fetchORList {token = tk, ebsdHash = ebsdHash} (ReceivedORs ebsdHash))
+        _       -> (model, Cmd.none)
   
     RefreshArches ebsdHash orHash ->
       case model.token of
-        Just tk ->
-          let
-            hs = [Http.header "Authorization" ("Bearer " ++ tk)]
-          in ( model
-              , Http.request
-              { method = "GET"
-              , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/hash/" ++ orHash ++ "/arche"
-              , headers = hs
-              , body = Http.emptyBody
-              , expect = Http.expectJson (ReceivedArches ebsdHash orHash) archeListDecoder
-              , timeout = Nothing
-              , tracker = Nothing
-              }
-              )
-        _ -> (model, Cmd.none)
+        Just tk -> (model, API.fetchArcheList {token = tk, ebsdHash = ebsdHash, orHash = orHash} (ReceivedArches ebsdHash orHash))
+        _       -> (model, Cmd.none)
 
     SelectedEBSD hash -> (
       {model | archeTree = ArcheTree.focusOnEbsd model.archeTree hash},
@@ -262,8 +228,23 @@ update msg model =
     SetResultMCL mcl -> ({model | archeResultView = Maybe.map (updateMcl mcl) model.archeResultView}, Cmd.none)
    
     SetResultType resTy -> ({model | archeResultView = Maybe.map (updateType resTy) model.archeResultView}, Cmd.none)
-    
-    ReceivedNewOR _ _ -> (model, Cmd.none)
+
+    CheckAsyncArches _ _ _ -> (model, Cmd.none)
+    CheckAsyncORs    _ _   -> (model, Cmd.none)
+
+    AsyncORProcess hashE res -> case res of
+      Err err  -> (model, Cmd.none)
+      Ok hashO -> (
+        { model | runningORProcesses = Dict.insert hashO {ebsdHash = hashE, count = 1} model.runningORProcesses},
+        Cmd.batch [Task.perform (\_ -> CheckAsyncORs hashE hashO) (inNsecs 15)]
+        )
+
+    AsyncArcheProcess hashE hashO res -> case res of
+      Err err  -> (model, Cmd.none)
+      Ok hashA -> (
+        { model | runningArcheProcesses = Dict.insert hashA {ebsdHash = hashE, orHash = hashO, count = 1} model.runningArcheProcesses},
+        Cmd.batch [Task.perform (\_ -> CheckAsyncArches hashE hashO hashA) (inNsecs 15)]
+        )
 
     ReceivedORs ebsdHash result ->
       case result of
@@ -283,28 +264,15 @@ update msg model =
           in ( {model | archeTree = at}, Cmd.none )
 
 
-    SubmitArche orCfg ->
+    SubmitArche archeCfg ->
       case model.token of
         Just tk ->
           case ArcheTree.getEBSDFocusKey model.archeTree of
             Just ebsdHash -> case ArcheTree.getORFocusKey model.archeTree of
-              Just orHash ->
-                let
-                  hs = [Http.header "Authorization" ("Bearer " ++ tk)]
-                in ( model
-                   , Http.request
-                   { method = "POST"
-                   , url = "/api/ebsd/hash/" ++ ebsdHash ++ "/orfit/hash/" ++ orHash ++ "/arche/async"
-                   , headers = hs
-                   , body = Http.jsonBody <| archeCfgEncoder orCfg
-                   , expect = Http.expectJson (ReceivedNewOR ebsdHash) orEvalDecoder
-                   , timeout = Nothing
-                   , tracker = Nothing
-                   }
-                   )
-              _ -> (model, Cmd.none)
-            _ -> (model, Cmd.none)
-        _ -> (model, Cmd.none)
+              Just orHash -> (model, API.sendASyncArche {token = tk, ebsdHash = ebsdHash, orHash = orHash} archeCfg (AsyncArcheProcess ebsdHash orHash))
+              _             -> (model, Cmd.none)
+            _             -> (model, Cmd.none)
+        _             -> (model, Cmd.none)
     
     SubmitEBSDFile Nothing      -> ({ model | uploadInput = Nothing }, Cmd.none)
     SubmitEBSDFile (Just upmsg) -> case model.uploadInput of
