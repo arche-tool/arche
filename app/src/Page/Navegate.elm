@@ -76,13 +76,38 @@ main =
     }
 
 -- =========== MODEL ===========
+
+type InputCfg
+  = UCfg Upload.Model
+  | OCfg ORConfig
+  | ACfg ArcheCfg
+  | NoCfg
+
+getUploadModel : InputCfg -> Maybe Upload.Model
+getUploadModel inp = case inp of
+  UCfg model -> Just model
+  _          -> Nothing
+
+getORCfg : InputCfg -> Maybe ORConfig
+getORCfg inp = case inp of
+  OCfg model -> Just model
+  _          -> Nothing
+
+getArcheCfg : InputCfg -> Maybe ArcheCfg
+getArcheCfg inp = case inp of
+  ACfg model -> Just model
+  _          -> Nothing
+
+hasActiveInput : InputCfg -> Bool
+hasActiveInput x = case x of
+   NoCfg -> False
+   _     -> True
+
 type alias Model =
   { token: Maybe String
   , archeTree: ArcheTree
   , archeResultView: Maybe ArcheResultExplorer
-  , uploadInput: Maybe Upload.Model
-  , orCfgInput: Maybe ORConfig
-  , archeCfgInput: Maybe ArcheCfg
+  , inputCfg: InputCfg 
   , runningORProcesses: Dict String { ebsdHash : String, count : Int }
   , runningArcheProcesses: Dict String { ebsdHash : String, orHash : String, count : Int }
   }
@@ -92,9 +117,7 @@ init _ =
   ( { token = Nothing
     , archeTree = ArcheTree.empty
     , archeResultView = Nothing
-    , uploadInput = Nothing
-    , orCfgInput = Nothing
-    , archeCfgInput = Nothing
+    , inputCfg = NoCfg
     , runningORProcesses = Dict.empty
     , runningArcheProcesses = Dict.empty
     }
@@ -141,12 +164,14 @@ type Msg
   | SelectedOR String
   | SelectedArche String
 
-  | SetORConfig (Maybe ORConfig)
-  | SetArcheConfig (Maybe ArcheCfg)
+  | SetORConfig ORConfig
+  | SetArcheConfig ArcheCfg
+  | SetUploadConfig Upload.Msg
+  | ResetInput
+
   | SetResultMCL Float
   | SetResultType ResultType
 
-  | SubmitEBSDFile (Maybe Upload.Msg)
   | SubmitORConfig ORConfig
   | SubmitArche ArcheCfg
 
@@ -224,9 +249,11 @@ update msg model =
     
     ResetToken -> ({model | token = Nothing}, Cmd.none)
    
-    SetORConfig orCfg -> ({model | orCfgInput = orCfg}, Cmd.none)
+    SetORConfig orCfg -> ({model | inputCfg = OCfg orCfg}, Cmd.none)
+    
+    ResetInput -> ({model | inputCfg = NoCfg}, Cmd.none)
 
-    SetArcheConfig archeCfg -> ({model | archeCfgInput = archeCfg}, Cmd.none)
+    SetArcheConfig archeCfg -> ({model | inputCfg = ACfg archeCfg}, Cmd.none)
 
     SetResultMCL mcl -> ({model | archeResultView = Maybe.map (updateMcl mcl) model.archeResultView}, Cmd.none)
    
@@ -321,27 +348,26 @@ update msg model =
             _             -> (model, Cmd.none)
         _             -> (model, Cmd.none)
     
-    SubmitEBSDFile Nothing      -> ({ model | uploadInput = Nothing }, Cmd.none)
-    SubmitEBSDFile (Just upmsg) -> case model.uploadInput of
+    SetUploadConfig upmsg -> case getUploadModel model.inputCfg of
       Just upModel ->
         let
           (newModel, newCmd) = Upload.update upmsg upModel
         in if Upload.isDone newModel
           then
-            ( { model | uploadInput = Nothing }
+            ( { model | inputCfg = NoCfg }
             , Cmd.batch [Task.perform (\_ -> RefreshEBSDs) Time.now]
             )
           else
-            ( {model | uploadInput = Just newModel }
-            , Cmd.map (SubmitEBSDFile << Just) newCmd
+            ( {model | inputCfg = UCfg newModel }
+            , Cmd.map SetUploadConfig newCmd
             )
-      Nothing -> ({ model | uploadInput = Just <| Upload.initModelWithToken model.token } , Cmd.none)
+      Nothing -> ({ model | inputCfg = UCfg <| Upload.initModelWithToken model.token } , Cmd.none)
     
 
 -- =========== SUBSCRIPTIONS ===========
 subscriptions : Model -> Sub Msg
-subscriptions model = case model.uploadInput of
-  Just upModel -> Sub.map (SubmitEBSDFile << Just) (Upload.subscriptions upModel)
+subscriptions model = case getUploadModel model.inputCfg of
+  Just upModel -> Sub.map SetUploadConfig (Upload.subscriptions upModel)
   _            -> Sub.none
 
 -- =========== VIEW ===========
@@ -365,18 +391,24 @@ renderArcheTree model =
       , selectedType = SetResultType
       }
     
-    rv = maybe [] (List.singleton << renderResultExplorer msgBuilder) model.archeResultView
+    inputs  = Just <| row columnShape [renderEBSDUpload model, renderORInput model, renderArcheInput model]
+    tree    = Just <| row [Element.alignTop] base
+    results = Maybe.map (renderResultExplorer msgBuilder) model.archeResultView
   in column
     [ Element.spacing 15
     , Element.alignTop
     ]
-    (row [ Element.alignTop] base :: rv) 
+    (filterMaybes [inputs, tree, results])
 
+columnShape : List (Element.Attribute msg)
+columnShape =
+  [ Element.centerX
+  ]
 renderEbsds : Model -> Element Msg
 renderEbsds model =
   let
     cols = ArcheTree.listEBSDWithFocus model.archeTree renderEbsd
-    input = renderEBSDUpload model
+    input = renderEBSDTooglrUpload model
   in column
     [ Element.spacing 10
     , Element.padding 5
@@ -387,8 +419,9 @@ renderEbsds model =
 renderORs : Model -> Element Msg
 renderORs model =
   let
-    cols = ArcheTree.listORWithFocus model.archeTree renderOREval 
-    input = renderORInput model
+    isActive = hasActiveInput model.inputCfg
+    cols = ArcheTree.listORWithFocus model.archeTree (renderOREval isActive) 
+    input = renderORToogleInput model
   in column
     [ Element.spacing 10
     , Element.padding 5
@@ -400,7 +433,7 @@ renderArches :  Model -> Element Msg
 renderArches model =
   let
     cols = ArcheTree.listArchesWithFocus model.archeTree renderArche 
-    input = renderArcheInput model
+    input = renderArcheToogleInput model
   in column
     [ Element.spacing 10
     , Element.padding 5
@@ -422,14 +455,18 @@ renderEbsd ebsd isSelected =
     , cardEnrty "upload by" <| Maybe.withDefault "" ebsd.createdBy.name
     ]
 
-renderOREval : OREval -> Bool -> Element Msg
-renderOREval orEval isSelected = 
+renderOREval : Bool -> OREval -> Bool -> Element Msg
+renderOREval isActive orEval isSelected = 
   let
     product = orEval.cfgOR.productPhase
     parenPhase = either (.phaseId >> Just) (\_ -> Nothing) orEval.cfgOR.parentPhase
     parenSymm = either .phaseSymm identity orEval.cfgOR.parentPhase
+
+    activeAttrs = if isActive
+      then [Element.transparent True, Element.alpha 0.5]
+      else [Element.Events.onClick (SelectedOR orEval.hashOR)]
   in column
-    (Element.Events.onClick (SelectedOR orEval.hashOR) :: boxShape isSelected)
+    (activeAttrs ++ boxShape isSelected)
     [ cardEnrty "avg. angular misfit" <| degToText orEval.resultOR.misfitError.avgError ++ "°"
     , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.planeDeviation ++ "°"
     , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.axisDeviation ++ "°"
@@ -465,7 +502,7 @@ renderORInput : Model -> Element Msg
 renderORInput model =
   let
     isAvgCheckbox orCfg = Input.checkbox []
-      { onChange = \isAvg -> SetORConfig <| Just { orCfg | optByAvg = isAvg}
+      { onChange = \isAvg -> SetORConfig <| { orCfg | optByAvg = isAvg}
       , icon = Input.defaultCheckbox
       , checked = orCfg.optByAvg
       , label = Input.labelRight [] (text "Use avg orientation?")
@@ -484,7 +521,7 @@ renderORInput model =
               Element.none
           )
       ]
-      { onChange = \deg -> SetORConfig <| Just { orCfg | misoAngle = {unDeg = deg}}
+      { onChange = \deg -> SetORConfig <| { orCfg | misoAngle = {unDeg = deg}}
       , label = Input.labelAbove [] (text <| "Misorientation Angle = " ++ degToText orCfg.misoAngle ++ "°")
       , min = 0.1
       , max = 15
@@ -493,8 +530,8 @@ renderORInput model =
       , thumb = Input.defaultThumb
       }
     phaseSel name orCfg getter setter = Input.radio
-      []
-      { onChange = \phid -> SetORConfig <| Just (setter orCfg phid)
+      radioShape
+      { onChange = \phid -> SetORConfig <| (setter orCfg phid)
       , selected = getter orCfg
       , label = Input.labelAbove [] (text <| "Phase ID (" ++ name ++ ")")
       , options = maybe [] (.info >> .phases >> Array.toList >> List.map (\x -> Input.option x.numID (text x.name)))
@@ -502,8 +539,8 @@ renderORInput model =
       }
  
     symmSel name orCfg getter setter = Input.radio
-      []
-      { onChange = \symm -> SetORConfig <| Just (setter orCfg symm)
+      radioShape
+      { onChange = \symm -> SetORConfig <| (setter orCfg symm)
       , selected = getter orCfg
       , label = Input.labelAbove [] (text <| "Symmetry (" ++ name ++ ")")
       , options =
@@ -511,7 +548,7 @@ renderORInput model =
           , Input.option CubicPhase     (text "bcc/fcc")
           ]
       }
-  in case model.orCfgInput of
+  in case getORCfg model.inputCfg of
     Just orCfg -> column
       boxInputShape
       [ phaseSel "parent"  orCfg
@@ -529,8 +566,13 @@ renderORInput model =
       , isAvgCheckbox orCfg
       , misoSlider orCfg
       , submitButton (SubmitORConfig orCfg)
-      , toogleInput SetORConfig Nothing
       ]
+    Nothing -> Element.none
+
+renderORToogleInput : Model -> Element Msg
+renderORToogleInput model =
+  case getORCfg model.inputCfg of
+    Just orCfg -> toogleInput SetORConfig Nothing
     Nothing -> if ArcheTree.hasEBSDFocus model.archeTree
       then toogleInput SetORConfig
         <| Just
@@ -542,7 +584,7 @@ renderArcheInput : Model -> Element Msg
 renderArcheInput model =
   let
     excludeFloatingCheckbox archeCfg = Input.checkbox []
-      { onChange = \x -> SetArcheConfig <| Just { archeCfg | excludeFloatingGrains = x } 
+      { onChange = \x -> SetArcheConfig <| { archeCfg | excludeFloatingGrains = x } 
       , icon = Input.defaultCheckbox
       , checked = archeCfg.excludeFloatingGrains
       , label = Input.labelRight [] (text "Exclude Floating Grains?")
@@ -561,7 +603,7 @@ renderArcheInput model =
               Element.none
           )
       ]
-      { onChange = \x -> SetArcheConfig <| Just { archeCfg | refinementSteps = Basics.round x } 
+      { onChange = \x -> SetArcheConfig <| { archeCfg | refinementSteps = Basics.round x } 
       , label = Input.labelAbove [] (text <| "Number of steps: " ++ intToText archeCfg.refinementSteps)
       , min = 1
       , max = 10
@@ -569,34 +611,45 @@ renderArcheInput model =
       , value = toFloat archeCfg.refinementSteps
       , thumb = Input.defaultThumb
       }
-  in case model.archeCfgInput of
+  in case getArcheCfg model.inputCfg of
     Just archeCfg -> column
       boxInputShape
       [ excludeFloatingCheckbox archeCfg
       , stepsSlider archeCfg
       , submitButton (SubmitArche archeCfg)
-      , toogleInput SetArcheConfig Nothing
       ]
+    Nothing -> Element.none
+
+renderArcheToogleInput : Model -> Element Msg
+renderArcheToogleInput model =
+  case getArcheCfg model.inputCfg of
+    Just archeCfg -> toogleInput SetArcheConfig Nothing
     Nothing -> if ArcheTree.hasORFocus model.archeTree
       then toogleInput SetArcheConfig
         <| Just
         <| maybe defaultArcheCfg .cfgArche
         <| ArcheTree.getArcheFocus model.archeTree
       else Element.none
-
+    
 renderEBSDUpload : Model -> Element Msg
 renderEBSDUpload model =
-  case model.uploadInput of
-    Just upModel -> column
-      boxInputShape
-      [ Element.map (SubmitEBSDFile << Just) <| Element.html (Upload.view upModel)
-      , if Upload.isUploading upModel
-        then Element.none
-        else toogleInput SubmitEBSDFile Nothing
-      ]
-    Nothing -> toogleInput SubmitEBSDFile (Just Upload.Cancel)
+  case getUploadModel model.inputCfg of
+    Just upModel -> Element.map SetUploadConfig <| Element.html (Upload.view upModel)
+    Nothing -> Element.none
 
+renderEBSDTooglrUpload : Model -> Element Msg
+renderEBSDTooglrUpload model =
+  case getUploadModel model.inputCfg of
+    Just upModel -> 
+      if Upload.isUploading upModel
+        then Element.none
+        else toogleInput SetUploadConfig Nothing
+    Nothing -> toogleInput SetUploadConfig (Just Upload.Cancel)
+  
 -- =========== commum ============
+
+radioShape : List (Element.Attribute msg)
+radioShape = [Element.spacing 3, Element.padding 6]
 
 boxShape : Bool -> List (Element.Attribute msg)
 boxShape isSelected =
@@ -629,7 +682,7 @@ boxInputShape =
   ]
 
 -- =========== Widgets ===========
-toogleInput : (Maybe a -> msg) -> Maybe a -> Element msg
+toogleInput : (a -> Msg) -> Maybe a -> Element Msg
 toogleInput func value =
   let
     color = case value of
@@ -637,10 +690,11 @@ toogleInput func value =
       _      -> G.colorB 
   in Input.button
     [ Font.size 20
+    , Element.height (Element.px 30)
     , Element.centerX
     , Font.color <| color
     ]
-    { onPress = Just (func value)
+    { onPress = Just (maybe ResetInput func value)
     , label = text <| case value of
       Just _ -> "✚"
       _      -> "✖" 

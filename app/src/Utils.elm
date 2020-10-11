@@ -4,6 +4,7 @@ module Utils exposing
     , degToText
     , symmToText
     , maybe
+    , isJust
     , either
     , filterMaybes
     , result
@@ -26,6 +27,11 @@ degToText v = format {base | decimals = Exact 1} v.unDeg
 
 maybe : b -> (a -> b) -> Maybe a -> b
 maybe def func x = Maybe.withDefault def (Maybe.map func x)
+
+isJust : Maybe a -> Bool
+isJust x = case x of
+    Just _ -> True
+    _      -> False
 
 either : (a -> c) -> (b -> c) -> Either a b -> c
 either fa fb e = case e of
