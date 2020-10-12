@@ -1,6 +1,6 @@
 module Page.Navegate exposing (
   Model,
-  Msg(..), boxShape,
+  Msg(..),
   renderEbsds,
   main,
   init,
@@ -446,7 +446,7 @@ renderEbsd ebsd isSelected =
   let
     (sx, sy) = ebsd.info.xystep
   in column
-    (Element.Events.onClick (SelectedEBSD ebsd.hashEBSD) :: boxShape isSelected)
+    (Element.Events.onClick (SelectedEBSD ebsd.hashEBSD) :: G.boxShape isSelected)
     [ cardEnrty "name" ebsd.alias
     , cardEnrty "id" <| ebsd.hashEBSD
     , cardEnrty "cols" <| intToText ebsd.info.cols
@@ -466,7 +466,7 @@ renderOREval isActive orEval isSelected =
       then [Element.transparent True, Element.alpha 0.5]
       else [Element.Events.onClick (SelectedOR orEval.hashOR)]
   in column
-    (activeAttrs ++ boxShape isSelected)
+    (activeAttrs ++ G.boxShape isSelected)
     [ cardEnrty "avg. angular misfit" <| degToText orEval.resultOR.misfitError.avgError ++ "°"
     , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.planeDeviation ++ "°"
     , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.axisDeviation ++ "°"
@@ -487,7 +487,7 @@ renderArche : Arche -> Bool -> Element Msg
 renderArche arche isSelected =
   let
     attrs =
-      Element.Events.onClick (SelectedArche arche.hashArche) :: boxShape isSelected
+      Element.Events.onClick (SelectedArche arche.hashArche) :: G.boxShape isSelected
     elms = 
       [ cardEnrty "steps" <| String.fromInt arche.cfgArche.refinementSteps
       , cardEnrty "exclude floating grains" <| if arche.cfgArche.excludeFloatingGrains then "☑" else "☐"
@@ -530,7 +530,7 @@ renderORInput model =
       , thumb = Input.defaultThumb
       }
     phaseSel name orCfg getter setter = Input.radio
-      radioShape
+      G.radioShape
       { onChange = \phid -> SetORConfig <| (setter orCfg phid)
       , selected = getter orCfg
       , label = Input.labelAbove [] (text <| "Phase ID (" ++ name ++ ")")
@@ -539,7 +539,7 @@ renderORInput model =
       }
  
     symmSel name orCfg getter setter = Input.radio
-      radioShape
+      G.radioShape
       { onChange = \symm -> SetORConfig <| (setter orCfg symm)
       , selected = getter orCfg
       , label = Input.labelAbove [] (text <| "Symmetry (" ++ name ++ ")")
@@ -550,7 +550,7 @@ renderORInput model =
       }
   in case getORCfg model.inputCfg of
     Just orCfg -> column
-      boxInputShape
+      G.boxInputShape
       [ phaseSel "parent"  orCfg
           (.parentPhase >> either (.phaseId >> Just) (\_ -> Nothing))
           (\x phid -> {x | parentPhase = either (\y -> if y.phaseId == phid then Right y.phaseSymm else Left {y | phaseId = phid}) (\s -> Left {phaseId = phid, phaseSymm = s}) x.parentPhase })
@@ -613,7 +613,7 @@ renderArcheInput model =
       }
   in case getArcheCfg model.inputCfg of
     Just archeCfg -> column
-      boxInputShape
+      G.boxInputShape
       [ excludeFloatingCheckbox archeCfg
       , stepsSlider archeCfg
       , submitButton (SubmitArche archeCfg)
@@ -634,7 +634,7 @@ renderArcheToogleInput model =
 renderEBSDUpload : Model -> Element Msg
 renderEBSDUpload model =
   case getUploadModel model.inputCfg of
-    Just upModel -> Element.map SetUploadConfig <| Element.html (Upload.view upModel)
+    Just upModel -> Element.map SetUploadConfig <| Upload.view upModel
     Nothing -> Element.none
 
 renderEBSDTooglrUpload : Model -> Element Msg
@@ -646,41 +646,6 @@ renderEBSDTooglrUpload model =
         else toogleInput SetUploadConfig Nothing
     Nothing -> toogleInput SetUploadConfig (Just Upload.Cancel)
   
--- =========== commum ============
-
-radioShape : List (Element.Attribute msg)
-radioShape = [Element.spacing 3, Element.padding 6]
-
-boxShape : Bool -> List (Element.Attribute msg)
-boxShape isSelected =
-  [ Element.Border.rounded 3
-  , Element.padding 10
-  , Element.spacing 3
-  , Element.width Element.fill
-  , Element.pointer
-  , BG.color (if isSelected then G.colorA1 else G.colorA)
-  , Font.color <| if isSelected then G.white else G.black
-  , Element.htmlAttribute
-    (Html.Attributes.style "user-select" "none")
-  , Element.mouseOver
-    [ Element.Border.color G.black
-    , Element.Border.glow G.black 1
-    , Element.Border.innerGlow G.black 1
-    ]
-  , Element.mouseDown [ Element.alpha 0.6 ]
-  ]
-
-boxInputShape : List (Element.Attribute msg)
-boxInputShape =
-  [ Element.Border.rounded 3
-  , Element.padding 10
-  , Element.width Element.fill
-  , Element.spacing 10
-  , Element.pointer
-  , BG.color G.colorA1
-  , Element.htmlAttribute (Html.Attributes.style "user-select" "none")
-  ]
-
 -- =========== Widgets ===========
 toogleInput : (a -> Msg) -> Maybe a -> Element Msg
 toogleInput func value =
@@ -701,10 +666,4 @@ toogleInput func value =
     }
 
 submitButton : msg -> Element msg
-submitButton x = Input.button
-  [ BG.color G.colorA2
-  , Element.padding 5
-  ]
-  { onPress = Just x
-  , label = text "Submit"
-  }
+submitButton = G.renderButton [] "Submit"
