@@ -19,7 +19,8 @@ import Element.Border
 import Element.Events
 import Element.Font as Font
 import Element.Input as Input
-import Html.Attributes
+import Html as Html
+import Html.Attributes as A
 import Http
 import Task
 import Time
@@ -108,8 +109,8 @@ type alias Model =
   , archeTree: ArcheTree
   , archeResultView: Maybe ArcheResultExplorer
   , inputCfg: InputCfg 
-  , runningORProcesses: Dict String { ebsdHash : String, count : Int }
-  , runningArcheProcesses: Dict String { ebsdHash : String, orHash : String, count : Int }
+  , runningORProcesses: Dict String { ebsdHash : String, cfg : ORConfig,  count : Int }
+  , runningArcheProcesses: Dict String { ebsdHash : String, orHash : String, cfg : ArcheCfg, count : Int }
   }
 
 init : () -> (Model, Cmd Msg)
@@ -179,8 +180,8 @@ type Msg
   | ReceivedORs    String        (Result Http.Error (Array OREval))
   | ReceivedArches String String (Result Http.Error (Array Arche))
 
-  | AsyncORProcess    String        (Result Http.Error String)
-  | AsyncArcheProcess String String (Result Http.Error String)
+  | AsyncORProcess    ORConfig String        (Result Http.Error String)
+  | AsyncArcheProcess ArcheCfg String String (Result Http.Error String)
 
 
 inNsecs : Int -> Task.Task a ()
@@ -198,7 +199,7 @@ update msg model =
       case model.token of
         Just tk ->
           case ArcheTree.getEBSDFocusKey model.archeTree of
-            Just ebsdHash -> (model, API.sendASyncORfit {token = tk, ebsdHash = ebsdHash} orCfg (AsyncORProcess ebsdHash))
+            Just ebsdHash -> (model, API.sendASyncORfit {token = tk, ebsdHash = ebsdHash} orCfg (AsyncORProcess orCfg ebsdHash))
             _             -> (model, Cmd.none)
         _             -> (model, Cmd.none)
 
@@ -260,10 +261,10 @@ update msg model =
     SetResultType resTy -> ({model | archeResultView = Maybe.map (updateType resTy) model.archeResultView}, Cmd.none)
 
     -- ====================== OR fit async ======================
-    AsyncORProcess hashE res -> case res of
+    AsyncORProcess orCfg hashE res -> case res of
       Err err  -> (model, Cmd.none)
       Ok hashO -> (
-        { model | runningORProcesses = Dict.insert hashO {ebsdHash = hashE, count = 1} model.runningORProcesses},
+        { model | runningORProcesses = Dict.insert hashO {ebsdHash = hashE, cfg = orCfg,  count = 1} model.runningORProcesses},
         Cmd.batch [Task.perform (\_ -> CheckAsyncORs hashE hashO) (inNsecs 45)]
         )
 
@@ -289,10 +290,10 @@ update msg model =
         _      -> (model, Cmd.none)
 
     -- ====================== OR Arche async ======================
-    AsyncArcheProcess hashE hashO res -> case res of
+    AsyncArcheProcess archeCfg hashE hashO res -> case res of
       Err err  -> (model, Cmd.none)
       Ok hashA -> (
-        { model | runningArcheProcesses = Dict.insert hashA {ebsdHash = hashE, orHash = hashO, count = 1} model.runningArcheProcesses},
+        { model | runningArcheProcesses = Dict.insert hashA {ebsdHash = hashE, orHash = hashO, cfg = archeCfg, count = 1} model.runningArcheProcesses},
         Cmd.batch [Task.perform (\_ -> CheckAsyncArches hashE hashO hashA) (inNsecs 45)]
         )
 
@@ -343,7 +344,7 @@ update msg model =
         Just tk ->
           case ArcheTree.getEBSDFocusKey model.archeTree of
             Just ebsdHash -> case ArcheTree.getORFocusKey model.archeTree of
-              Just orHash -> (model, API.sendASyncArche {token = tk, ebsdHash = ebsdHash, orHash = orHash} archeCfg (AsyncArcheProcess ebsdHash orHash))
+              Just orHash -> (model, API.sendASyncArche {token = tk, ebsdHash = ebsdHash, orHash = orHash} archeCfg (AsyncArcheProcess archeCfg ebsdHash orHash))
               _             -> (model, Cmd.none)
             _             -> (model, Cmd.none)
         _             -> (model, Cmd.none)
@@ -391,6 +392,7 @@ renderArcheTree model =
       , selectedType = SetResultType
       }
     
+    processes  = Just <| row [] [renderEBSDProcess model, renderORProcess model, renderArcheProcess model]
     inputs  = Just <| row columnShape [renderEBSDUpload model, renderORInput model, renderArcheInput model]
     tree    = Just <| row [Element.alignTop] base
     results = Maybe.map (renderResultExplorer msgBuilder) model.archeResultView
@@ -398,23 +400,67 @@ renderArcheTree model =
     [ Element.spacing 15
     , Element.alignTop
     ]
-    (filterMaybes [inputs, tree, results])
+    (filterMaybes [processes, inputs, tree, results])
+
+renderEBSDProcess : Model -> Element Msg
+renderEBSDProcess model =
+  let
+    es = []
+  in Element.column columnShape2 es
+
+renderArcheProcess : Model -> Element Msg
+renderArcheProcess model =
+  let
+    ls = Dict.toList model.runningArcheProcesses
+    es = List.map (\(hashA, info) -> 
+      let
+        header = Element.text <| maybe "" .alias <| ArcheTree.findEBSD model.archeTree info.ebsdHash
+        progressBar =  Element.html <|
+          Html.progress
+            [ A.value (String.fromInt info.count)
+            , A.max "5"
+            , A.style "display" "block"
+            ] []
+      in column G.boxInputShape <| header :: progressBar :: renderArcheConfig info.cfg
+      ) ls
+  in Element.column columnShape2 es
+
+renderORProcess : Model -> Element Msg
+renderORProcess model =
+  let
+    ls = Dict.toList model.runningORProcesses
+    es = List.map (\(hashA, info) ->
+      let
+        header = Element.text <| maybe "" .alias <| ArcheTree.findEBSD model.archeTree info.ebsdHash
+        progressBar =  Element.html <|
+          Html.progress
+            [ A.value (String.fromInt info.count)
+            , A.max "5"
+            , A.style "display" "block"
+            ] []
+      in column G.boxInputShape <| header :: progressBar :: renderORConfig info.cfg
+      ) ls
+  in Element.column columnShape2 es
 
 columnShape : List (Element.Attribute msg)
 columnShape =
   [ Element.centerX
   ]
+
+columnShape2 : List (Element.Attribute msg)
+columnShape2 = 
+  [ Element.spacing 10
+  , Element.padding 5
+  , Element.width (Element.px 300)
+  , Element.alignTop
+  ]
+
 renderEbsds : Model -> Element Msg
 renderEbsds model =
   let
     cols = ArcheTree.listEBSDWithFocus model.archeTree renderEbsd
     input = renderEBSDTooglrUpload model
-  in column
-    [ Element.spacing 10
-    , Element.padding 5
-    , Element.width (Element.px 300)
-    , Element.alignTop
-    ] (input :: cols)
+  in column columnShape2 (input :: cols)
 
 renderORs : Model -> Element Msg
 renderORs model =
@@ -422,24 +468,14 @@ renderORs model =
     isActive = hasActiveInput model.inputCfg
     cols = ArcheTree.listORWithFocus model.archeTree (renderOREval isActive) 
     input = renderORToogleInput model
-  in column
-    [ Element.spacing 10
-    , Element.padding 5
-    , Element.width (Element.px 300)
-    , Element.alignTop
-    ] (input :: cols)
+  in column columnShape2 (input :: cols)
 
 renderArches :  Model -> Element Msg
 renderArches model =
   let
     cols = ArcheTree.listArchesWithFocus model.archeTree renderArche 
     input = renderArcheToogleInput model
-  in column
-    [ Element.spacing 10
-    , Element.padding 5
-    , Element.width (Element.px 300)
-    , Element.alignTop
-    ] (input :: cols)
+  in column columnShape2 (input :: cols)
 
 renderEbsd : EBSD -> Bool -> Element Msg
 renderEbsd ebsd isSelected =
@@ -466,11 +502,21 @@ renderOREval isActive orEval isSelected =
       then [Element.transparent True, Element.alpha 0.5]
       else [Element.Events.onClick (SelectedOR orEval.hashOR)]
   in column
-    (activeAttrs ++ G.boxShape isSelected)
+    (activeAttrs ++ G.boxShape isSelected) <|
     [ cardEnrty "avg. angular misfit" <| degToText orEval.resultOR.misfitError.avgError ++ "°"
     , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.planeDeviation ++ "°"
     , cardEnrty "<100> <111> deviation" <| degToText orEval.resultOR.ksDeviation.axisDeviation ++ "°"
-    , cardEnrty "parent phase ID" <| intToText product.phaseId
+    ] ++ renderORConfig orEval.cfgOR
+
+
+renderORConfig : ORConfig -> List (Element Msg)
+renderORConfig orCfg = 
+  let
+    product = orCfg.productPhase
+    parenPhase = either (.phaseId >> Just) (\_ -> Nothing) orCfg.parentPhase
+    parenSymm = either .phaseSymm identity orCfg.parentPhase
+  in
+    [ cardEnrty "parent phase ID" <| intToText product.phaseId
     , cardEnrty "parent symmetry" <| symmToText product.phaseSymm
     , maybe Element.none (cardEnrty "product phase ID" << intToText) parenPhase
     , cardEnrty "product symmetry" <| symmToText parenSymm
@@ -483,19 +529,21 @@ cardEnrty field value = row
   ]
   [ text field, text value ]
 
+renderArcheConfig : ArcheCfg -> List (Element Msg)
+renderArcheConfig archeCfg = 
+  [ cardEnrty "steps" <| String.fromInt archeCfg.refinementSteps
+  , cardEnrty "exclude floating grains" <| if archeCfg.excludeFloatingGrains then "☑" else "☐"
+  , cardEnrty "initial cluster factor" <| floatToText archeCfg.initClusterFactor
+  , cardEnrty "incremental cluster factor" <| floatToText archeCfg.stepClusterFactor
+  , cardEnrty "angular misfit threshold" <| degToText archeCfg.badAngle
+  ]
+
 renderArche : Arche -> Bool -> Element Msg
 renderArche arche isSelected =
   let
     attrs =
       Element.Events.onClick (SelectedArche arche.hashArche) :: G.boxShape isSelected
-    elms = 
-      [ cardEnrty "steps" <| String.fromInt arche.cfgArche.refinementSteps
-      , cardEnrty "exclude floating grains" <| if arche.cfgArche.excludeFloatingGrains then "☑" else "☐"
-      , cardEnrty "initial cluster factor" <| floatToText arche.cfgArche.initClusterFactor
-      , cardEnrty "incremental cluster factor" <| floatToText arche.cfgArche.stepClusterFactor
-      , cardEnrty "angular misfit threshold" <| degToText arche.cfgArche.badAngle
-      ]
-  in column attrs elms
+  in column attrs (renderArcheConfig arche.cfgArche)
 
 
 renderORInput : Model -> Element Msg

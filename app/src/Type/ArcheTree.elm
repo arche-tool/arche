@@ -159,3 +159,12 @@ focusOnArche at key = case FocusedList.getFocus at of
             let
                 orsNew =  FocusedList.focusOn focusedOR.arches key
             in FocusedList.update at {focusedEBSD | ors = FocusedList.update focusedEBSD.ors {focusedOR | arches = orsNew }}
+
+findEBSD : ArcheTree -> String -> Maybe EBSD
+findEBSD at hashE = Maybe.map (\x -> x.ebsd) (FocusedList.find at hashE)
+
+findOR : ArcheTree -> String -> String -> Maybe OREval
+findOR at hashE hashO =
+    let
+        orNode = Maybe.andThen (\x -> FocusedList.find x.ors hashO) (FocusedList.find at hashE)
+    in Maybe.map (\x -> x.orEvaluation) orNode
