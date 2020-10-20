@@ -15,6 +15,7 @@ import qualified File.EBSD                 as F
 import qualified File.ANGReader            as F
 import qualified File.CTFReader            as F
 import qualified Texture.Orientation       as TO
+import qualified Texture.Symmetry          as TS
 import qualified Linear.Vect               as LV
 
 import Util.FireStore.Value
@@ -28,12 +29,19 @@ instance ToJSON OF.KSDeviation
 instance ToJSON OF.OREvaluation
 
 instance ToJSON OR.FitError
-instance ToJSON OR.PhaseID
+instance ToJSON OR.PhaseSymm
+instance ToJSON OR.Phase
 instance ToJSON OR.OR
 
 instance ToJSON TO.Deg
 instance ToJSON TO.Quaternion
 instance ToJSON TO.AxisPair
+
+instance ToJSON TS.Symm
+instance ToJSON TS.SymmAxis
+
+instance ToJSON F.EBSDmeta
+instance ToJSON F.EBSDphase
 
 instance (ToJSON a) => ToJSON (LV.Vec2 a)
 instance (ToJSON a) => ToJSON (LV.Vec3 a)
@@ -48,12 +56,19 @@ instance FromJSON OF.KSDeviation
 instance FromJSON OF.OREvaluation
 
 instance FromJSON OR.FitError
-instance FromJSON OR.PhaseID
+instance FromJSON OR.PhaseSymm
+instance FromJSON OR.Phase
 instance FromJSON OR.OR
 
 instance FromJSON TO.AxisPair
 instance FromJSON TO.Quaternion
 instance FromJSON TO.Deg
+
+instance FromJSON TS.Symm
+instance FromJSON TS.SymmAxis
+
+instance FromJSON F.EBSDmeta
+instance FromJSON F.EBSDphase
 
 instance (FromJSON a) => FromJSON (LV.Vec2 a)
 instance (FromJSON a) => FromJSON (LV.Vec3 a)
@@ -86,6 +101,9 @@ instance Hashable TO.AxisPair
 instance Hashable TO.Deg
 instance Hashable TO.Quaternion
 
+instance Hashable TS.Symm
+instance Hashable TS.SymmAxis
+
 instance (Hashable a) => Hashable (LV.Vec2 a)
 instance (Hashable a) => Hashable (LV.Vec3 a)
 instance (Hashable a) => Hashable (LV.Vec4 a)
@@ -93,7 +111,8 @@ instance (Hashable a) => Hashable (LV.Vec4 a)
 instance (Hashable a) => Hashable (Vector a) where
     hashWithSalt i = hashWithSalt i .toList 
 
-instance Hashable OR.PhaseID
+instance Hashable OR.PhaseSymm
+instance Hashable OR.Phase
 instance Hashable OR.OR
 
 instance Hashable GG.Cfg
@@ -109,9 +128,14 @@ instance ToDocValue OF.KSDeviation
 instance ToDocValue TO.Deg
 instance ToDocValue TO.AxisPair
 instance ToDocValue TO.Quaternion
+instance ToDocValue TS.Symm
+instance ToDocValue TS.SymmAxis
 instance ToDocValue OR.FitError
 instance ToDocValue OR.OR
-instance ToDocValue OR.PhaseID
+instance ToDocValue OR.PhaseSymm
+instance ToDocValue OR.Phase
+instance ToDocValue F.EBSDmeta
+instance ToDocValue F.EBSDphase
 
 instance (ToDocValue a) => ToDocValue (LV.Vec3 a)
 instance (ToDocValue a) => ToDocValue (LV.Vec2 a)
@@ -125,9 +149,14 @@ instance FromDocValue OF.KSDeviation
 instance FromDocValue TO.Deg
 instance FromDocValue TO.AxisPair
 instance FromDocValue TO.Quaternion
+instance FromDocValue TS.Symm
+instance FromDocValue TS.SymmAxis
 instance FromDocValue OR.FitError
 instance FromDocValue OR.OR
-instance FromDocValue OR.PhaseID
+instance FromDocValue OR.PhaseSymm
+instance FromDocValue OR.Phase
+instance FromDocValue F.EBSDmeta
+instance FromDocValue F.EBSDphase
 
 instance (FromDocValue a) => FromDocValue (LV.Vec3 a)
 instance (FromDocValue a) => FromDocValue (LV.Vec2 a)

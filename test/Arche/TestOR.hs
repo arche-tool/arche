@@ -24,19 +24,19 @@ test = testGroup "OR"
 
 testMisoSingleOR :: OR -> Quaternion -> Quaternion -> Property
 testMisoSingleOR ora q1 q2 = let
-  ors = genTS ora
+  ors = genTS Cubic ora
   symOps = getSymmOps Cubic
   in binaryTest "matchRef" (~=) (misoSingleOR ors symOps q1 q2) (misoSingleORRef ors Cubic q1 q2)
 
 testMisoDoubleOR :: OR -> Quaternion -> Quaternion -> Property
 testMisoDoubleOR ora q1 q2 = let
-  ors = genTS ora
+  ors = genTS Cubic ora
   symOps = getSymmOps Cubic
   in binaryTest "matchRef" (~=) (misoDoubleOR ors symOps q1 q2) (misoDoubleORRef ors Cubic q1 q2)
 
 testMisoDoubleORTransitive :: OR -> Quaternion -> Quaternion -> Property
 testMisoDoubleORTransitive  ora q1 q2 = let
-  ors = genTS ora
+  ors = genTS Cubic ora
   symOps = getSymmOps Cubic
   in binaryTest "nor" (~=) (misoDoubleOR    ors symOps q1 q2) (misoDoubleOR    ors symOps q2 q1)  .&&.
      binaryTest "ref" (~=) (misoDoubleORRef ors Cubic  q1 q2) (misoDoubleORRef ors Cubic  q2 q1)

@@ -1,5 +1,6 @@
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Arche.Strategy.Graph
        ( run
@@ -9,6 +10,7 @@ module Arche.Strategy.Graph
 
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Vector.Unboxed  as U
+import Control.Arrow ((&&&))
 import Data.Word
 
 import qualified File.ANGReader as A
@@ -23,10 +25,13 @@ import Texture.Orientation
 import Texture.IPF
 
 import Arche.Grains
+import Arche.OR
 
 data Cfg =
   Cfg
-  { misoAngle   :: Deg
+  { misoAngle    :: Deg
+  , parentPhase  :: Either Phase PhaseSymm
+  , productPhase :: Phase
   } deriving (Show)
 
 genVoxBoxAttr :: (U.Unbox a, RenderElemVTK b)=>
@@ -45,21 +50,30 @@ run cfg ebsd_file base_output = do
     Left err -> error err
     Right (gids, micro, attrs) -> do
       writeUniVTKfile (base_output ++ ".vtr")        True $ renderVoxBoxVTK      gids attrs
-      writeUniVTKfile (base_output ++ "_faces.vtu")  True $ renderMicroFacesVTK  gids micro
-      writeUniVTKfile (base_output ++ "_edges.vtu")  True $ renderMicroEdgesVTK  gids micro
-      writeUniVTKfile (base_output ++ "_vertex.vtu") True $ renderMicroVertexVTK gids micro
+      writeUniVTKfile (base_output ++ "_faces.vtp")  True $ renderMicroFacesVTK  gids micro
+      writeUniVTKfile (base_output ++ "_edges.vtp")  True $ renderMicroEdgesVTK  gids micro
+      writeUniVTKfile (base_output ++ "_vertex.vtp") True $ renderMicroVertexVTK gids micro
+
+getPhaseSelector :: Cfg -> (Int -> Phase)
+getPhaseSelector Cfg{..} = let
+  in case parentPhase of  
+    Left parent -> \ph -> if ph == phaseId parent then parent else if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
+    _           -> \ph -> if ph == phaseId productPhase then productPhase else Phase ph CubicPhase 
 
 processEBSD :: Cfg -> BSL.ByteString -> Either String (VoxBox GrainID, MicroVoxel, [VTKAttrPoint a])
-processEBSD Cfg{..} bs = do
+processEBSD cfg@Cfg{..} bs = do
+  let phaseSelector = getPhaseSelector cfg
   ebsd <- loadEBSD bs
-  vbp <- readEBSDToVoxBox C.phase    A.phaseNum ebsd
-  vbq <- readEBSDToVoxBox C.rotation A.rotation ebsd
-  case getGrainID misoAngle Cubic (vbq) of
+  vbq <- readEBSDToVoxBox
+    (C.rotation &&& (phaseSelector . C.phase))
+    (A.rotation &&& (phaseSelector . A.phaseNum))
+    ebsd
+  case getGrainID misoAngle vbq of
     Nothing -> Left "No grain detected!"
     Just vg -> let
       (micro, gids) = getMicroVoxel $ resetGrainIDs vg
       attrGID   = genVoxBoxAttr "GrainID" unGrainID gids
-      attrIPF   = genVoxBoxAttr "IPF"   getCubicIPFColor vbq
-      attrPhase = genVoxBoxAttr "Phase" id vbp
+      attrIPF   = genVoxBoxAttr "IPF"   (getCubicIPFColor .fst) vbq
+      attrPhase = genVoxBoxAttr "Phase" (phaseId . snd) vbq
       attrs = [attrGID, attrIPF, attrPhase]
       in Right (gids, micro, attrs)

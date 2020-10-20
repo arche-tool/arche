@@ -26,7 +26,7 @@ benchMiso probe = let
   (q1, s1) = random s0
   (q2, s2) = random s1
   (q3, _) = random s2
-  ors = genTS . OR $ q3
+  ors = genTS Cubic . OR $ q3
   in nf (\(ors', qa, qb) -> probe ors' Cubic qa qb) (ors, q1, q2)
 
 benchMisoSO :: (U.Vector OR -> U.Vector SymmOp -> Quaternion -> Quaternion -> Double) -> Benchmarkable
@@ -35,7 +35,7 @@ benchMisoSO probe = let
   (q1, s1) = random s0
   (q2, s2) = random s1
   (q3, _) = random s2
-  ors = genTS . OR $ q3
+  ors = genTS Cubic . OR $ q3
   in nf (\(ors', qa, qb, ops) -> probe ors' ops qa qb) (ors, q1, q2, getSymmOps Cubic)
 
 -- ======================= With eta =========================
