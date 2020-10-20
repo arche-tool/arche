@@ -84,6 +84,11 @@ type InputCfg
   | ACfg ArcheCfg
   | NoCfg
 
+type Processing
+  = UpProcess { uploadAlias: String, uploadModel: Upload.Model }
+  | OrProcess { ebsdHash : String, orHash : String, cfg : ORConfig,  count : Int }
+  | ArProcess { ebsdHash : String, orHash : String, archeHash : String, cfg : ArcheCfg,  count : Int }
+
 getUploadModel : InputCfg -> Maybe Upload.Model
 getUploadModel inp = case inp of
   UCfg model -> Just model
@@ -109,8 +114,7 @@ type alias Model =
   , archeTree: ArcheTree
   , archeResultView: Maybe ArcheResultExplorer
   , inputCfg: InputCfg 
-  , runningORProcesses: Dict String { ebsdHash : String, cfg : ORConfig,  count : Int }
-  , runningArcheProcesses: Dict String { ebsdHash : String, orHash : String, cfg : ArcheCfg, count : Int }
+  , runningProcesses: Dict String Processing
   }
 
 init : () -> (Model, Cmd Msg)
@@ -119,8 +123,7 @@ init _ =
     , archeTree = ArcheTree.empty
     , archeResultView = Nothing
     , inputCfg = NoCfg
-    , runningORProcesses = Dict.empty
-    , runningArcheProcesses = Dict.empty
+    , runningProcesses = Dict.empty
     }
   , Cmd.none
   )
@@ -263,23 +266,27 @@ update msg model =
     -- ====================== OR fit async ======================
     AsyncORProcess orCfg hashE res -> case res of
       Err err  -> (model, Cmd.none)
-      Ok hashO -> (
-        { model | runningORProcesses = Dict.insert hashO {ebsdHash = hashE, cfg = orCfg,  count = 1} model.runningORProcesses},
-        Cmd.batch [Task.perform (\_ -> CheckAsyncORs hashE hashO) (inNsecs 45)]
-        )
+      Ok hashO ->
+        let orProc = OrProcess {ebsdHash = hashE, orHash = hashO, cfg = orCfg,  count = 1}
+        in (
+          { model | runningProcesses = Dict.insert hashO orProc model.runningProcesses},
+          Cmd.batch [Task.perform (\_ -> CheckAsyncORs hashE hashO) (inNsecs 45)]
+          )
 
     CheckAsyncORs hashE hashO ->
       let
-        bump = Maybe.map (\v -> { v | count = v.count + 1})
-        updated = Dict.update hashO bump model.runningORProcesses
+        bump x = case x of
+          Just (OrProcess v) -> Just <| OrProcess { v | count = v.count + 1}
+          _                  -> x
+        updated = Dict.update hashO bump model.runningProcesses
       in case model.token of
-        Just tk -> ({ model | runningORProcesses = updated}, API.fetchOR {token = tk, ebsdHash = hashE, orHash = hashO} (ReCheckAsyncORs hashE hashO))
-        _       -> ({ model | runningORProcesses = updated}, Cmd.none)
+        Just tk -> ({ model | runningProcesses = updated}, API.fetchOR {token = tk, ebsdHash = hashE, orHash = hashO} (ReCheckAsyncORs hashE hashO))
+        _       -> ({ model | runningProcesses = updated}, Cmd.none)
 
     ReCheckAsyncORs hashE hashO res ->
       let
-        recheck = case Dict.get hashO model.runningORProcesses of
-          Just {ebsdHash, count} -> if (count < 5) && (ebsdHash == hashE)
+        recheck = case Dict.get hashO model.runningProcesses of
+          Just (OrProcess {ebsdHash, count}) -> if (count < 5) && (ebsdHash == hashE)
             then Task.perform (\_ -> CheckAsyncORs hashE hashO) (inNsecs 30)
             else Cmd.none
           _ -> Cmd.none
@@ -292,26 +299,31 @@ update msg model =
     -- ====================== OR Arche async ======================
     AsyncArcheProcess archeCfg hashE hashO res -> case res of
       Err err  -> (model, Cmd.none)
-      Ok hashA -> (
-        { model | runningArcheProcesses = Dict.insert hashA {ebsdHash = hashE, orHash = hashO, cfg = archeCfg, count = 1} model.runningArcheProcesses},
-        Cmd.batch [Task.perform (\_ -> CheckAsyncArches hashE hashO hashA) (inNsecs 45)]
-        )
+      Ok hashA ->
+        let
+          archeProc = ArProcess {ebsdHash = hashE, orHash = hashO, archeHash = hashA, cfg = archeCfg, count = 1} 
+        in (
+          { model | runningProcesses = Dict.insert hashA archeProc model.runningProcesses},
+          Cmd.batch [Task.perform (\_ -> CheckAsyncArches hashE hashO hashA) (inNsecs 45)]
+          )
 
     CheckAsyncArches hashE hashO hashA ->
       let
-        bump = Maybe.map (\v -> { v | count = v.count + 1})
-        updated = Dict.update hashA bump model.runningArcheProcesses
+        bump x = case x of
+          Just (ArProcess v) -> Just <| ArProcess { v | count = v.count + 1}
+          _                  -> x
+        updated = Dict.update hashA bump model.runningProcesses
       in case model.token of
         Just tk -> (
-          { model | runningArcheProcesses = updated},
+          { model | runningProcesses = updated},
           API.fetchArche {token = tk, ebsdHash = hashE, orHash = hashO, archeHash = hashA} (ReCheckAsyncArches hashE hashO hashA)
           )
-        _       -> ({ model | runningArcheProcesses = updated}, Cmd.none)
+        _       -> ({ model | runningProcesses = updated}, Cmd.none)
 
     ReCheckAsyncArches hashE hashO hashA res ->
       let
-        recheck = case Dict.get hashA model.runningArcheProcesses of
-          Just {ebsdHash, orHash, count} -> if (count < 5) && (ebsdHash == hashE) && (orHash == hashO)
+        recheck = case Dict.get hashA model.runningProcesses of
+          Just (ArProcess {ebsdHash, orHash, count}) -> if (count < 5) && (ebsdHash == hashE) && (orHash == hashO)
             then Task.perform (\_ -> CheckAsyncArches hashE hashO hashA) (inNsecs 30)
             else Cmd.none
           _ -> Cmd.none
@@ -392,7 +404,7 @@ renderArcheTree model =
       , selectedType = SetResultType
       }
     
-    processes  = Just <| row [] [renderEBSDProcess model, renderORProcess model, renderArcheProcess model]
+    processes  = Just <| renderAllProcess model
     inputs  = Just <| row columnShape [renderEBSDUpload model, renderORInput model, renderArcheInput model]
     tree    = Just <| row [Element.alignTop] base
     results = Maybe.map (renderResultExplorer msgBuilder) model.archeResultView
@@ -408,28 +420,15 @@ renderEBSDProcess model =
     es = []
   in Element.column columnShape2 es
 
-renderArcheProcess : Model -> Element Msg
-renderArcheProcess model =
+renderAllProcess : Model -> Element Msg
+renderAllProcess model =
   let
-    ls = Dict.toList model.runningArcheProcesses
-    es = List.map (\(hashA, info) -> 
-      let
-        header = Element.text <| maybe "" .alias <| ArcheTree.findEBSD model.archeTree info.ebsdHash
-        progressBar =  Element.html <|
-          Html.progress
-            [ A.value (String.fromInt info.count)
-            , A.max "5"
-            , A.style "display" "block"
-            ] []
-      in column G.boxInputShape <| header :: progressBar :: renderArcheConfig info.cfg
-      ) ls
-  in Element.column columnShape2 es
+    ls = Dict.values model.runningProcesses
+  in Element.column columnShape2 <| List.map (renderProcessing model) ls
 
-renderORProcess : Model -> Element Msg
-renderORProcess model =
-  let
-    ls = Dict.toList model.runningORProcesses
-    es = List.map (\(hashA, info) ->
+renderProcessing : Model -> Processing -> Element Msg
+renderProcessing model proc = case proc of
+    OrProcess info ->
       let
         header = Element.text <| maybe "" .alias <| ArcheTree.findEBSD model.archeTree info.ebsdHash
         progressBar =  Element.html <|
@@ -439,8 +438,18 @@ renderORProcess model =
             , A.style "display" "block"
             ] []
       in column G.boxInputShape <| header :: progressBar :: renderORConfig info.cfg
-      ) ls
-  in Element.column columnShape2 es
+    ArProcess info ->
+      let
+        header = Element.text <| maybe "" .alias <| ArcheTree.findEBSD model.archeTree info.ebsdHash
+        progressBar =  Element.html <|
+          Html.progress
+            [ A.value (String.fromInt info.count)
+            , A.max "5"
+            , A.style "display" "block"
+            ] []
+      in column G.boxInputShape <| header :: progressBar :: renderArcheConfig info.cfg
+    UpProcess upModel -> Element.map SetUploadConfig <| Upload.renderProgress upModel.uploadModel.state
+
 
 columnShape : List (Element.Attribute msg)
 columnShape =
@@ -682,7 +691,7 @@ renderArcheToogleInput model =
 renderEBSDUpload : Model -> Element Msg
 renderEBSDUpload model =
   case getUploadModel model.inputCfg of
-    Just upModel -> Element.map SetUploadConfig <| Upload.view upModel
+    Just upModel -> Element.map SetUploadConfig <| Upload.renderInput upModel.state
     Nothing -> Element.none
 
 renderEBSDTooglrUpload : Model -> Element Msg

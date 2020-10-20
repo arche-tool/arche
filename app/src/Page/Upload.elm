@@ -8,7 +8,8 @@ module Page.Upload exposing (
   hasFailed,
   update,
   subscriptions,
-  view
+  renderInput,
+  renderProgress
   )
 
 import Browser
@@ -175,17 +176,21 @@ view : Model -> Element Msg
 view model =
   case model.token of
     Nothing -> Element.none
-    Just _  -> renderState model.state
+    Just _  -> renderInput model.state
 
-renderState : UploadState -> Element Msg
-renderState state =
-  let
-    content = case state of
-      Waiting ->
+renderInput : UploadState -> Element Msg
+renderInput state =
+  case state of
+    Waiting -> column Globals.boxInputShape
         [ Element.text "Please, upload the ANG file to process."
         , Globals.renderButton [Element.centerX] "Select files" OpenFileSelector
         ] 
+    _ -> Element.none
 
+renderProgress : UploadState -> Element Msg
+renderProgress state =
+  let
+    content = case state of
       Uploading fraction ->
         [ Element.html <| Html.progress
             [ A.value (String.fromInt (round (100 * fraction)))
@@ -213,6 +218,7 @@ renderState state =
             , Html.div [A.class "bounce3"] []
             ]
         ]
+      _ -> []
     in column
       Globals.boxInputShape
       content
