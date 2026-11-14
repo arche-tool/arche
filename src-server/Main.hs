@@ -36,7 +36,7 @@ main = do
         oauthClientID = Auth.mkOAuthClientID (oauth_client_id config)
 
         api :: Auth.BearerToken -> Store.User -> Server API
-        api tk user = ebsdApi storageSigner user :<|> orApi user :<|> archeApi tk user
+        api tk user = ebsdApi storageSigner user :<|> orApi tk user :<|> archeApi tk user
 
         server :: Server ArcheServer
         server = \(tk, info) -> let

@@ -10,6 +10,7 @@ module Type.Storage
     , HashArche(..)
     , HashResult(..)
     , StorageBucket(bktName)
+    , TaskQueue(queueName)
     , StorageLink(..)
     , StoragePublicLink(..)
     , StorageObject(..)
@@ -17,6 +18,8 @@ module Type.Storage
     , imageBucket
     , ebsdBucket
     , landingZoneBucket
+    , reconstructionQueue
+    , orFitQueue
     ) where
 
 import GHC.Generics
@@ -35,6 +38,8 @@ newtype StorageBucket = StorageBucket {bktName :: Text} deriving (Show, Generic,
 
 newtype StorageObjectName = StorageObjectName {objFullName :: Text} deriving (Show, Generic, Eq)
 
+newtype TaskQueue = TaskQueue {queueName :: Text} deriving (Show, Generic, Eq)
+
 imageBucket :: StorageBucket
 imageBucket  = StorageBucket "arche-image"
 
@@ -43,6 +48,13 @@ ebsdBucket = StorageBucket "ebsd"
 
 landingZoneBucket :: StorageBucket
 landingZoneBucket = StorageBucket "arche-landing-zone"
+
+reconstructionQueue :: TaskQueue
+reconstructionQueue = TaskQueue "projects/apt-muse-269419/locations/europe-west1/queues/reconstruction-queue"
+
+orFitQueue :: TaskQueue
+orFitQueue = TaskQueue "projects/apt-muse-269419/locations/europe-west1/queues/orfit-queue"
+
 
 data StorageObject
     = StorageObject

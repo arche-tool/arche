@@ -370,10 +370,22 @@ instance (FromDocValue a, FromDocValue b, FromDocValue c, FromDocValue d) =>
 instance (FromDocValue a) => FromDocValue (Maybe a) where
   fromValue = runParser (optional parse)
 
+instance (FromDocValue a, FromDocValue b) => FromDocValue (Either a b) where
+  fromValue v = do
+    hm :: HM.HashMap Text FireStore.Value <- runParser parse v
+    case (HM.lookup "Left" hm, HM.lookup "Right" hm) of
+      (Just x, _) -> Left  <$> fromValue x
+      (_, Just x) -> Right <$> fromValue x
+      _           -> fail "Can not find neither Left nor Right" 
+
 -- ========================= ToDocValue Base Instances =======================
 instance (ToDocValue a) => ToDocValue (Maybe a) where
   toValue (Just x) = toValue x
   toValue _        = FireStore.value & FireStore.vNullValue ?~ FireStore.NullValue
+
+instance (ToDocValue a, ToDocValue b) => ToDocValue (Either a b) where
+  toValue (Left  a) = toValue $ HM.singleton ("Left"  :: Text) (toValue a)
+  toValue (Right b) = toValue $ HM.singleton ("Right" :: Text) (toValue b)
 
 instance ToDocValue Text where
   toValue txt = FireStore.value & FireStore.vStringValue ?~ txt

@@ -92,6 +92,16 @@ parseOR = let
     <> metavar "\"(Int,Int,Int,Double)\""
     ))
 
+parseStartOR :: Parser AxisPair
+parseStartOR = let
+  func :: (Int, Int, Int, Double) -> AxisPair
+  func (v1, v2, v3, w) = mkAxisPair v (Deg w)
+      where v = Vec3 (fromIntegral v1) (fromIntegral v2) (fromIntegral v3)
+  in (func <$> option auto
+    (  long "start-or"
+    <> metavar "\"(Int,Int,Int,Double)\""
+    ))
+
 parseInOut :: Parser (FilePath, FilePath)
 parseInOut = let
   func a b = (a, getStdOut a b)
@@ -126,7 +136,10 @@ instance ParserCmdLine Graph.Cfg where
   validate = testInputFile
 
 parseShowGraph :: Parser Graph.Cfg
-parseShowGraph = Graph.Cfg <$> parseMisoAngle
+parseShowGraph = Graph.Cfg
+  <$> parseMisoAngle
+  <*> parseParent
+  <*> parseProduct
 
 -- ======================================= OR Fit All ====================================
 
@@ -139,6 +152,9 @@ parseORFitAll = ORFitAll.Cfg
   <$> parseMisoAngle
   <*> parseORbyAvg
   <*> optional parseOR
+  <*> optional parseStartOR
+  <*> parseParent
+  <*> parseProduct
 
 parseORbyAvg :: Parser Bool
 parseORbyAvg = switch
@@ -162,7 +178,8 @@ parseGomesGraph = GomesGraph.Cfg
   <*> parseStepCluster
   <*> parseBadAngle
   <*> (OR.convert <$> parseOR)
-  <*> optional parseParentPhaseID
+  <*> parseProduct
+  <*> parseParent
   <*> parseOutputToANG
   <*> parseOutputToCTF
 
@@ -201,12 +218,47 @@ parseBadAngle = ((Deg . abs) <$> option auto
    <> value 5
    <> help "The default error is 5 deg."))
 
-parseParentPhaseID :: Parser OR.PhaseID
-parseParentPhaseID = OR.PhaseID <$> option auto
-   (  long "parentPhaseID"
-   <> short 'g'
+parseParent :: Parser (Either OR.Phase OR.PhaseSymm)
+parseParent = let
+  left  = fmap Left  $ OR.Phase <$> parseParentPhaseID <*> parseParentSymm
+  right = fmap Right $ parseParentSymm
+  in left <|> right
+
+parseProduct :: Parser OR.Phase
+parseProduct = OR.Phase <$> parseProductPhaseID <*> parseProductSymm
+
+parseParentPhaseID :: Parser Int
+parseParentPhaseID = option auto
+   (  long "parentPhase"
    <> metavar "Int"
-   <> help "ID number of parent phase in the ANG file, if present.")
+   <> help "ID number of parent phase in the ANG/CTF file, if present.")
+
+parseProductPhaseID :: Parser Int
+parseProductPhaseID = option auto
+   (  long "productPhase"
+   <> metavar "Int"
+   <> help "ID number of product phase in the ANG/CTF file, if present.")
+
+symmReader :: String -> Maybe OR.PhaseSymm
+symmReader x = case x of
+  "cubic"     -> Just OR.CubicPhase
+  "hexagonal" -> Just OR.HexagonalPhase
+  "bcc"       -> Just OR.CubicPhase
+  "fcc"       -> Just OR.CubicPhase
+  "hcp"       -> Just OR.HexagonalPhase
+  _           -> Nothing
+
+parseParentSymm :: Parser OR.PhaseSymm
+parseParentSymm = option (maybeReader symmReader)
+  (  long "parentSymmetry"
+   <> metavar "symmetry"
+   <> help "Type of symmetry on parent phase.")
+
+parseProductSymm :: Parser OR.PhaseSymm
+parseProductSymm = option (maybeReader symmReader)
+  (  long "productSymmetry"
+   <> metavar "symmetry"
+   <> help "Type of symmetry on product phase.")
 
 parseExtMCL :: Parser Bool
 parseExtMCL = switch

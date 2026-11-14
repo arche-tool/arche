@@ -13,6 +13,7 @@ import GHC.Word      (Word8)
 import qualified Arche.Strategy.ORFitAll   as OF
 import qualified Arche.OR                  as OR
 import qualified Texture.Orientation       as TO
+import qualified File.EBSD                 as FE
 
 import Type.Storage (
     HashEBSD(..),
@@ -28,6 +29,7 @@ import Util.OrphanInstances ()
 data EBSD
     = EBSD
     { alias     :: Text
+    , info      :: FE.EBSDmeta
     , hashEBSD  :: HashEBSD
     , createdBy :: User
     } deriving (Show, Generic)
@@ -74,7 +76,8 @@ data ArcheCfg = ArcheCfg
   , initClusterFactor      :: Double
   , stepClusterFactor      :: Double
   , badAngle               :: TO.Deg
-  , parentPhaseID          :: Maybe OR.PhaseID
+  , productPhase           :: OR.Phase
+  , parentPhase            :: Either OR.Phase OR.PhaseSymm
   } deriving (Show, Generic)
 
 instance Functor Arche where

@@ -124,6 +124,7 @@ Library arche-server-lib
     Util.OrphanInstances
     Util.SignedUrl
     Util.Storage
+    Util.Tasks
     Util.Hash
   build-depends:
       arche
@@ -143,9 +144,11 @@ Library arche-server-lib
     , cryptonite
     , cryptostore
     , free
+    , exceptions
     , gogol
     , gogol-firestore
     , gogol-storage
+    , gogol-cloudtasks
     , hashable
     , http-client
     , http-client-tls
